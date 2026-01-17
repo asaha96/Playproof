@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 
 // Theme configuration type
 export interface PlayproofTheme {
@@ -38,6 +38,15 @@ export interface PlayproofCaptchaProps {
     onFailure?: (result: VerificationResult) => void;
     onStart?: () => void;
     className?: string;
+}
+
+// Bubble type
+interface Bubble {
+    id: string;
+    x: number;
+    y: number;
+    size: number;
+    popping: boolean;
 }
 
 // Inline all SDK code for the demo to avoid import issues
@@ -79,6 +88,7 @@ export default function PlayproofCaptcha({
     const [progress, setProgress] = useState(0);
     const [timeLeft, setTimeLeft] = useState(gameDuration / 1000);
     const [score, setScore] = useState(0);
+    const [bubbles, setBubbles] = useState<Bubble[]>([]);
 
     // Merge theme with defaults
     const mergedTheme = { ...DEFAULT_THEME, ...theme };
@@ -93,17 +103,48 @@ export default function PlayproofCaptcha({
         clickAccuracy: 0
     });
     const currentTrajectory = useRef<{ x: number; y: number; timestamp: number }[]>([]);
-    const bubbles = useRef<HTMLDivElement[]>([]);
-    const intervals = useRef<{ bubble?: NodeJS.Timeout; progress?: NodeJS.Timeout; game?: NodeJS.Timeout }>({});
+    const intervals = useRef<{ spawn?: NodeJS.Timeout; progress?: NodeJS.Timeout; game?: NodeJS.Timeout }>({});
     const startTimeRef = useRef<number>(0);
+    const gameStateRef = useRef(gameState);
 
-    const startGame = () => {
+    // Update gameStateRef when gameState changes
+    useEffect(() => {
+        gameStateRef.current = gameState;
+    }, [gameState]);
+
+    const spawnBubble = useCallback(() => {
+        if (!gameAreaRef.current) return;
+        
+        const size = 40 + Math.random() * 30;
+        const maxX = gameAreaRef.current.offsetWidth - size;
+        const maxY = gameAreaRef.current.offsetHeight - size;
+
+        const newBubble: Bubble = {
+            id: `bubble-${Date.now()}-${Math.random()}`,
+            x: Math.random() * maxX,
+            y: Math.random() * maxY,
+            size,
+            popping: false
+        };
+
+        setBubbles(prev => {
+            if (prev.length >= 5) return prev;
+            return [...prev, newBubble];
+        });
+
+        // Auto-remove after 3 seconds
+        setTimeout(() => {
+            setBubbles(prev => prev.filter(b => b.id !== newBubble.id));
+        }, 3000);
+    }, []);
+
+    const startGame = useCallback(() => {
         if (!gameAreaRef.current) return;
 
         setGameState('playing');
         onStart?.();
 
-        // Reset behavior data
+        // Reset everything
         behaviorData.current = {
             mouseMovements: [],
             clickTimings: [],
@@ -115,80 +156,16 @@ export default function PlayproofCaptcha({
         currentTrajectory.current = [];
         setScore(0);
         setProgress(0);
-
-        // Clear game area
-        if (gameAreaRef.current) {
-            gameAreaRef.current.innerHTML = '';
-        }
-        bubbles.current = [];
+        setBubbles([]);
 
         startTimeRef.current = Date.now();
 
-        // Spawn bubbles
-        const spawnBubble = () => {
-            if (!gameAreaRef.current || bubbles.current.length >= 5) return;
-
-            const bubble = document.createElement('div');
-            bubble.className = 'playproof-bubble';
-
-            const size = 40 + Math.random() * 30;
-            const maxX = gameAreaRef.current.offsetWidth - size;
-            const maxY = gameAreaRef.current.offsetHeight - size;
-
-            // Convert hex colors to RGB for rgba shadow
-            const primaryRgb = hexToRgb(mergedTheme.primary);
-            
-            bubble.style.cssText = `
-        position: absolute;
-        width: ${size}px;
-        height: ${size}px;
-        left: ${Math.random() * maxX}px;
-        top: ${Math.random() * maxY}px;
-        background: linear-gradient(135deg, ${mergedTheme.primary}, ${mergedTheme.secondary});
-        border-radius: 50%;
-        cursor: pointer;
-        animation: bubbleAppear 0.3s ease;
-        transition: transform 0.1s ease;
-        box-shadow: 0 4px 15px rgba(${primaryRgb.r}, ${primaryRgb.g}, ${primaryRgb.b}, 0.3), 
-          inset 0 -2px 10px rgba(0,0,0,0.2),
-          inset 0 2px 10px rgba(255,255,255,0.3);
-        z-index: 10;
-      `;
-            
-            // Add hover effect
-            bubble.addEventListener('mouseenter', () => {
-                bubble.style.transform = 'scale(1.1)';
-            });
-            bubble.addEventListener('mouseleave', () => {
-                bubble.style.transform = 'scale(1)';
-            });
-            
-            // Add click handler directly to bubble for better responsiveness
-            bubble.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent double-triggering
-            });
-
-            gameAreaRef.current.appendChild(bubble);
-            bubbles.current.push(bubble);
-
-            // Auto-remove after 3 seconds
-            setTimeout(() => {
-                const idx = bubbles.current.indexOf(bubble);
-                if (idx > -1) {
-                    bubbles.current.splice(idx, 1);
-                    bubble.remove();
-                }
-            }, 3000);
-        };
-
-        // Initial spawn
+        // Spawn first bubble
         spawnBubble();
-        
+
         // Spawn bubbles periodically
-        intervals.current.bubble = setInterval(() => {
-            if (gameAreaRef.current && bubbles.current.length < 5) {
-                spawnBubble();
-            }
+        intervals.current.spawn = setInterval(() => {
+            spawnBubble();
         }, 800);
 
         // Progress tracking
@@ -201,25 +178,37 @@ export default function PlayproofCaptcha({
 
         // End game
         intervals.current.game = setTimeout(() => endGame(), gameDuration);
-    };
+    }, [gameDuration, onStart, spawnBubble]);
 
-    const endGame = () => {
+    const endGame = useCallback(() => {
         // Clear intervals
-        if (intervals.current.bubble) clearInterval(intervals.current.bubble);
-        if (intervals.current.progress) clearInterval(intervals.current.progress);
-        if (intervals.current.game) clearTimeout(intervals.current.game);
+        if (intervals.current.spawn) {
+            clearInterval(intervals.current.spawn);
+            intervals.current.spawn = undefined;
+        }
+        if (intervals.current.progress) {
+            clearInterval(intervals.current.progress);
+            intervals.current.progress = undefined;
+        }
+        if (intervals.current.game) {
+            clearTimeout(intervals.current.game);
+            intervals.current.game = undefined;
+        }
+
+        // Clear bubbles
+        setBubbles([]);
 
         // Calculate accuracy
         const total = behaviorData.current.hits + behaviorData.current.misses;
         behaviorData.current.clickAccuracy = total > 0 ? behaviorData.current.hits / total : 0;
 
         // Calculate confidence score
-        const score = calculateConfidence(behaviorData.current);
-        const passed = score >= confidenceThreshold;
+        const scoreValue = calculateConfidence(behaviorData.current);
+        const passed = scoreValue >= confidenceThreshold;
 
         const result: VerificationResult = {
             passed,
-            score,
+            score: scoreValue,
             threshold: confidenceThreshold,
             timestamp: Date.now(),
             details: {
@@ -236,7 +225,7 @@ export default function PlayproofCaptcha({
         } else {
             onFailure?.(result);
         }
-    };
+    }, [confidenceThreshold, onSuccess, onFailure]);
 
     const calculateConfidence = (data: typeof behaviorData.current): number => {
         const scores: { weight: number; score: number }[] = [];
@@ -287,102 +276,74 @@ export default function PlayproofCaptcha({
         return scores.reduce((sum, s) => sum + (s.weight * s.score), 0) / totalWeight;
     };
 
-    // Mouse/click handlers - use ref to track game state
-    const gameStateRef = useRef(gameState);
-    
-    useEffect(() => {
-        gameStateRef.current = gameState;
-    }, [gameState]);
+    // Handle bubble click
+    const handleBubbleClick = useCallback((bubbleId: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        
+        if (gameStateRef.current !== 'playing') return;
 
-    useEffect(() => {
-        const gameArea = gameAreaRef.current;
-        if (!gameArea) return;
+        behaviorData.current.clickTimings.push(Date.now());
+        behaviorData.current.hits++;
+        setScore(prev => prev + 10);
 
-        const handleMouseMove = (e: MouseEvent) => {
-            if (gameStateRef.current !== 'playing') return;
-            const rect = gameArea.getBoundingClientRect();
-            const movement = {
-                x: e.clientX - rect.left,
-                y: e.clientY - rect.top,
-                timestamp: performance.now() // Use performance.now() for better precision
-            };
-            behaviorData.current.mouseMovements.push(movement);
-            currentTrajectory.current.push(movement);
+        // Save trajectory
+        if (currentTrajectory.current.length > 2) {
+            behaviorData.current.trajectories.push([...currentTrajectory.current]);
+        }
+        currentTrajectory.current = [];
+
+        // Mark bubble as popping then remove
+        setBubbles(prev => prev.map(b => 
+            b.id === bubbleId ? { ...b, popping: true } : b
+        ));
+
+        setTimeout(() => {
+            setBubbles(prev => prev.filter(b => b.id !== bubbleId));
+        }, 200);
+    }, []);
+
+    // Handle game area click (miss)
+    const handleGameAreaClick = useCallback((e: React.MouseEvent) => {
+        if (gameStateRef.current !== 'playing') return;
+
+        // Only count as miss if not clicking a bubble
+        const target = e.target as HTMLElement;
+        if (target.classList.contains('playproof-bubble')) return;
+
+        behaviorData.current.clickTimings.push(Date.now());
+        behaviorData.current.misses++;
+
+        // Save trajectory
+        if (currentTrajectory.current.length > 2) {
+            behaviorData.current.trajectories.push([...currentTrajectory.current]);
+        }
+        currentTrajectory.current = [];
+    }, []);
+
+    // Handle mouse move
+    const handleMouseMove = useCallback((e: React.MouseEvent) => {
+        if (gameStateRef.current !== 'playing') return;
+        
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const movement = {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top,
+            timestamp: Date.now()
         };
-
-        const handleClick = (e: MouseEvent) => {
-            if (gameStateRef.current !== 'playing') return;
-
-            behaviorData.current.clickTimings.push(performance.now());
-
-            // Check bubble hit
-            const rect = gameArea.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-
-            let hit = false;
-            for (const bubble of bubbles.current) {
-                if (!bubble.parentElement) continue; // Skip if already removed
-                
-                const bRect = bubble.getBoundingClientRect();
-                const bX = bRect.left - rect.left;
-                const bY = bRect.top - rect.top;
-                const bRadius = bRect.width / 2;
-                const bCenterX = bX + bRadius;
-                const bCenterY = bY + bRadius;
-
-                // Check if click is within circle (more accurate than rectangle)
-                const distance = Math.sqrt(
-                    Math.pow(x - bCenterX, 2) + Math.pow(y - bCenterY, 2)
-                );
-
-                if (distance <= bRadius) {
-                    // Pop bubble with visual feedback
-                    bubble.style.animation = 'bubblePop 0.2s ease forwards';
-                    bubble.style.pointerEvents = 'none';
-                    
-                    // Update score immediately for visual feedback
-                    setScore(prev => prev + 10);
-                    
-                    setTimeout(() => {
-                        const idx = bubbles.current.indexOf(bubble);
-                        if (idx > -1) bubbles.current.splice(idx, 1);
-                        if (bubble.parentElement) {
-                            bubble.remove();
-                        }
-                    }, 200);
-                    hit = true;
-                    break;
-                }
-            }
-
-            if (hit) behaviorData.current.hits++;
-            else behaviorData.current.misses++;
-
-            // Save trajectory
-            if (currentTrajectory.current.length > 2) {
-                behaviorData.current.trajectories.push([...currentTrajectory.current]);
-            }
-            currentTrajectory.current = [];
-        };
-
-        gameArea.addEventListener('mousemove', handleMouseMove);
-        gameArea.addEventListener('click', handleClick);
-
-        return () => {
-            gameArea.removeEventListener('mousemove', handleMouseMove);
-            gameArea.removeEventListener('click', handleClick);
-        };
-    }, []); // Empty deps - handlers use refs
+        behaviorData.current.mouseMovements.push(movement);
+        currentTrajectory.current.push(movement);
+    }, []);
 
     // Cleanup on unmount
     useEffect(() => {
         return () => {
-            if (intervals.current.bubble) clearInterval(intervals.current.bubble);
+            if (intervals.current.spawn) clearInterval(intervals.current.spawn);
             if (intervals.current.progress) clearInterval(intervals.current.progress);
             if (intervals.current.game) clearTimeout(intervals.current.game);
         };
     }, []);
+
+    const primaryRgb = hexToRgb(mergedTheme.primary);
 
     return (
         <div
@@ -421,7 +382,7 @@ export default function PlayproofCaptcha({
                             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
                         </svg>
                     </span>
-                    Verify you're human
+                    Verify you&apos;re human
                 </h2>
                 <span className="text-xs font-medium" style={{ color: mergedTheme.textMuted }}>
                     {timeLeft}s
@@ -436,21 +397,45 @@ export default function PlayproofCaptcha({
                     background: mergedTheme.surface,
                     cursor: gameState === 'playing' ? 'crosshair' : 'default'
                 }}
+                onClick={handleGameAreaClick}
+                onMouseMove={handleMouseMove}
             >
                 {/* Score display during gameplay */}
                 {gameState === 'playing' && (
                     <div
-                        className="absolute top-3 right-3 px-3 py-1.5 rounded-lg text-sm font-bold"
+                        className="absolute top-3 right-3 px-3 py-1.5 rounded-lg text-sm font-bold z-20"
                         style={{
                             background: `linear-gradient(135deg, ${mergedTheme.primary}88, ${mergedTheme.secondary}88)`,
                             color: mergedTheme.text,
                             backdropFilter: 'blur(8px)',
-                            zIndex: 20
                         }}
                     >
                         Score: {score}
                     </div>
                 )}
+
+                {/* Bubbles */}
+                {bubbles.map((bubble) => (
+                    <div
+                        key={bubble.id}
+                        className={`playproof-bubble absolute rounded-full cursor-pointer transition-transform hover:scale-110 ${bubble.popping ? 'animate-pop' : 'animate-appear'}`}
+                        style={{
+                            width: bubble.size,
+                            height: bubble.size,
+                            left: bubble.x,
+                            top: bubble.y,
+                            background: `linear-gradient(135deg, ${mergedTheme.primary}, ${mergedTheme.secondary})`,
+                            boxShadow: `0 4px 15px rgba(${primaryRgb.r}, ${primaryRgb.g}, ${primaryRgb.b}, 0.3), 
+                                inset 0 -2px 10px rgba(0,0,0,0.2),
+                                inset 0 2px 10px rgba(255,255,255,0.3)`,
+                            zIndex: 10,
+                            opacity: bubble.popping ? 0 : 1,
+                            transform: bubble.popping ? 'scale(1.3)' : 'scale(1)',
+                        }}
+                        onClick={(e) => handleBubbleClick(bubble.id, e)}
+                    />
+                ))}
+
                 {gameState === 'idle' && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-5">
                         <h3 className="text-base font-semibold mb-2" style={{ color: mergedTheme.text }}>
@@ -556,6 +541,12 @@ export default function PlayproofCaptcha({
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }
+        }
+        .animate-appear {
+          animation: bubbleAppear 0.3s ease forwards;
+        }
+        .animate-pop {
+          animation: bubblePop 0.2s ease forwards;
         }
         .animate-fadeIn {
           animation: fadeIn 0.3s ease;
