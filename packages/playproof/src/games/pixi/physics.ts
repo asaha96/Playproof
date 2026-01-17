@@ -1,53 +1,55 @@
 /**
  * Lightweight 2D Physics
  * Simple, deterministic physics for verification games
- * 
+ *
  * Avoids external dependencies; designed for easy server replay
  */
+
+import type { Vec2Type, CircleBodyOptions, RectBodyOptions, CollisionResult, RectBounds } from '../../types';
 
 /**
  * 2D Vector utilities
  */
 export const Vec2 = {
-    create(x = 0, y = 0) {
+    create(x = 0, y = 0): Vec2Type {
         return { x, y };
     },
-    
-    add(a, b) {
+
+    add(a: Vec2Type, b: Vec2Type): Vec2Type {
         return { x: a.x + b.x, y: a.y + b.y };
     },
-    
-    sub(a, b) {
+
+    sub(a: Vec2Type, b: Vec2Type): Vec2Type {
         return { x: a.x - b.x, y: a.y - b.y };
     },
-    
-    scale(v, s) {
+
+    scale(v: Vec2Type, s: number): Vec2Type {
         return { x: v.x * s, y: v.y * s };
     },
-    
-    length(v) {
+
+    length(v: Vec2Type): number {
         return Math.sqrt(v.x * v.x + v.y * v.y);
     },
-    
-    normalize(v) {
+
+    normalize(v: Vec2Type): Vec2Type {
         const len = Vec2.length(v);
         if (len === 0) return { x: 0, y: 0 };
         return { x: v.x / len, y: v.y / len };
     },
-    
-    dot(a, b) {
+
+    dot(a: Vec2Type, b: Vec2Type): number {
         return a.x * b.x + a.y * b.y;
     },
-    
-    reflect(v, normal) {
+
+    reflect(v: Vec2Type, normal: Vec2Type): Vec2Type {
         const dot = Vec2.dot(v, normal);
         return {
             x: v.x - 2 * dot * normal.x,
             y: v.y - 2 * dot * normal.y
         };
     },
-    
-    distance(a, b) {
+
+    distance(a: Vec2Type, b: Vec2Type): number {
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         return Math.sqrt(dx * dx + dy * dy);
@@ -58,12 +60,21 @@ export const Vec2 = {
  * Simple circle body for physics simulation
  */
 export class CircleBody {
-    constructor(x, y, radius, options = {}) {
+    position: Vec2Type;
+    prevPosition: Vec2Type;
+    velocity: Vec2Type;
+    radius: number;
+    friction: number;
+    restitution: number;
+    mass: number;
+    isStatic: boolean;
+
+    constructor(x: number, y: number, radius: number, options: CircleBodyOptions = {}) {
         this.position = Vec2.create(x, y);
         this.prevPosition = Vec2.create(x, y);
         this.velocity = Vec2.create(0, 0);
         this.radius = radius;
-        
+
         this.friction = options.friction ?? 0.98;
         this.restitution = options.restitution ?? 0.8;
         this.mass = options.mass ?? 1;
@@ -73,7 +84,7 @@ export class CircleBody {
     /**
      * Apply impulse to body
      */
-    applyImpulse(impulse) {
+    applyImpulse(impulse: Vec2Type): void {
         if (this.isStatic) return;
         this.velocity = Vec2.add(this.velocity, Vec2.scale(impulse, 1 / this.mass));
     }
@@ -81,18 +92,18 @@ export class CircleBody {
     /**
      * Update position (Verlet-style)
      */
-    update(dt, gravity = { x: 0, y: 0 }) {
+    update(dt: number, gravity: Vec2Type = { x: 0, y: 0 }): void {
         if (this.isStatic) return;
-        
+
         // Save previous position for interpolation
         this.prevPosition = { ...this.position };
-        
+
         // Apply gravity
         this.velocity = Vec2.add(this.velocity, Vec2.scale(gravity, dt));
-        
+
         // Apply friction
         this.velocity = Vec2.scale(this.velocity, this.friction);
-        
+
         // Update position
         this.position = Vec2.add(this.position, Vec2.scale(this.velocity, dt));
     }
@@ -100,7 +111,7 @@ export class CircleBody {
     /**
      * Get interpolated position for rendering
      */
-    getInterpolatedPosition(alpha) {
+    getInterpolatedPosition(alpha: number): Vec2Type {
         return {
             x: this.prevPosition.x + (this.position.x - this.prevPosition.x) * alpha,
             y: this.prevPosition.y + (this.position.y - this.prevPosition.y) * alpha
@@ -110,7 +121,7 @@ export class CircleBody {
     /**
      * Check if body is effectively stopped
      */
-    isStopped(threshold = 0.5) {
+    isStopped(threshold = 0.5): boolean {
         return Vec2.length(this.velocity) < threshold;
     }
 }
@@ -119,7 +130,13 @@ export class CircleBody {
  * Axis-aligned rectangle for walls/obstacles
  */
 export class RectBody {
-    constructor(x, y, width, height, options = {}) {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    restitution: number;
+
+    constructor(x: number, y: number, width: number, height: number, options: RectBodyOptions = {}) {
         this.x = x;
         this.y = y;
         this.width = width;
@@ -130,7 +147,7 @@ export class RectBody {
     /**
      * Get bounds
      */
-    getBounds() {
+    getBounds(): RectBounds {
         return {
             left: this.x,
             right: this.x + this.width,
@@ -147,7 +164,7 @@ export const Collision = {
     /**
      * Circle vs Circle collision
      */
-    circleVsCircle(a, b) {
+    circleVsCircle(a: CircleBody, b: CircleBody): boolean {
         const dist = Vec2.distance(a.position, b.position);
         const minDist = a.radius + b.radius;
         return dist < minDist;
@@ -156,29 +173,29 @@ export const Collision = {
     /**
      * Circle vs Rect collision with resolution
      */
-    circleVsRect(circle, rect) {
+    circleVsRect(circle: CircleBody, rect: RectBody): CollisionResult {
         const bounds = rect.getBounds();
-        
+
         // Find closest point on rect to circle center
         const closestX = Math.max(bounds.left, Math.min(circle.position.x, bounds.right));
         const closestY = Math.max(bounds.top, Math.min(circle.position.y, bounds.bottom));
-        
+
         const distX = circle.position.x - closestX;
         const distY = circle.position.y - closestY;
         const distance = Math.sqrt(distX * distX + distY * distY);
-        
+
         if (distance < circle.radius) {
             // Collision detected - calculate normal
-            let normal;
+            let normal: Vec2Type;
             if (distance === 0) {
                 // Circle center is inside rect - push out via shortest axis
                 const overlapLeft = circle.position.x - bounds.left;
                 const overlapRight = bounds.right - circle.position.x;
                 const overlapTop = circle.position.y - bounds.top;
                 const overlapBottom = bounds.bottom - circle.position.y;
-                
+
                 const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
-                
+
                 if (minOverlap === overlapLeft) normal = { x: -1, y: 0 };
                 else if (minOverlap === overlapRight) normal = { x: 1, y: 0 };
                 else if (minOverlap === overlapTop) normal = { x: 0, y: -1 };
@@ -186,25 +203,25 @@ export const Collision = {
             } else {
                 normal = Vec2.normalize({ x: distX, y: distY });
             }
-            
+
             return { collided: true, normal, penetration: circle.radius - distance };
         }
-        
+
         return { collided: false };
     },
 
     /**
      * Resolve circle vs rect collision
      */
-    resolveCircleVsRect(circle, rect, collision) {
-        if (!collision.collided || circle.isStatic) return;
-        
+    resolveCircleVsRect(circle: CircleBody, rect: RectBody, collision: CollisionResult): void {
+        if (!collision.collided || circle.isStatic || !collision.normal || collision.penetration === undefined) return;
+
         // Push circle out of rect
         circle.position = Vec2.add(
             circle.position,
             Vec2.scale(collision.normal, collision.penetration)
         );
-        
+
         // Reflect velocity
         circle.velocity = Vec2.scale(
             Vec2.reflect(circle.velocity, collision.normal),
@@ -215,7 +232,7 @@ export const Collision = {
     /**
      * Check if circle is inside another circle (for hole detection)
      */
-    circleInsideCircle(inner, outerX, outerY, outerRadius) {
+    circleInsideCircle(inner: CircleBody, outerX: number, outerY: number, outerRadius: number): boolean {
         const dist = Vec2.distance(inner.position, { x: outerX, y: outerY });
         return dist + inner.radius * 0.5 < outerRadius;
     },
@@ -223,7 +240,7 @@ export const Collision = {
     /**
      * Check if point is inside circle
      */
-    pointInCircle(px, py, cx, cy, radius) {
+    pointInCircle(px: number, py: number, cx: number, cy: number, radius: number): boolean {
         const dx = px - cx;
         const dy = py - cy;
         return dx * dx + dy * dy <= radius * radius;
@@ -232,7 +249,7 @@ export const Collision = {
     /**
      * Check if point is inside rect
      */
-    pointInRect(px, py, rx, ry, rw, rh) {
+    pointInRect(px: number, py: number, rx: number, ry: number, rw: number, rh: number): boolean {
         return px >= rx && px <= rx + rw && py >= ry && py <= ry + rh;
     }
 };
@@ -241,18 +258,22 @@ export const Collision = {
  * Simple physics world
  */
 export class PhysicsWorld {
-    constructor(options = {}) {
+    gravity: Vec2Type;
+    bodies: CircleBody[];
+    rects: RectBody[];
+
+    constructor(options: { gravity?: Vec2Type } = {}) {
         this.gravity = options.gravity ?? { x: 0, y: 0 };
         this.bodies = [];
         this.rects = [];
     }
 
-    addCircle(circle) {
+    addCircle(circle: CircleBody): CircleBody {
         this.bodies.push(circle);
         return circle;
     }
 
-    addRect(rect) {
+    addRect(rect: RectBody): RectBody {
         this.rects.push(rect);
         return rect;
     }
@@ -260,7 +281,7 @@ export class PhysicsWorld {
     /**
      * Step the physics simulation
      */
-    update(dt) {
+    update(dt: number): void {
         // Update all bodies
         for (const body of this.bodies) {
             body.update(dt, this.gravity);
@@ -285,7 +306,7 @@ export class PhysicsWorld {
                     const b = this.bodies[j];
                     const normal = Vec2.normalize(Vec2.sub(b.position, a.position));
                     const overlap = (a.radius + b.radius) - Vec2.distance(a.position, b.position);
-                    
+
                     if (!a.isStatic) a.position = Vec2.sub(a.position, Vec2.scale(normal, overlap / 2));
                     if (!b.isStatic) b.position = Vec2.add(b.position, Vec2.scale(normal, overlap / 2));
                 }
@@ -293,7 +314,7 @@ export class PhysicsWorld {
         }
     }
 
-    clear() {
+    clear(): void {
         this.bodies = [];
         this.rects = [];
     }
