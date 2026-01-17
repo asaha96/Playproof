@@ -101,8 +101,10 @@ export class CircleBody {
         // Apply gravity
         this.velocity = Vec2.add(this.velocity, Vec2.scale(gravity, dt));
 
-        // Apply friction
-        this.velocity = Vec2.scale(this.velocity, this.friction);
+        // Apply friction (frame-rate independent using exponential decay)
+        // friction^(dt * 60) normalizes to 60fps behavior
+        const frictionFactor = Math.pow(this.friction, dt * 60);
+        this.velocity = Vec2.scale(this.velocity, frictionFactor);
 
         // Update position
         this.position = Vec2.add(this.position, Vec2.scale(this.velocity, dt));

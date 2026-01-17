@@ -16,7 +16,7 @@ import type { PlayproofConfig, SDKHooks, GameResult, BasketballLevelSpec, ShotDa
  */
 const LEVEL_SPEC: BasketballLevelSpec = {
     version: 1,
-    world: { width: 400, height: 280, gravity: 600 },
+    world: { width: 400, height: 280, gravity: 800 }, // Increased gravity for realistic arc
     ball: { x: 80, y: 220, radius: 15 },
     hoop: {
         x: 300,
@@ -97,12 +97,12 @@ export class BasketballGame extends PixiGameBase {
             gravity: { x: 0, y: spec.world.gravity * this.scaleY }
         });
 
-        // Create ball
+        // Create ball (friction ~1 for no air drag in flight)
         this.ball = new CircleBody(
             spec.ball.x * this.scaleX,
             spec.ball.y * this.scaleY,
             spec.ball.radius * Math.min(this.scaleX, this.scaleY),
-            { friction: 0.99, restitution: 0.6 }
+            { friction: 1.0, restitution: 0.65 }
         );
         this.world.addCircle(this.ball);
 
@@ -235,12 +235,15 @@ export class BasketballGame extends PixiGameBase {
                     const dx = completedDrag.endX - completedDrag.startX;
                     const dy = completedDrag.startY - completedDrag.endY; // Invert Y
 
-                    if (dy > 20) { // Minimum upward swipe
-                        const power = Math.min(Math.sqrt(dx * dx + dy * dy) * 0.4, 20);
+                    if (dy > 15) { // Minimum upward swipe
+                        // Increased power for proper arc to reach hoop
+                        const swipeLength = Math.sqrt(dx * dx + dy * dy);
+                        const power = Math.min(swipeLength * 0.6, 35);
                         const angle = Math.atan2(dy, dx);
 
-                        const impulseX = Math.cos(angle) * power;
-                        const impulseY = -Math.sin(angle) * power; // Negative for upward
+                        // Apply impulse with scaling for canvas size
+                        const impulseX = Math.cos(angle) * power * this.scaleX;
+                        const impulseY = -Math.sin(angle) * power * this.scaleY; // Negative for upward
 
                         this.ball!.applyImpulse({ x: impulseX, y: impulseY });
 
@@ -321,18 +324,21 @@ export class BasketballGame extends PixiGameBase {
                     const dy = drag.startY - drag.currentY;
 
                     if (dy > 10) {
-                        const power = Math.min(Math.sqrt(dx * dx + dy * dy) * 0.4, 20);
+                        const swipeLength = Math.sqrt(dx * dx + dy * dy);
+                        const power = Math.min(swipeLength * 0.6, 35);
                         const angle = Math.atan2(dy, dx);
 
-                        // Simple arc preview
-                        const vx = Math.cos(angle) * power * 30;
-                        const vy = -Math.sin(angle) * power * 30;
+                        // Calculate initial velocity (matching actual shot physics)
+                        const vx = Math.cos(angle) * power * this.scaleX;
+                        const vy = -Math.sin(angle) * power * this.scaleY;
+                        const gravity = LEVEL_SPEC.world.gravity * this.scaleY;
 
                         this.gfx.aimLine!.moveTo(ballPos.x, ballPos.y);
 
-                        for (let t = 0; t < 1; t += 0.1) {
+                        // Draw parabolic trajectory preview
+                        for (let t = 0; t < 0.8; t += 0.05) {
                             const px = ballPos.x + vx * t;
-                            const py = ballPos.y + vy * t + 0.5 * 600 * this.scaleY * t * t * 0.01;
+                            const py = ballPos.y + vy * t + 0.5 * gravity * t * t;
                             this.gfx.aimLine!.lineTo(px, py);
                         }
 
