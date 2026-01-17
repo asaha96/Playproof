@@ -251,8 +251,8 @@ export class Playproof {
             gameDuration: duration
         }, hooks);
 
-        // For Pixi games, we need to await init
-        if (gameInfo.isPixi && this.game.init) {
+        // For Three.js games, we need to await init
+        if (gameInfo.isThree && this.game.init) {
             await this.game.init();
         }
 
