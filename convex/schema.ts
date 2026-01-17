@@ -19,10 +19,12 @@ export default defineSchema({
     // Verification sessions table for analytics
     sessions: defineTable({
         userId: v.optional(v.string()),
-        minigameName: v.string(),
+        minigameName: v.string(), // Kept for backward compat
+        gameId: v.optional(v.string()),
         scorePercent: v.number(),
-        result: v.union(v.literal("pass"), v.literal("fail")),
+        result: v.union(v.literal("pass"), v.literal("fail"), v.literal("Human"), v.literal("Bot")),
         durationMs: v.number(),
+        riskFlags: v.optional(v.array(v.string())),
         createdAt: v.number(),
     }).index("by_user", ["userId"]),
 
