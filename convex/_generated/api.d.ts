@@ -8,6 +8,9 @@
  * @module
  */
 
+import type * as branding from "../branding.js";
+import type * as minigames from "../minigames.js";
+import type * as sessions from "../sessions.js";
 import type * as users from "../users.js";
 
 import type {
@@ -17,6 +20,9 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  branding: typeof branding;
+  minigames: typeof minigames;
+  sessions: typeof sessions;
   users: typeof users;
 }>;
 
