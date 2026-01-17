@@ -27,5 +27,8 @@
   "repository": {
     "type": "git",
     "url": ""
+  },
+  "dependencies": {
+    "pixi.js": "^8.15.0"
   }
 }
