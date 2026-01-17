@@ -12,6 +12,7 @@
     "dev": "npm run dev -w apps/web",
     "dev:web": "npm run dev -w apps/web",
     "dev:demo": "npm run dev -w demo-app",
+    "dev:demo:sdk": "concurrently -k -n sdk,demo -c cyan,magenta \"npm run dev -w packages/playproof\" \"npm run dev -w demo-app\"",
     "dev:api": "npm run dev -w apps/api",
     "dev:worker": "npm run dev -w apps/edge-worker",
     "build": "npm run build -w apps/web",
@@ -25,6 +26,9 @@
     "game-captcha",
     "monorepo"
   ],
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
   "author": "",
   "license": "MIT",
   "repository": {

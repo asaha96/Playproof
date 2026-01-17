@@ -27,9 +27,12 @@ A human verification system that replaces traditional CAPTCHAs with engaging min
    - Package lives at `packages/playproof/`
    - npm publish name: `playproof`
 
-4. **`packages/playproof` is TypeScript-only**
-   - All SDK source code lives in `.ts` modules
-   - No `.js` files should exist under `packages/playproof/src`
+4. **Always use TypeScript, never JavaScript**
+   - All new code must be written in TypeScript (`.ts`, `.tsx`)
+   - Never create `.js` or `.jsx` files (except for config files like `next.config.js`)
+   - Prefer strict type safety over `any` types
+   - `packages/playproof` is TypeScript-only (no `.js` under `packages/playproof/src`)
+   - `packages/playproof` is TypeScript-only (no `.js` under `packages/playproof/src`)
 
 ---
 
@@ -75,7 +78,7 @@ Update this file **immediately** after any of these changes:
 
 - New folder or package added
 - Package renamed or moved
-- Dependency structure changed (new workspace, new external dep)
+- Dependency structure changed (new workspace, new external dep, new root script)
 - API contract changed (endpoints, SDK interface)
 - New service or worker added
 - Branch strategy or naming convention changed
@@ -131,6 +134,7 @@ npm install
 npm run dev              # Default dev (apps/web)
 npm run dev:web          # apps/web
 npm run dev:demo         # demo-app
+npm run dev:demo:sdk     # packages/playproof + demo-app (concurrently)
 npm run dev:api          # apps/api
 npm run dev:worker       # apps/edge-worker
 ```

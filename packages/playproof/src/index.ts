@@ -1,6 +1,5 @@
 /**
- * PlayProof SDK - UMD Bundle Entry
- * Universal module definition for browser usage
+ * PlayProof SDK - Entry
  */
 
 import { Playproof } from './playproof';
