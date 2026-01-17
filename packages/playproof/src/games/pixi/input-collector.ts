@@ -18,7 +18,8 @@ import type {
 } from '../../types';
 
 // Enable verbose logging in development
-const DEBUG = true;
+const DEBUG = (globalThis as { process?: { env?: { NODE_ENV?: string } } })
+    ?.process?.env?.NODE_ENV === 'development';
 const log = (...args: unknown[]): void => {
     if (DEBUG) console.log('[InputCollector]', ...args);
 };

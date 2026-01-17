@@ -11,8 +11,9 @@ import { PhysicsWorld, CircleBody, RectBody, Vec2, Collision } from './physics';
 import { Graphics } from 'pixi.js';
 import type { PlayproofConfig, SDKHooks, GameResult, MiniGolfLevelSpec, ShotData, Vec2Type } from '../../types';
 
-// Debug logging
-const DEBUG = true;
+// Debug logging (dev-only)
+const DEBUG = (globalThis as { process?: { env?: { NODE_ENV?: string } } })
+    ?.process?.env?.NODE_ENV === 'development';
 const log = (...args: unknown[]): void => {
     if (DEBUG) console.log('[MiniGolf]', ...args);
 };
@@ -55,6 +56,9 @@ export class MiniGolfGame extends PixiGameBase {
     private scaleY: number;
     private gfx: MiniGolfGraphics;
     private _lastDebugTime: number;
+    private maxPullDistance: number;
+    private powerScale: number;
+    private maxPower: number;
 
     constructor(gameArea: HTMLElement, config: PlayproofConfig, hooks: SDKHooks) {
         super(gameArea, config, hooks);
@@ -75,6 +79,9 @@ export class MiniGolfGame extends PixiGameBase {
         this.scaleX = 1;
         this.scaleY = 1;
         this._lastDebugTime = 0;
+        this.maxPullDistance = 0;
+        this.powerScale = 0;
+        this.maxPower = 0;
 
         this.gfx = {
             ball: null,
@@ -96,6 +103,11 @@ export class MiniGolfGame extends PixiGameBase {
         this.world = new PhysicsWorld({
             gravity: { x: 0, y: 0 } // Top-down, no gravity
         });
+
+        const minScale = Math.min(this.scaleX, this.scaleY);
+        this.maxPullDistance = 160 * minScale;
+        this.powerScale = 4.2 * minScale;
+        this.maxPower = 420 * minScale;
 
         // Create ball
         this.ball = new CircleBody(
@@ -172,7 +184,7 @@ export class MiniGolfGame extends PixiGameBase {
 
     update(dt: number): void {
         // Log once per second for debugging
-        if (!this._lastDebugTime || performance.now() - this._lastDebugTime > 1000) {
+        if (DEBUG && (!this._lastDebugTime || performance.now() - this._lastDebugTime > 1000)) {
             log('update() running, hasShot:', this.hasShot, 'isCollecting:', this.input?.isCollecting, 'isDragging:', this.input?.isDragging);
             this._lastDebugTime = performance.now();
         }
@@ -198,10 +210,12 @@ export class MiniGolfGame extends PixiGameBase {
                     // Calculate impulse (opposite of drag direction)
                     const dx = completedDrag.startX - completedDrag.endX;
                     const dy = completedDrag.startY - completedDrag.endY;
-                    const power = Math.min(Vec2.length({ x: dx, y: dy }) * 0.15, 25);
-                    log('Drag vector dx:', dx, 'dy:', dy, 'power:', power);
+                    const pullLength = Vec2.length({ x: dx, y: dy });
+                    const clampedPull = Math.min(pullLength, this.maxPullDistance);
+                    const power = Math.min(clampedPull * this.powerScale, this.maxPower);
+                    log('Drag vector dx:', dx, 'dy:', dy, 'pull:', pullLength, 'power:', power);
 
-                    if (power > 0.5) { // Minimum power threshold
+                    if (power > 8) {
                         const impulse = Vec2.scale(Vec2.normalize({ x: dx, y: dy }), power);
                         log('Applying impulse:', impulse);
                         this.ball!.applyImpulse(impulse);
@@ -217,7 +231,7 @@ export class MiniGolfGame extends PixiGameBase {
                         };
 
                         this.input!.recordHit(); // Shot taken
-                        log('Shot taken!');
+                        log('Shot taken! velocity:', { ...this.ball!.velocity });
                     } else {
                         log('Power too low:', power);
                     }
@@ -257,12 +271,14 @@ export class MiniGolfGame extends PixiGameBase {
                     // Draw aim line (opposite direction)
                     const dx = drag.startX - drag.currentX;
                     const dy = drag.startY - drag.currentY;
-                    const power = Math.min(Vec2.length({ x: dx, y: dy }) * 0.15, 25);
+                    const pullLength = Vec2.length({ x: dx, y: dy });
+                    const clampedPull = Math.min(pullLength, this.maxPullDistance);
+                    const power = Math.min(clampedPull * this.powerScale, this.maxPower);
                     const dir = Vec2.normalize({ x: dx, y: dy });
 
                     // Line from ball in shot direction
-                    const endX = ballPos.x + dir.x * power * 5;
-                    const endY = ballPos.y + dir.y * power * 5;
+                    const endX = ballPos.x + dir.x * power * 0.6;
+                    const endY = ballPos.y + dir.y * power * 0.6;
 
                     this.gfx.aimLine!.moveTo(ballPos.x, ballPos.y);
                     this.gfx.aimLine!.lineTo(endX, endY);
@@ -273,11 +289,11 @@ export class MiniGolfGame extends PixiGameBase {
                     });
 
                     // Power indicator dots
-                    const numDots = Math.floor(power / 5);
+                    const numDots = Math.max(3, Math.floor(power / 40));
                     for (let i = 1; i <= numDots; i++) {
-                        const t = i / (power / 5);
-                        const dotX = ballPos.x + dir.x * power * 5 * t;
-                        const dotY = ballPos.y + dir.y * power * 5 * t;
+                        const t = i / numDots;
+                        const dotX = ballPos.x + dir.x * power * 0.6 * t;
+                        const dotY = ballPos.y + dir.y * power * 0.6 * t;
                         this.gfx.aimLine!.circle(dotX, dotY, 3);
                         this.gfx.aimLine!.fill({ color: 0xffffff, alpha: 0.5 });
                     }
@@ -295,7 +311,7 @@ export class MiniGolfGame extends PixiGameBase {
         }
 
         // Check if ball stopped (miss)
-        if (this.ball!.isStopped(0.3)) {
+        if (this.ball!.isStopped(3)) {
             return { success: false, reason: 'missed' };
         }
 

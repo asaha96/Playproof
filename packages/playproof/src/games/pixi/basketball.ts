@@ -11,6 +11,13 @@ import { PhysicsWorld, CircleBody, RectBody, Vec2, Collision } from './physics';
 import { Graphics } from 'pixi.js';
 import type { PlayproofConfig, SDKHooks, GameResult, BasketballLevelSpec, ShotData, HoopSensor, ShootZone } from '../../types';
 
+// Debug logging (dev-only)
+const DEBUG = (globalThis as { process?: { env?: { NODE_ENV?: string } } })
+    ?.process?.env?.NODE_ENV === 'development';
+const log = (...args: unknown[]): void => {
+    if (DEBUG) console.log('[Basketball]', ...args);
+};
+
 /**
  * Hardcoded level spec for v0
  */
@@ -52,6 +59,9 @@ export class BasketballGame extends PixiGameBase {
     private scaleX: number;
     private scaleY: number;
     private gfx: BasketballGraphics;
+    private shotPowerScale: number;
+    private maxShotPower: number;
+    private minShotPower: number;
 
     constructor(gameArea: HTMLElement, config: PlayproofConfig, hooks: SDKHooks) {
         super(gameArea, config, hooks);
@@ -83,6 +93,10 @@ export class BasketballGame extends PixiGameBase {
             backboard: null,
             aimLine: null
         };
+
+        this.shotPowerScale = 0;
+        this.maxShotPower = 0;
+        this.minShotPower = 0;
     }
 
     async setup(): Promise<void> {
@@ -91,6 +105,11 @@ export class BasketballGame extends PixiGameBase {
 
         this.scaleX = width / spec.world.width;
         this.scaleY = height / spec.world.height;
+
+        const minScale = Math.min(this.scaleX, this.scaleY);
+        this.shotPowerScale = 6.5 * minScale;
+        this.maxShotPower = 520 * minScale;
+        this.minShotPower = 140 * minScale;
 
         // Create physics world with gravity
         this.world = new PhysicsWorld({
@@ -102,7 +121,7 @@ export class BasketballGame extends PixiGameBase {
             spec.ball.x * this.scaleX,
             spec.ball.y * this.scaleY,
             spec.ball.radius * Math.min(this.scaleX, this.scaleY),
-            { friction: 0.99, restitution: 0.6 }
+            { friction: 0.995, restitution: 0.6 }
         );
         this.world.addCircle(this.ball);
 
@@ -231,16 +250,18 @@ export class BasketballGame extends PixiGameBase {
                 );
 
                 if (startInZone) {
-                    // Upward swipe = shot
                     const dx = completedDrag.endX - completedDrag.startX;
-                    const dy = completedDrag.startY - completedDrag.endY; // Invert Y
+                    const dy = completedDrag.startY - completedDrag.endY;
+                    const pullLength = Math.sqrt(dx * dx + dy * dy);
 
-                    if (dy > 20) { // Minimum upward swipe
-                        const power = Math.min(Math.sqrt(dx * dx + dy * dy) * 0.4, 20);
+                    if (dy > 12) {
+                        const power = Math.min(Math.max(pullLength * this.shotPowerScale, this.minShotPower), this.maxShotPower);
                         const angle = Math.atan2(dy, dx);
 
                         const impulseX = Math.cos(angle) * power;
-                        const impulseY = -Math.sin(angle) * power; // Negative for upward
+                        const impulseY = -Math.sin(angle) * power;
+
+                        log('Shot', { startInZone, dx, dy, pullLength, power, angle });
 
                         this.ball!.applyImpulse({ x: impulseX, y: impulseY });
 
@@ -256,7 +277,12 @@ export class BasketballGame extends PixiGameBase {
                         };
 
                         this.input!.recordHit();
+                        log('Ball velocity after shot', { ...this.ball!.velocity });
+                    } else {
+                        log('Shot rejected: dy too small', { startInZone, dx, dy, pullLength });
                     }
+                } else {
+                    log('Shot rejected: start outside shoot zone', { startX: completedDrag.startX, startY: completedDrag.startY, shootZone: this.shootZone });
                 }
             }
         }
@@ -268,6 +294,10 @@ export class BasketballGame extends PixiGameBase {
         if (this.hasShot) {
             const ballY = this.ball!.position.y;
             const ballX = this.ball!.position.x;
+
+            if (DEBUG && Math.random() < 0.02) {
+                log('Ball flight', { x: ballX, y: ballY, velocity: { ...this.ball!.velocity } });
+            }
 
             // Check if ball is above rim
             if (ballY < this.hoopY) {
@@ -320,19 +350,23 @@ export class BasketballGame extends PixiGameBase {
                     const dx = drag.currentX - drag.startX;
                     const dy = drag.startY - drag.currentY;
 
-                    if (dy > 10) {
-                        const power = Math.min(Math.sqrt(dx * dx + dy * dy) * 0.4, 20);
+                    if (dy > 6) {
+                        const pullLength = Math.sqrt(dx * dx + dy * dy);
+                        const power = Math.min(Math.max(pullLength * this.shotPowerScale, this.minShotPower), this.maxShotPower);
                         const angle = Math.atan2(dy, dx);
 
-                        // Simple arc preview
-                        const vx = Math.cos(angle) * power * 30;
-                        const vy = -Math.sin(angle) * power * 30;
+                        const vx = Math.cos(angle) * power;
+                        const vy = -Math.sin(angle) * power;
+                        const gravity = LEVEL_SPEC.world.gravity * this.scaleY;
 
                         this.gfx.aimLine!.moveTo(ballPos.x, ballPos.y);
 
-                        for (let t = 0; t < 1; t += 0.1) {
+                        const steps = 12;
+                        const maxTime = 1.2;
+                        for (let i = 1; i <= steps; i++) {
+                            const t = (i / steps) * maxTime;
                             const px = ballPos.x + vx * t;
-                            const py = ballPos.y + vy * t + 0.5 * 600 * this.scaleY * t * t * 0.01;
+                            const py = ballPos.y + vy * t + 0.5 * gravity * t * t;
                             this.gfx.aimLine!.lineTo(px, py);
                         }
 

@@ -7,8 +7,9 @@ import { PixiHost } from './pixi-host';
 import { InputCollector } from './input-collector';
 import type { PlayproofConfig, SDKHooks, BehaviorData, AttemptData, GameResult, PlayproofTheme } from '../../types';
 
-// Debug logging
-const DEBUG = true;
+// Debug logging (dev-only)
+const DEBUG = (globalThis as { process?: { env?: { NODE_ENV?: string } } })
+    ?.process?.env?.NODE_ENV === 'development';
 const log = (...args: unknown[]): void => {
     if (DEBUG) console.log('[GameBase]', ...args);
 };
