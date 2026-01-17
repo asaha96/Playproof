@@ -5,9 +5,9 @@
 
 ## Project Intent
 
-**PlayProof** = Game-based verification SDK + services
+**PlayProof** = Deployment-based verification SDK + services
 
-A human verification system that replaces traditional CAPTCHAs with engaging mini-games that measure behavioral patterns to distinguish humans from bots.
+A human verification system that replaces traditional CAPTCHAs with branded deployments that measure behavioral patterns to distinguish humans from bots.
 
 ---
 
@@ -62,7 +62,7 @@ Playproof/
 | `apps/web` | Primary web application | Next.js (placeholder for now) |
 | `apps/api` | API orchestrator, endpoints: `/issue`, `/events`, `/finalize` | Fastify + TypeScript |
 | `apps/edge-worker` | Edge token issuance, caching, prefilter | Cloudflare Workers |
-| `packages/playproof` | Client SDK for embedding verification games | TypeScript + PixiJS |
+| `packages/playproof` | Client SDK for embedding verification deployments | TypeScript + PixiJS |
 | `packages/shared` | Shared types, contracts, utilities | TypeScript |
 | `services/scoring` | ML scoring service | Python + FastAPI + XGBoost |
 | `demo-app` | Interactive demo for testing SDK | Next.js |
@@ -204,6 +204,9 @@ git pull --ff-only
 - **Workspace root**: Configured with npm workspaces
 - **SDK**: `packages/playproof/` (published name: `playproof`)
 - **Web app**: `apps/web/` (placeholder, canonical path)
+- **Dashboard**: Deployments page at `/dashboard/deployments`
+- **Deployments**: Branding stored per deployment with `type` enum and `isActive` flag (user branding removed)
+- **Terminology**: Legacy naming updated to "deployments" across Convex and web UI
 - **Demo**: `demo-app/` (legacy, functional)
 - **API**: `apps/api/` (Fastify placeholder)
 - **Worker**: `apps/edge-worker/` (Cloudflare placeholder)
@@ -212,4 +215,4 @@ git pull --ff-only
 
 ---
 
-*Last updated: Initial creation*
+*Last updated: Deployment terminology and schema updates*

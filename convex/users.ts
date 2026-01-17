@@ -1,5 +1,4 @@
 import { mutation, query } from "./_generated/server";
-import { DEFAULT_BRANDING } from "./branding";
 
 /**
  * Get the current authenticated user's data.
@@ -63,15 +62,6 @@ export const upsertViewer = mutation({
         updates.imageUrl = identity.pictureUrl;
       }
 
-      const brandingKeys = Object.keys(
-        DEFAULT_BRANDING
-      ) as (keyof typeof DEFAULT_BRANDING)[];
-      for (const key of brandingKeys) {
-        if (existingUser[key] === undefined) {
-          updates[key] = DEFAULT_BRANDING[key];
-        }
-      }
-
       if (Object.keys(updates).length > 1) {
         await ctx.db.patch(existingUser._id, updates);
       }
@@ -85,7 +75,6 @@ export const upsertViewer = mutation({
       email: identity.email || "",
       name: identity.name || identity.email?.split("@")[0] || "User",
       imageUrl: identity.pictureUrl,
-      ...DEFAULT_BRANDING,
       createdAt: now,
       updatedAt: now,
     });

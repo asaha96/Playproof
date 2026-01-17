@@ -170,7 +170,7 @@ export default function AnalyticsPage() {
                 </EmptyMedia>
                 <EmptyTitle>No sessions yet</EmptyTitle>
                 <EmptyDescription>
-                  Sessions will appear here as soon as minigames start running.
+                  Sessions will appear here as soon as deployments go live.
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>
@@ -179,7 +179,7 @@ export default function AnalyticsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Session</TableHead>
-                  <TableHead>Game</TableHead>
+                  <TableHead>Deployment</TableHead>
                   <TableHead>Score</TableHead>
                   <TableHead>Result</TableHead>
                 </TableRow>
@@ -190,7 +190,7 @@ export default function AnalyticsPage() {
                     <TableCell className="font-medium">
                       {formatSessionId(session._id)}
                     </TableCell>
-                    <TableCell>{session.minigameName}</TableCell>
+                    <TableCell>{session.deploymentName}</TableCell>
                     <TableCell>{session.scorePercent}</TableCell>
                     <TableCell>
                       <span className="inline-flex items-center gap-1 text-sm">

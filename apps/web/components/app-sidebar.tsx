@@ -10,7 +10,7 @@ import {
   UserButton,
   useUser,
 } from "@clerk/nextjs"
-import { BarChart3, Gamepad2, Palette, ShieldCheck } from "lucide-react"
+import { BarChart3, Palette, Rocket, ShieldCheck } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -34,9 +34,9 @@ const navItems = [
     icon: BarChart3,
   },
   {
-    title: "Minigames",
-    href: "/dashboard/minigames",
-    icon: Gamepad2,
+    title: "Deployments",
+    href: "/dashboard/deployments",
+    icon: Rocket,
   },
   {
     title: "Branding",

@@ -6,8 +6,14 @@ const brandingFields = {
   secondaryColor: v.optional(v.string()),
   tertiaryColor: v.optional(v.string()),
   typography: v.optional(v.string()),
-  brandingType: v.optional(v.string()),
 };
+
+const deploymentType = v.union(
+  v.literal("bubble-pop"),
+  v.literal("golf"),
+  v.literal("basketball"),
+  v.literal("archery")
+);
 
 export default defineSchema({
   // Users table - stores authenticated users from Clerk
@@ -23,25 +29,25 @@ export default defineSchema({
     // Timestamps
     createdAt: v.number(),
     updatedAt: v.number(),
-    ...brandingFields,
   })
     .index("by_clerkSubject", ["clerkSubject"])
     .index("by_email", ["email"]),
-  // Minigames table - stores PlayProof minigame configs
-  minigames: defineTable({
+  // Deployments table - stores PlayProof deployment configs
+  deployments: defineTable({
     name: v.string(),
+    type: deploymentType,
     createdAt: v.number(),
     updatedAt: v.number(),
-    isReady: v.boolean(),
+    isActive: v.boolean(),
     sessionIds: v.optional(v.array(v.id("sessions"))),
     ...brandingFields,
   })
     .index("by_name", ["name"])
     .index("by_updatedAt", ["updatedAt"])
-    .index("by_ready", ["isReady"]),
-  // Sessions table - stores verification sessions for a minigame
+    .index("by_active", ["isActive"]),
+  // Sessions table - stores verification sessions for a deployment
   sessions: defineTable({
-    minigameId: v.id("minigames"),
+    deploymentId: v.id("deployments"),
     startAt: v.number(),
     endAt: v.number(),
     durationMs: v.number(),
@@ -77,6 +83,6 @@ export default defineSchema({
       })
     ),
   })
-    .index("by_minigameId", ["minigameId"])
+    .index("by_deploymentId", ["deploymentId"])
     .index("by_startAt", ["startAt"]),
 });
