@@ -22,7 +22,7 @@ const log = (...args: unknown[]): void => {
  */
 const LEVEL_SPEC: MiniGolfLevelSpec = {
     version: 1,
-    world: { width: 400, height: 280, friction: 0.985 },
+    world: { width: 400, height: 280, friction: 0.992 }, // Less aggressive friction for smoother gameplay
     ball: { x: 80, y: 200, radius: 10 },
     hole: { x: 320, y: 80, radius: 18 },
     walls: [
@@ -194,14 +194,15 @@ export class MiniGolfGame extends PixiGameBase {
                 );
                 log('Distance to ball:', distToBall, 'threshold:', this.ball!.radius * 3);
 
-                if (distToBall < this.ball!.radius * 3) {
+                if (distToBall < this.ball!.radius * 4) {
                     // Calculate impulse (opposite of drag direction)
                     const dx = completedDrag.startX - completedDrag.endX;
                     const dy = completedDrag.startY - completedDrag.endY;
-                    const power = Math.min(Vec2.length({ x: dx, y: dy }) * 0.15, 25);
+                    // Increased power multiplier for better ball travel
+                    const power = Math.min(Vec2.length({ x: dx, y: dy }) * 0.25, 40);
                     log('Drag vector dx:', dx, 'dy:', dy, 'power:', power);
 
-                    if (power > 0.5) { // Minimum power threshold
+                    if (power > 1) { // Minimum power threshold
                         const impulse = Vec2.scale(Vec2.normalize({ x: dx, y: dy }), power);
                         log('Applying impulse:', impulse);
                         this.ball!.applyImpulse(impulse);
@@ -253,11 +254,11 @@ export class MiniGolfGame extends PixiGameBase {
                     ballPos
                 );
 
-                if (distToBall < this.ball!.radius * 3) {
+                if (distToBall < this.ball!.radius * 4) {
                     // Draw aim line (opposite direction)
                     const dx = drag.startX - drag.currentX;
                     const dy = drag.startY - drag.currentY;
-                    const power = Math.min(Vec2.length({ x: dx, y: dy }) * 0.15, 25);
+                    const power = Math.min(Vec2.length({ x: dx, y: dy }) * 0.25, 40);
                     const dir = Vec2.normalize({ x: dx, y: dy });
 
                     // Line from ball in shot direction

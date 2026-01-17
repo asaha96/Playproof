@@ -25,9 +25,12 @@ const LEVEL_SPEC: ArcheryLevelSpec = {
         bullseyeRadius: 10,
         rings: 4
     },
-    arrow: { speed: 800, length: 40 },
+    arrow: { speed: 500, length: 40 }, // Reduced speed for visible arc
     passThreshold: 0.7
 };
+
+// Gravity for arrow (in world coordinates, will be scaled)
+const ARROW_GRAVITY = 150;
 
 interface ArcheryGraphics {
     bow: Graphics | null;
@@ -53,6 +56,7 @@ export class ArcheryGame extends PixiGameBase {
     private passRadius: number;
     private scaleX: number;
     private scaleY: number;
+    private arrowGravity: number;
     private gfx: ArcheryGraphics;
 
     constructor(gameArea: HTMLElement, config: PlayproofConfig, hooks: SDKHooks) {
@@ -79,6 +83,7 @@ export class ArcheryGame extends PixiGameBase {
         this.passRadius = 0;
         this.scaleX = 1;
         this.scaleY = 1;
+        this.arrowGravity = 0;
 
         this.gfx = {
             bow: null,
@@ -107,7 +112,7 @@ export class ArcheryGame extends PixiGameBase {
         this.bullseyeRadius = spec.target.bullseyeRadius * Math.min(this.scaleX, this.scaleY);
         this.passRadius = this.targetRadius * spec.passThreshold;
 
-        // Arrow initial state
+        // Arrow initial state (speed and gravity both scaled)
         this.arrow = {
             x: this.bowX,
             y: this.bowY,
@@ -115,8 +120,11 @@ export class ArcheryGame extends PixiGameBase {
             vy: 0,
             angle: 0,
             length: spec.arrow.length * Math.min(this.scaleX, this.scaleY),
-            speed: spec.arrow.speed * this.scaleX
+            speed: spec.arrow.speed * Math.min(this.scaleX, this.scaleY)
         };
+        
+        // Store scaled gravity for use in update
+        this.arrowGravity = ARROW_GRAVITY * this.scaleY;
 
         this._drawScene();
     }
@@ -232,13 +240,13 @@ export class ArcheryGame extends PixiGameBase {
                 }
             }
         } else {
-            // Arrow in flight
-            this.arrow.vy += 200 * dt; // Light gravity
+            // Arrow in flight - apply scaled gravity for realistic arc
+            this.arrow.vy += this.arrowGravity * dt;
             this.arrow.x += this.arrow.vx * dt;
             this.arrow.y += this.arrow.vy * dt;
             this.arrow.angle = Math.atan2(this.arrow.vy, this.arrow.vx);
 
-            // Check for target hit
+            // Check for target hit (using arrow tip position)
             const distToTarget = Vec2.distance(
                 { x: this.arrow.x, y: this.arrow.y },
                 { x: this.targetX, y: this.targetY }
