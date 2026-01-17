@@ -3,6 +3,7 @@
     "target": "ES2020",
     "module": "ESNext",
     "moduleResolution": "bundler",
+<<<<<<< HEAD
     "declaration": true,
     "declarationMap": true,
     "outDir": "./dist",
@@ -17,6 +18,26 @@
       "@playproof/shared": ["../shared/src/index.ts"],
       "@playproof/shared/*": ["../shared/src/*"]
     }
+=======
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true
+>>>>>>> feat/pixi-microgames-v0
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

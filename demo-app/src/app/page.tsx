@@ -1,7 +1,28 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import PlayproofCaptcha, { PlayproofTheme, VerificationResult } from '@/components/PlayproofCaptcha';
+
+// Dynamic import for the SDK-based component (avoids SSR issues with PixiJS)
+const PlayproofSDK = dynamic(() => import('@/components/PlayproofSDK'), { 
+  ssr: false,
+  loading: () => (
+    <div className="w-full max-w-[400px] h-[380px] bg-slate-900 rounded-lg animate-pulse flex items-center justify-center">
+      <span className="text-slate-500">Loading game...</span>
+    </div>
+  )
+});
+
+// Game options
+const GAMES = [
+  { id: 'bubble-pop', name: 'Bubble Pop', description: 'Pop bubbles (DOM-based)', isPixi: false },
+  { id: 'mini-golf', name: 'Mini Golf', description: 'Putt into the hole (PixiJS)', isPixi: true },
+  { id: 'basketball', name: 'Basketball', description: 'Shoot hoops (PixiJS)', isPixi: true },
+  { id: 'archery', name: 'Archery', description: 'Hit the target (PixiJS)', isPixi: true },
+] as const;
+
+type GameId = typeof GAMES[number]['id'];
 
 // Clean monochrome slate theme
 const SLATE_THEME: PlayproofTheme = {
@@ -21,6 +42,7 @@ export default function Home() {
   const [threshold, setThreshold] = useState<number>(0.7);
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [captchaKey, setCaptchaKey] = useState(0);
+  const [selectedGame, setSelectedGame] = useState<GameId>('mini-golf');
 
   const handleSuccess = (res: VerificationResult) => {
     setResult(res);
@@ -36,6 +58,13 @@ export default function Home() {
     setResult(null);
     setCaptchaKey(prev => prev + 1);
   };
+
+  const selectGame = (gameId: GameId) => {
+    setSelectedGame(gameId);
+    resetCaptcha();
+  };
+
+  const selectedGameInfo = GAMES.find(g => g.id === selectedGame)!;
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
@@ -70,21 +99,55 @@ export default function Home() {
           <div>
             <div className="mb-6">
               <h2 className="text-lg font-medium text-slate-200 mb-1">Try the verification</h2>
-              <p className="text-sm text-slate-500">Pop the bubbles to prove you're human</p>
+              <p className="text-sm text-slate-500">{selectedGameInfo.description}</p>
             </div>
             <div className="flex justify-center lg:justify-start">
-              <PlayproofCaptcha
-                key={captchaKey}
-                theme={SLATE_THEME}
-                confidenceThreshold={threshold}
-                onSuccess={handleSuccess}
-                onFailure={handleFailure}
-              />
+              {selectedGameInfo.isPixi ? (
+                <PlayproofSDK
+                  key={captchaKey}
+                  theme={SLATE_THEME}
+                  confidenceThreshold={threshold}
+                  gameId={selectedGame as any}
+                  onSuccess={handleSuccess}
+                  onFailure={handleFailure}
+                />
+              ) : (
+                <PlayproofCaptcha
+                  key={captchaKey}
+                  theme={SLATE_THEME}
+                  confidenceThreshold={threshold}
+                  onSuccess={handleSuccess}
+                  onFailure={handleFailure}
+                />
+              )}
             </div>
           </div>
 
           {/* Right Column - Controls & Results */}
           <div className="space-y-8">
+
+            {/* Game Selection */}
+            <section>
+              <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">Game Type</h3>
+              <div className="grid grid-cols-2 gap-2">
+                {GAMES.map((game) => (
+                  <button
+                    key={game.id}
+                    onClick={() => selectGame(game.id)}
+                    className={`p-3 rounded-lg border text-left transition-all ${
+                      selectedGame === game.id
+                        ? 'bg-slate-800 border-slate-600 text-slate-200'
+                        : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="font-medium text-sm">{game.name}</div>
+                    <div className="text-xs opacity-60 mt-0.5">
+                      {game.isPixi ? 'PixiJS' : 'DOM'}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </section>
 
             {/* Threshold Control */}
             <section>
@@ -160,15 +223,16 @@ export default function Home() {
               <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-3">Integration</h3>
               <div className="bg-slate-900/80 rounded-lg p-4 border border-slate-800 overflow-x-auto">
                 <pre className="text-xs text-slate-400 font-mono">
-                  <code>{`<PlayproofCaptcha
-  confidenceThreshold={${threshold}}
-  onSuccess={(result) => {
+                  <code>{`const captcha = new Playproof({
+  containerId: 'my-container',
+  gameId: '${selectedGame}',
+  confidenceThreshold: ${threshold},
+  onSuccess: (result) => {
     // Handle verified user
-  }}
-  onFailure={(result) => {
-    // Handle verification failure
-  }}
-/>`}</code>
+  }
+});
+
+captcha.verify();`}</code>
                 </pre>
               </div>
             </section>
