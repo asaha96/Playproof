@@ -42,16 +42,16 @@ export interface PlayproofCaptchaProps {
 
 // Inline all SDK code for the demo to avoid import issues
 const DEFAULT_THEME = {
-    primary: '#6366f1',
-    secondary: '#8b5cf6',
-    background: '#1e1e2e',
-    surface: '#2a2a3e',
-    text: '#f5f5f5',
-    textMuted: '#a1a1aa',
-    accent: '#22d3ee',
-    success: '#10b981',
+    primary: '#64748b',
+    secondary: '#475569',
+    background: '#0f172a',
+    surface: '#1e293b',
+    text: '#f8fafc',
+    textMuted: '#94a3b8',
+    accent: '#cbd5e1',
+    success: '#22c55e',
     error: '#ef4444',
-    border: '#3f3f5a'
+    border: '#334155'
 };
 
 export default function PlayproofCaptcha({
@@ -131,9 +131,10 @@ export default function PlayproofCaptcha({
         cursor: pointer;
         animation: bubbleAppear 0.3s ease;
         transition: transform 0.1s ease;
-        box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3), 
-          inset 0 -2px 10px rgba(0,0,0,0.2),
-          inset 0 2px 10px rgba(255,255,255,0.3);
+        box-shadow: 0 4px 20px rgba(100, 116, 139, 0.25), 
+          inset 0 -2px 8px rgba(0,0,0,0.15),
+          inset 0 2px 8px rgba(255,255,255,0.1);
+        border: 1px solid rgba(148, 163, 184, 0.2);
       `;
 
             bubbleContainerRef.current.appendChild(bubble);
