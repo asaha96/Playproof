@@ -13,6 +13,7 @@ import {
 import { BarChart3, Gamepad2, Palette, ShieldCheck } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { ThemeToggle } from "@/components/theme-toggle"
 import {
   Sidebar,
   SidebarContent,
@@ -91,6 +92,18 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarSeparator className="mt-auto" />
+      <SidebarGroup>
+        <SidebarGroupContent>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <div className="flex items-center justify-between px-2 py-1.5">
+                <span className="text-xs text-muted-foreground">Theme</span>
+                <ThemeToggle />
+              </div>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
       <SidebarFooter>
         <SignedIn>
           <div className="flex items-center gap-3 rounded-lg border border-sidebar-border bg-sidebar-accent/60 p-2">
