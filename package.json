@@ -1,0 +1,34 @@
+{
+  "name": "playproof",
+  "version": "1.0.0",
+  "description": "Game-based captcha SDK for better human/bot segmentation",
+  "main": "src/index.js",
+  "module": "src/index.js",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./src/index.js",
+      "require": "./src/index.js"
+    },
+    "./styles": "./src/styles/captcha.css"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "dev": "cd demo-app && npm run dev"
+  },
+  "keywords": [
+    "captcha",
+    "verification",
+    "bot-detection",
+    "human-verification",
+    "game-captcha"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": ""
+  }
+}
