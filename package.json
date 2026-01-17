@@ -1,34 +1,30 @@
 {
   "name": "playproof",
-  "version": "1.0.0",
-  "description": "Game-based captcha SDK for better human/bot segmentation",
-  "main": "src/index.js",
-  "module": "src/index.js",
-  "type": "module",
-  "exports": {
-    ".": {
-      "import": "./src/index.js",
-      "require": "./src/index.js"
-    },
-    "./styles": "./src/styles/captcha.css"
-  },
-  "files": [
-    "src"
+  "version": "0.0.1",
+  "private": true,
+  "description": "PlayProof: The Next Evolution of Digital Trust",
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "services/*"
   ],
   "scripts": {
-    "dev": "cd demo-app && npm run dev"
+    "build": "npm run build --workspaces --if-present",
+    "dev": "concurrently -n sdk,api,worker,demo -c blue,green,yellow,magenta \"npm run dev -w playproof-sdk\" \"npm run dev -w @playproof/api\" \"npm run dev -w @playproof/scoring-stub\" \"npm run dev -w @playproof/demo-web\"",
+    "dev:infra": "docker-compose -f infra/docker-compose.yml up -d",
+    "dev:sdk": "npm run dev -w playproof-sdk",
+    "dev:api": "npm run dev -w @playproof/api",
+    "dev:worker": "npm run dev -w @playproof/scoring-stub",
+    "dev:demo": "npm run dev -w @playproof/demo-web",
+    "lint": "eslint . --ext .ts,.tsx",
+    "clean": "rm -rf node_modules packages/*/node_modules apps/*/node_modules services/*/node_modules packages/*/dist apps/*/dist services/*/dist"
   },
-  "keywords": [
-    "captcha",
-    "verification",
-    "bot-detection",
-    "human-verification",
-    "game-captcha"
-  ],
-  "author": "",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": ""
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

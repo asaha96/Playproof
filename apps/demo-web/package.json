@@ -1,0 +1,22 @@
+{
+  "name": "@playproof/demo-web",
+  "version": "0.0.1",
+  "private": true,
+  "description": "PlayProof Demo - Web Component integration example",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "playproof-sdk": "*",
+    "pixi.js": "^8.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.0"
+  }
+}

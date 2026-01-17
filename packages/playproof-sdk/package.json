@@ -1,0 +1,40 @@
+{
+  "name": "playproof-sdk",
+  "version": "0.0.1",
+  "description": "PlayProof SDK - Human verification through gameplay",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./web-component": {
+      "import": "./dist/web-component.js",
+      "types": "./dist/web-component.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && vite build",
+    "dev": "vite build --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@msgpack/msgpack": "^3.0.0-beta2",
+    "pixi.js": "^8.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.0",
+    "vite-plugin-dts": "^3.7.0"
+  },
+  "peerDependencies": {
+    "pixi.js": "^8.0.0"
+  }
+}

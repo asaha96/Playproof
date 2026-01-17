@@ -1,0 +1,27 @@
+{
+  "name": "@playproof/api",
+  "version": "0.0.1",
+  "private": true,
+  "description": "PlayProof API - Challenge issuance and batch ingestion",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cors": "^9.0.1",
+    "bullmq": "^5.1.0",
+    "fastify": "^4.25.0",
+    "ioredis": "^5.3.2",
+    "nanoid": "^5.0.4",
+    "@msgpack/msgpack": "^3.0.0-beta2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
