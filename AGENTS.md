@@ -42,6 +42,7 @@ Playproof/
 │   ├── web/              # Canonical web app (Next.js when scaffolded)
 │   ├── api/              # Fastify API orchestrator
 │   └── edge-worker/      # Cloudflare Worker (token issuance, caching, prefilter)
+├── convex/               # Convex backend (schema, functions)
 ├── packages/
 │   ├── playproof/        # SDK package (published as 'playproof')
 │   │   └── src/          # SDK source code
@@ -134,6 +135,7 @@ npm run dev:web          # apps/web
 npm run dev:demo         # demo-app
 npm run dev:api          # apps/api
 npm run dev:worker       # apps/edge-worker
+npm run convex:dev       # convex dev
 ```
 
 ### Per-Workspace Commands
@@ -206,6 +208,7 @@ git pull --ff-only
 - **API**: `apps/api/` (Fastify placeholder)
 - **Worker**: `apps/edge-worker/` (Cloudflare placeholder)
 - **Scoring**: `services/scoring/` (FastAPI placeholder)
+- **Convex**: `convex/` (Backend functions & schema)
 
 ---
 
