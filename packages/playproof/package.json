@@ -37,9 +37,10 @@
     "url": ""
   },
   "dependencies": {
-    "pixi.js": "^8.15.0"
+    "three": "^0.170.0"
   },
   "devDependencies": {
+    "@types/three": "^0.170.0",
     "typescript": "^5.0.0"
   }
 }

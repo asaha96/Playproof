@@ -3,11 +3,9 @@
  * Maps game IDs to game classes for dynamic selection
  */
 
-import { BubblePopGame } from './bubble-pop';
-import { MiniGolfGame } from './pixi/mini-golf';
-import { BasketballGame } from './pixi/basketball';
-import { ArcheryGame } from './pixi/archery';
-import type { GameId, GameInfo, PlayproofConfig, SDKHooks, BaseGame } from '../types';
+import { BubblePopGame } from './three/bubble-pop';
+import { ArcheryGame } from './three/archery';
+import type { GameId, PlayproofConfig, SDKHooks, BaseGame } from '../types';
 
 type GameConstructor = new (gameArea: HTMLElement, config: PlayproofConfig, hooks: SDKHooks) => BaseGame;
 
@@ -16,11 +14,17 @@ interface GameRegistryEntry {
     name: string;
     description: string;
     duration: number;
-    isPixi: boolean;
+    isThree: boolean;
 }
 
 /**
  * Available games with metadata
+ * 
+ * Adding a new game:
+ * 1. Create a new game class in ./three/ extending ThreeBaseGame
+ * 2. Import it here
+ * 3. Add an entry to GAME_REGISTRY with unique key
+ * 4. Update GameId type in types.ts
  */
 export const GAME_REGISTRY: Record<string, GameRegistryEntry> = {
     'bubble-pop': {
@@ -28,28 +32,14 @@ export const GAME_REGISTRY: Record<string, GameRegistryEntry> = {
         name: 'Bubble Pop',
         description: 'Pop the bubbles as fast as you can!',
         duration: 10000,
-        isPixi: false
-    },
-    'mini-golf': {
-        GameClass: MiniGolfGame as unknown as GameConstructor,
-        name: 'Mini Golf',
-        description: 'Putt the ball into the hole!',
-        duration: 6000,
-        isPixi: true
-    },
-    'basketball': {
-        GameClass: BasketballGame as unknown as GameConstructor,
-        name: 'Basketball',
-        description: 'Shoot the ball through the hoop!',
-        duration: 6000,
-        isPixi: true
+        isThree: true
     },
     'archery': {
         GameClass: ArcheryGame as unknown as GameConstructor,
         name: 'Archery',
-        description: 'Hit the target with your arrow!',
-        duration: 6000,
-        isPixi: true
+        description: 'Draw back and hit the target!',
+        duration: 12000,
+        isThree: true
     }
 };
 

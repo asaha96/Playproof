@@ -120,14 +120,14 @@ export interface AttemptData {
 }
 
 // Game types
-export type GameId = 'bubble-pop' | 'mini-golf' | 'basketball' | 'archery' | 'random';
+export type GameId = 'bubble-pop' | 'archery' | 'random';
 
 export interface GameInfo {
     GameClass: new (gameArea: HTMLElement, config: PlayproofConfig, hooks: SDKHooks) => BaseGame;
     name: string;
     description: string;
     duration: number;
-    isPixi: boolean;
+    isThree: boolean;
 }
 
 export interface BaseGame {
