@@ -27,6 +27,11 @@ A human verification system that replaces traditional CAPTCHAs with engaging min
    - Package lives at `packages/playproof/`
    - npm publish name: `playproof`
 
+4. **Always use TypeScript, never JavaScript**
+   - All new code must be written in TypeScript (`.ts`, `.tsx`)
+   - Never create `.js` or `.jsx` files (except for config files like `next.config.js`)
+   - Prefer strict type safety over `any` types
+
 ---
 
 ## Repository Map
