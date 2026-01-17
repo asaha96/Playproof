@@ -160,42 +160,42 @@ export class ArcheryGame extends PixiGameBase {
 
     update(dt) {
         if (!this.hasShot) {
-            // Handle bow drawing
-            if (this.input.isDragging) {
+            // Check if a drag just completed
+            const completedDrag = this.input.consumeCompletedDrag();
+            
+            if (completedDrag) {
+                // Fire arrow based on completed drag
+                const drawDuration = completedDrag.duration;
+                const drawPower = Math.min(drawDuration / 1000, 1); // Max 1 second draw
+                
+                // Aim angle based on drag end position relative to bow
+                const dx = completedDrag.endX - this.bowX;
+                const dy = completedDrag.endY - this.bowY;
+                const aimAngle = Math.atan2(dy, dx);
+                
+                // Launch arrow
+                this.arrow.vx = Math.cos(aimAngle) * this.arrow.speed * Math.max(drawPower, 0.3);
+                this.arrow.vy = Math.sin(aimAngle) * this.arrow.speed * Math.max(drawPower, 0.3);
+                this.arrow.angle = aimAngle;
+                
+                this.hasShot = true;
+                this.isDrawing = false;
+                this.shotData = {
+                    drawDuration,
+                    drawPower,
+                    aimAngle,
+                    aimX: completedDrag.endX,
+                    aimY: completedDrag.endY,
+                    timestamp: performance.now()
+                };
+                
+                this.input.recordHit();
+            } else if (this.input.isDragging) {
+                // Currently drawing bow
                 if (!this.isDrawing) {
                     this.isDrawing = true;
                     this.drawStartTime = performance.now();
                 }
-            } else if (this.isDrawing) {
-                // Released - fire arrow
-                const drag = this.input.getDragInfo();
-                if (drag) {
-                    const drawDuration = performance.now() - this.drawStartTime;
-                    const drawPower = Math.min(drawDuration / 1000, 1); // Max 1 second draw
-                    
-                    // Aim angle based on drag
-                    const dx = drag.currentX - this.bowX;
-                    const dy = drag.currentY - this.bowY;
-                    const aimAngle = Math.atan2(dy, dx);
-                    
-                    // Launch arrow
-                    this.arrow.vx = Math.cos(aimAngle) * this.arrow.speed * drawPower;
-                    this.arrow.vy = Math.sin(aimAngle) * this.arrow.speed * drawPower;
-                    this.arrow.angle = aimAngle;
-                    
-                    this.hasShot = true;
-                    this.shotData = {
-                        drawDuration,
-                        drawPower,
-                        aimAngle,
-                        aimX: drag.currentX,
-                        aimY: drag.currentY,
-                        timestamp: performance.now()
-                    };
-                    
-                    this.input.recordHit();
-                }
-                this.isDrawing = false;
             }
         } else {
             // Arrow in flight
