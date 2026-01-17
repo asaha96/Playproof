@@ -54,6 +54,16 @@ const DEFAULT_THEME = {
     border: '#3f3f5a'
 };
 
+// Helper function to convert hex to RGB
+const hexToRgb = (hex: string) => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+    } : { r: 99, g: 102, b: 241 };
+};
+
 export default function PlayproofCaptcha({
     theme = {},
     confidenceThreshold = 0.7,
@@ -68,6 +78,7 @@ export default function PlayproofCaptcha({
     const [gameState, setGameState] = useState<'idle' | 'playing' | 'success' | 'failure'>('idle');
     const [progress, setProgress] = useState(0);
     const [timeLeft, setTimeLeft] = useState(gameDuration / 1000);
+    const [score, setScore] = useState(0);
 
     // Merge theme with defaults
     const mergedTheme = { ...DEFAULT_THEME, ...theme };
@@ -84,6 +95,7 @@ export default function PlayproofCaptcha({
     const currentTrajectory = useRef<{ x: number; y: number; timestamp: number }[]>([]);
     const bubbles = useRef<HTMLDivElement[]>([]);
     const intervals = useRef<{ bubble?: NodeJS.Timeout; progress?: NodeJS.Timeout; game?: NodeJS.Timeout }>({});
+    const startTimeRef = useRef<number>(0);
 
     const startGame = () => {
         if (!gameAreaRef.current) return;
@@ -101,12 +113,16 @@ export default function PlayproofCaptcha({
             clickAccuracy: 0
         };
         currentTrajectory.current = [];
+        setScore(0);
+        setProgress(0);
 
         // Clear game area
-        gameAreaRef.current.innerHTML = '';
+        if (gameAreaRef.current) {
+            gameAreaRef.current.innerHTML = '';
+        }
         bubbles.current = [];
 
-        const startTime = Date.now();
+        startTimeRef.current = Date.now();
 
         // Spawn bubbles
         const spawnBubble = () => {
@@ -119,6 +135,9 @@ export default function PlayproofCaptcha({
             const maxX = gameAreaRef.current.offsetWidth - size;
             const maxY = gameAreaRef.current.offsetHeight - size;
 
+            // Convert hex colors to RGB for rgba shadow
+            const primaryRgb = hexToRgb(mergedTheme.primary);
+            
             bubble.style.cssText = `
         position: absolute;
         width: ${size}px;
@@ -130,10 +149,24 @@ export default function PlayproofCaptcha({
         cursor: pointer;
         animation: bubbleAppear 0.3s ease;
         transition: transform 0.1s ease;
-        box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3), 
+        box-shadow: 0 4px 15px rgba(${primaryRgb.r}, ${primaryRgb.g}, ${primaryRgb.b}, 0.3), 
           inset 0 -2px 10px rgba(0,0,0,0.2),
           inset 0 2px 10px rgba(255,255,255,0.3);
+        z-index: 10;
       `;
+            
+            // Add hover effect
+            bubble.addEventListener('mouseenter', () => {
+                bubble.style.transform = 'scale(1.1)';
+            });
+            bubble.addEventListener('mouseleave', () => {
+                bubble.style.transform = 'scale(1)';
+            });
+            
+            // Add click handler directly to bubble for better responsiveness
+            bubble.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent double-triggering
+            });
 
             gameAreaRef.current.appendChild(bubble);
             bubbles.current.push(bubble);
@@ -148,12 +181,19 @@ export default function PlayproofCaptcha({
             }, 3000);
         };
 
+        // Initial spawn
         spawnBubble();
-        intervals.current.bubble = setInterval(spawnBubble, 800);
+        
+        // Spawn bubbles periodically
+        intervals.current.bubble = setInterval(() => {
+            if (gameAreaRef.current && bubbles.current.length < 5) {
+                spawnBubble();
+            }
+        }, 800);
 
         // Progress tracking
         intervals.current.progress = setInterval(() => {
-            const elapsed = Date.now() - startTime;
+            const elapsed = Date.now() - startTimeRef.current;
             const prog = Math.min(100, (elapsed / gameDuration) * 100);
             setProgress(prog);
             setTimeLeft(Math.max(0, Math.ceil((gameDuration - elapsed) / 1000)));
@@ -247,27 +287,33 @@ export default function PlayproofCaptcha({
         return scores.reduce((sum, s) => sum + (s.weight * s.score), 0) / totalWeight;
     };
 
-    // Mouse/click handlers
+    // Mouse/click handlers - use ref to track game state
+    const gameStateRef = useRef(gameState);
+    
+    useEffect(() => {
+        gameStateRef.current = gameState;
+    }, [gameState]);
+
     useEffect(() => {
         const gameArea = gameAreaRef.current;
         if (!gameArea) return;
 
         const handleMouseMove = (e: MouseEvent) => {
-            if (gameState !== 'playing') return;
+            if (gameStateRef.current !== 'playing') return;
             const rect = gameArea.getBoundingClientRect();
             const movement = {
                 x: e.clientX - rect.left,
                 y: e.clientY - rect.top,
-                timestamp: Date.now()
+                timestamp: performance.now() // Use performance.now() for better precision
             };
             behaviorData.current.mouseMovements.push(movement);
             currentTrajectory.current.push(movement);
         };
 
         const handleClick = (e: MouseEvent) => {
-            if (gameState !== 'playing') return;
+            if (gameStateRef.current !== 'playing') return;
 
-            behaviorData.current.clickTimings.push(Date.now());
+            behaviorData.current.clickTimings.push(performance.now());
 
             // Check bubble hit
             const rect = gameArea.getBoundingClientRect();
@@ -276,17 +322,34 @@ export default function PlayproofCaptcha({
 
             let hit = false;
             for (const bubble of bubbles.current) {
+                if (!bubble.parentElement) continue; // Skip if already removed
+                
                 const bRect = bubble.getBoundingClientRect();
                 const bX = bRect.left - rect.left;
                 const bY = bRect.top - rect.top;
+                const bRadius = bRect.width / 2;
+                const bCenterX = bX + bRadius;
+                const bCenterY = bY + bRadius;
 
-                if (x >= bX && x <= bX + bRect.width && y >= bY && y <= bY + bRect.height) {
-                    // Pop bubble
+                // Check if click is within circle (more accurate than rectangle)
+                const distance = Math.sqrt(
+                    Math.pow(x - bCenterX, 2) + Math.pow(y - bCenterY, 2)
+                );
+
+                if (distance <= bRadius) {
+                    // Pop bubble with visual feedback
                     bubble.style.animation = 'bubblePop 0.2s ease forwards';
+                    bubble.style.pointerEvents = 'none';
+                    
+                    // Update score immediately for visual feedback
+                    setScore(prev => prev + 10);
+                    
                     setTimeout(() => {
                         const idx = bubbles.current.indexOf(bubble);
                         if (idx > -1) bubbles.current.splice(idx, 1);
-                        bubble.remove();
+                        if (bubble.parentElement) {
+                            bubble.remove();
+                        }
                     }, 200);
                     hit = true;
                     break;
@@ -310,7 +373,7 @@ export default function PlayproofCaptcha({
             gameArea.removeEventListener('mousemove', handleMouseMove);
             gameArea.removeEventListener('click', handleClick);
         };
-    }, [gameState]);
+    }, []); // Empty deps - handlers use refs
 
     // Cleanup on unmount
     useEffect(() => {
@@ -374,6 +437,20 @@ export default function PlayproofCaptcha({
                     cursor: gameState === 'playing' ? 'crosshair' : 'default'
                 }}
             >
+                {/* Score display during gameplay */}
+                {gameState === 'playing' && (
+                    <div
+                        className="absolute top-3 right-3 px-3 py-1.5 rounded-lg text-sm font-bold"
+                        style={{
+                            background: `linear-gradient(135deg, ${mergedTheme.primary}88, ${mergedTheme.secondary}88)`,
+                            color: mergedTheme.text,
+                            backdropFilter: 'blur(8px)',
+                            zIndex: 20
+                        }}
+                    >
+                        Score: {score}
+                    </div>
+                )}
                 {gameState === 'idle' && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-5">
                         <h3 className="text-base font-semibold mb-2" style={{ color: mergedTheme.text }}>
