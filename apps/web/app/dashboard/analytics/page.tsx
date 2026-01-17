@@ -38,8 +38,11 @@ import { api } from "@/convex/_generated/api";
 export default function AnalyticsPage() {
   const stats = useQuery(api.sessions.stats);
   const sessions = useQuery(api.sessions.recent, { limit: 10 });
+  
+  // TODO: Uncomment after running `npx convex deploy` to deploy timeSeries function
   // @ts-expect-error - timeSeries will be available after Convex generates types
-  const timeSeriesData = useQuery(api.sessions.timeSeries as any, { days: 14 });
+  // const timeSeriesData = useQuery(api.sessions.timeSeries as any, { days: 14 });
+  const timeSeriesData = undefined; // Temporarily disabled until function is deployed
 
   const statCards = stats
     ? [
