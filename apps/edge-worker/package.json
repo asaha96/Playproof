@@ -1,0 +1,14 @@
+{
+  "name": "@playproof/edge-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PlayProof Cloudflare Worker (token issuance, caching, prefilter)",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}

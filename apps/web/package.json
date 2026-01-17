@@ -1,0 +1,10 @@
+{
+  "name": "@playproof/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PlayProof canonical web application (placeholder)",
+  "scripts": {
+    "dev": "echo 'apps/web is a placeholder. Scaffold a Next.js app here when ready.' && exit 0",
+    "build": "echo 'apps/web is a placeholder. Scaffold a Next.js app here when ready.' && exit 0"
+  }
+}
