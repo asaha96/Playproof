@@ -39,7 +39,7 @@ export default function AnalyticsPage() {
   const stats = useQuery(api.sessions.stats);
   const sessions = useQuery(api.sessions.recent, { limit: 10 });
   // @ts-expect-error - timeSeries will be available after Convex generates types
-  const timeSeriesData = useQuery(api.sessions.timeSeries, { days: 14 });
+  const timeSeriesData = useQuery(api.sessions.timeSeries as any, { days: 14 });
 
   const statCards = stats
     ? [

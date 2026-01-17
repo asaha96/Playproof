@@ -68,14 +68,28 @@ export const stats = query({
  * Get recent verification sessions
  */
 export const recent = query({
-    args: { limit: v.number() },
+    args: { limit: v.optional(v.number()) },
     handler: async (ctx, args) => {
+        const limit = args.limit ?? 10;
         const sessions = await ctx.db
             .query("sessions")
             .order("desc")
-            .take(args.limit);
+            .take(limit);
 
-        return sessions;
+        // Format sessions to match frontend expectations
+        return sessions.map((session) => ({
+            _id: session._id,
+            minigameId: session._id, // Placeholder - adjust based on your schema
+            minigameName: session.minigameName || "Unknown",
+            gameId: session.gameId,
+            suspectScore: session.scorePercent / 100,
+            scorePercent: session.scorePercent,
+            startAt: session.createdAt,
+            endAt: session.createdAt + session.durationMs,
+            durationMs: session.durationMs,
+            result: session.result === "pass" || session.result === "Human" ? "Human" : "Bot",
+            riskFlags: session.riskFlags || [],
+        }));
     },
 });
 
@@ -83,15 +97,16 @@ export const recent = query({
  * Get time series data for the analytics component
  */
 export const timeSeries = query({
-    args: { days: v.number() },
+    args: { days: v.optional(v.number()) },
     handler: async (ctx, args) => {
+        const days = args.days ?? 14;
         // In a real app with many records, you'd want to use an index on creation time
         // and aggregate more efficiently or pre-calculate. For now/demo, we scan.
 
         // We want to return data for the last N days
         const now = Date.now();
         const msPerDay = 24 * 60 * 60 * 1000;
-        const startTime = now - (args.days * msPerDay);
+        const startTime = now - (days * msPerDay);
 
         const sessions = await ctx.db
             .query("sessions")
@@ -102,7 +117,7 @@ export const timeSeries = query({
         const daysMap = new Map<string, { humans: number; bots: number; total: number }>();
 
         // Initialize all days to 0 to ensure continuous line
-        for (let i = 0; i < args.days; i++) {
+        for (let i = 0; i < days; i++) {
             const date = new Date(now - (i * msPerDay));
             const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
             daysMap.set(dateStr, { humans: 0, bots: 0, total: 0 });
