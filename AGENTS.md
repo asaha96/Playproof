@@ -32,7 +32,6 @@ A human verification system that replaces traditional CAPTCHAs with engaging min
    - Never create `.js` or `.jsx` files (except for config files like `next.config.js`)
    - Prefer strict type safety over `any` types
    - `packages/playproof` is TypeScript-only (no `.js` under `packages/playproof/src`)
-   - `packages/playproof` is TypeScript-only (no `.js` under `packages/playproof/src`)
 
 ---
 
