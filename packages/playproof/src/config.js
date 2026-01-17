@@ -20,11 +20,18 @@ export const DEFAULT_CONFIG = {
   containerId: 'playproof-container',
   theme: DEFAULT_THEME,
   confidenceThreshold: 0.7,
-  gameDuration: 10000, // 10 seconds
+  gameDuration: null, // null = use game default, or specify ms
+  gameId: 'bubble-pop', // 'bubble-pop', 'mini-golf', 'basketball', 'archery', or 'random'
   onSuccess: null,
   onFailure: null,
   onStart: null,
-  onProgress: null
+  onProgress: null,
+  // Future SDK hooks (unused in v0)
+  hooks: {
+    onTelemetryBatch: null,
+    onAttemptEnd: null,
+    regenerate: null
+  }
 };
 
 /**
