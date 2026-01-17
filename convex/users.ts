@@ -1,95 +1,61 @@
 import { mutation, query } from "./_generated/server";
-import { DEFAULT_BRANDING } from "./branding";
 
 /**
- * Get the current authenticated user's data.
- * Returns null if not authenticated or user doesn't exist in DB yet.
- */
-export const viewer = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      return null;
-    }
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerkSubject", (q) => q.eq("clerkSubject", identity.subject))
-      .unique();
-
-    return user;
-  },
-});
-
-/**
- * Check if the current user is authenticated (has valid Clerk session).
- */
-export const isAuthenticated = query({
-  args: {},
-  handler: async (ctx) => {
-    return (await ctx.auth.getUserIdentity()) !== null;
-  },
-});
-
-/**
- * Upsert (create or update) the current user in the database.
- * Call this after sign-in to ensure the user exists in Convex.
+ * Upsert the current authenticated user into the users table.
+ * This is called when a user signs in via Clerk.
  */
 export const upsertViewer = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Called upsertViewer without authentication");
-    }
-
-    // Check if user already exists
-    const existingUser = await ctx.db
-      .query("users")
-      .withIndex("by_clerkSubject", (q) => q.eq("clerkSubject", identity.subject))
-      .unique();
-
-    const now = Date.now();
-
-    if (existingUser) {
-      // Update existing user if name or image changed
-      const updates: Record<string, unknown> = { updatedAt: now };
-
-      if (identity.name && identity.name !== existingUser.name) {
-        updates.name = identity.name;
-      }
-      if (identity.pictureUrl && identity.pictureUrl !== existingUser.imageUrl) {
-        updates.imageUrl = identity.pictureUrl;
-      }
-
-      const brandingKeys = Object.keys(
-        DEFAULT_BRANDING
-      ) as (keyof typeof DEFAULT_BRANDING)[];
-      for (const key of brandingKeys) {
-        if (existingUser[key] === undefined) {
-          updates[key] = DEFAULT_BRANDING[key];
+    args: {},
+    handler: async (ctx) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) {
+            throw new Error("Called upsertViewer without authentication");
         }
-      }
 
-      if (Object.keys(updates).length > 1) {
-        await ctx.db.patch(existingUser._id, updates);
-      }
+        // Check if user already exists
+        const existingUser = await ctx.db
+            .query("users")
+            .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+            .unique();
 
-      return existingUser._id;
-    }
+        if (existingUser) {
+            // Update existing user
+            await ctx.db.patch(existingUser._id, {
+                email: identity.email,
+                name: identity.name,
+                imageUrl: identity.pictureUrl,
+            });
+            return existingUser._id;
+        }
 
-    // Create new user
-    const userId = await ctx.db.insert("users", {
-      clerkSubject: identity.subject,
-      email: identity.email || "",
-      name: identity.name || identity.email?.split("@")[0] || "User",
-      imageUrl: identity.pictureUrl,
-      ...DEFAULT_BRANDING,
-      createdAt: now,
-      updatedAt: now,
-    });
+        // Create new user
+        const userId = await ctx.db.insert("users", {
+            clerkId: identity.subject,
+            email: identity.email,
+            name: identity.name,
+            imageUrl: identity.pictureUrl,
+        });
 
-    return userId;
-  },
+        return userId;
+    },
+});
+
+/**
+ * Get the current authenticated user
+ */
+export const viewer = query({
+    args: {},
+    handler: async (ctx) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) {
+            return null;
+        }
+
+        const user = await ctx.db
+            .query("users")
+            .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
+            .unique();
+
+        return user;
+    },
 });
