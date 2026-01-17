@@ -44,6 +44,11 @@ const navItems = [
     href: "/dashboard/branding",
     icon: Palette,
   },
+  {
+    title: "Playground",
+    href: "/dashboard/playground",
+    icon: Gamepad2, // Using Gamepad2 as a placeholder, maybe find a better icon or reuse
+  },
 ]
 
 export function AppSidebar() {
