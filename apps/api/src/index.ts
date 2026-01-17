@@ -1,6 +1,6 @@
-import Fastify from 'fastify';
+import Fastify, { FastifyInstance } from 'fastify';
 
-const fastify = Fastify({ logger: true });
+const fastify: FastifyInstance = Fastify({ logger: true });
 
 fastify.get('/health', async () => {
   return { status: 'ok', service: 'playproof-api' };
@@ -11,7 +11,7 @@ fastify.get('/health', async () => {
 // fastify.post('/events', async (request, reply) => { ... });
 // fastify.post('/finalize', async (request, reply) => { ... });
 
-const start = async () => {
+const start = async (): Promise<void> => {
   try {
     await fastify.listen({ port: 3001, host: '0.0.0.0' });
   } catch (err) {

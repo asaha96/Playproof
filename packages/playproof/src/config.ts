@@ -3,7 +3,9 @@
  * Default values and configuration handling
  */
 
-export const DEFAULT_THEME = {
+import type { PlayproofTheme, PlayproofConfig, PlayproofUserConfig } from '@playproof/shared';
+
+export const DEFAULT_THEME: PlayproofTheme = {
   primary: '#6366f1',
   secondary: '#8b5cf6',
   background: '#1e1e2e',
@@ -16,7 +18,7 @@ export const DEFAULT_THEME = {
   border: '#3f3f5a'
 };
 
-export const DEFAULT_CONFIG = {
+export const DEFAULT_CONFIG: PlayproofConfig = {
   containerId: 'playproof-container',
   theme: DEFAULT_THEME,
   confidenceThreshold: 0.7,
@@ -29,11 +31,9 @@ export const DEFAULT_CONFIG = {
 
 /**
  * Validates and merges user config with defaults
- * @param {Object} userConfig - User provided configuration
- * @returns {Object} Merged configuration
  */
-export function mergeConfig(userConfig = {}) {
-  const theme = {
+export function mergeConfig(userConfig: PlayproofUserConfig = {}): PlayproofConfig {
+  const theme: PlayproofTheme = {
     ...DEFAULT_THEME,
     ...(userConfig.theme || {})
   };
@@ -47,9 +47,7 @@ export function mergeConfig(userConfig = {}) {
 
 /**
  * Validates confidence threshold
- * @param {number} threshold - Threshold value to validate
- * @returns {boolean} Whether threshold is valid
  */
-export function validateThreshold(threshold) {
+export function validateThreshold(threshold: number): boolean {
   return typeof threshold === 'number' && threshold >= 0 && threshold <= 1;
 }

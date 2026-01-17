@@ -2,19 +2,23 @@
   "name": "playproof",
   "version": "1.0.0",
   "description": "Game-based captcha SDK for better human/bot segmentation",
-  "main": "src/index.js",
-  "module": "src/index.js",
   "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./src/index.js",
-      "require": "./src/index.js"
-    },
-    "./styles": "./src/styles/captcha.css"
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
   },
   "files": [
-    "src"
+    "dist"
   ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
   "keywords": [
     "captcha",
     "verification",
@@ -27,5 +31,11 @@
   "repository": {
     "type": "git",
     "url": ""
+  },
+  "dependencies": {
+    "@playproof/shared": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
   }
 }
