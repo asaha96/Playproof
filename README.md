@@ -1,21 +1,71 @@
-# Playproof 🎮
+# Playproof
 
 A game-based captcha SDK for better human/bot segmentation. Replace traditional CAPTCHAs with engaging mini-games that measure human behavior patterns.
 
-## Features
+## Repository Structure
 
-- **🎨 Theme Customization** - Developers can fully customize colors to match their site design
-- **🎯 Configurable Confidence Threshold** - Set how strict verification should be (0-100%)
-- **🕹️ Game-based Verification** - Fun mini-games instead of frustrating image puzzles
-- **📊 Behavior Analysis** - Analyzes mouse movements, timing patterns, and click accuracy
+This is a monorepo managed with npm workspaces.
 
-## Installation
+| Location | Description | Status |
+|----------|-------------|--------|
+| `apps/web` | **Canonical web application** | Placeholder |
+| `apps/api` | Fastify API orchestrator | Placeholder |
+| `apps/edge-worker` | Cloudflare Worker | Placeholder |
+| `packages/playproof` | SDK package (published as `playproof`) | Active |
+| `packages/shared` | Shared types and utilities | Placeholder |
+| `services/scoring` | Python FastAPI scoring service | Placeholder |
+| `demo-app` | Legacy demo application | Active |
+
+> **Note**: `apps/web` is the canonical web app location. `demo-app` is kept for legacy/demo purposes.
+
+## Quick Start
+
+### Install all dependencies
+
+```bash
+npm install
+```
+
+### Run the demo app
+
+```bash
+npm run dev:demo
+```
+
+Then open http://localhost:3000
+
+### Run other services
+
+```bash
+npm run dev:web      # apps/web (placeholder)
+npm run dev:api      # apps/api (Fastify, port 3001)
+npm run dev:worker   # apps/edge-worker (Cloudflare Worker)
+```
+
+### Python scoring service
+
+```bash
+cd services/scoring
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
+
+## SDK Features
+
+- **Theme Customization** - Developers can fully customize colors to match their site design
+- **Configurable Confidence Threshold** - Set how strict verification should be (0-100%)
+- **Game-based Verification** - Fun mini-games instead of frustrating image puzzles
+- **Behavior Analysis** - Analyzes mouse movements, timing patterns, and click accuracy
+
+## Installation (SDK)
 
 ```bash
 npm install playproof
 ```
 
-## Quick Start
+## Quick Start (SDK)
 
 ### Vanilla JavaScript
 
@@ -44,9 +94,6 @@ const captcha = new Playproof({
   
   onSuccess: (result) => {
     console.log('Human verified!', result);
-    // result.score - confidence score (0-1)
-    // result.passed - boolean
-    // result.details - behavior metrics
   },
   
   onFailure: (result) => {
@@ -70,7 +117,6 @@ function MyForm() {
         primary: '#0ea5e9',
         secondary: '#06b6d4',
         background: '#0c1929',
-        // ... more colors
       }}
       confidenceThreshold={0.7}
       onSuccess={(result) => {
@@ -109,18 +155,6 @@ The `confidenceThreshold` option (0.0 - 1.0) determines how confident the system
 - **0.5 - 0.7** (Balanced): Good security, user-friendly
 - **0.8 - 1.0** (Strict): Maximum security, some legitimate users may fail
 
-## Demo App
-
-Run the interactive demo to test themes and thresholds:
-
-```bash
-cd demo-app
-npm install
-npm run dev
-```
-
-Then open http://localhost:3000
-
 ## How It Works
 
 Playproof analyzes user behavior during a short (~10 second) mini-game:
@@ -131,6 +165,10 @@ Playproof analyzes user behavior during a short (~10 second) mini-game:
 4. **Movement Trajectories** - Humans follow bezier-like curves to targets
 
 These metrics are combined into a confidence score that's compared against your threshold.
+
+## Contributing
+
+See `AGENTS.md` for repository conventions and guidelines.
 
 ## License
 
