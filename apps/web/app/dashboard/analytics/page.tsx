@@ -1,4 +1,7 @@
+"use client";
+
 import { ArrowUpRight, ShieldCheck, Sparkles, Target } from "lucide-react";
+import { useQuery } from "convex/react";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -17,53 +20,54 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-const stats = [
-  {
-    label: "Human pass rate",
-    value: "97.2%",
-    delta: "+1.4%",
-  },
-  {
-    label: "Bot detections",
-    value: "1,142",
-    delta: "+8.1%",
-  },
-  {
-    label: "Avg. session time",
-    value: "14.8s",
-    delta: "-0.9s",
-  },
-];
-
-const sessions = [
-  {
-    id: "pp-9012",
-    game: "Orbital Drift",
-    score: "98",
-    result: "Human",
-  },
-  {
-    id: "pp-9011",
-    game: "Glyph Match",
-    score: "83",
-    result: "Human",
-  },
-  {
-    id: "pp-9010",
-    game: "Signal Sprint",
-    score: "42",
-    result: "Bot",
-  },
-  {
-    id: "pp-9009",
-    game: "Orbit Lab",
-    score: "76",
-    result: "Human",
-  },
-];
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
+import { api } from "@/convex/_generated/api";
 
 export default function AnalyticsPage() {
+  const stats = useQuery(api.sessions.stats);
+  const sessions = useQuery(api.sessions.recent, { limit: 6 });
+
+  const statCards = stats
+    ? [
+        {
+          label: "Human pass rate",
+          value: `${(stats.humanPassRate * 100).toFixed(1)}%`,
+          note: `${stats.totalSessions} sessions`,
+        },
+        {
+          label: "Bot detections",
+          value: stats.botDetections.toLocaleString(),
+          note: `of ${stats.totalSessions} sessions`,
+        },
+        {
+          label: "Avg. session time",
+          value: `${(stats.avgSessionMs / 1000).toFixed(1)}s`,
+          note: `${stats.totalSessions} sessions`,
+        },
+      ]
+    : [
+        { label: "Human pass rate", value: "--", note: "Loading sessions" },
+        { label: "Bot detections", value: "--", note: "Loading sessions" },
+        {
+          label: "Avg. session time",
+          value: "--",
+          note: "Loading sessions",
+        },
+      ];
+
+  const formatSessionId = (id: string) => {
+    if (id.length <= 8) {
+      return id;
+    }
+    return `${id.slice(0, 4)}...${id.slice(-4)}`;
+  };
+
   return (
     <div className="flex flex-col gap-6 p-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -82,7 +86,7 @@ export default function AnalyticsPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        {stats.map((stat) => (
+        {statCards.map((stat) => (
           <Card key={stat.label}>
             <CardHeader>
               <CardDescription>{stat.label}</CardDescription>
@@ -90,7 +94,7 @@ export default function AnalyticsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-xs text-muted-foreground">
-                Trend: <span className="text-foreground">{stat.delta}</span>
+                <span className="text-foreground">{stat.note}</span>
               </div>
             </CardContent>
           </Card>
@@ -154,31 +158,51 @@ export default function AnalyticsPage() {
           <CardDescription>Latest verification outcomes.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Session</TableHead>
-                <TableHead>Game</TableHead>
-                <TableHead>Score</TableHead>
-                <TableHead>Result</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sessions.map((session) => (
-                <TableRow key={session.id}>
-                  <TableCell className="font-medium">{session.id}</TableCell>
-                  <TableCell>{session.game}</TableCell>
-                  <TableCell>{session.score}</TableCell>
-                  <TableCell>
-                    <span className="inline-flex items-center gap-1 text-sm">
-                      {session.result}
-                      <ArrowUpRight className="size-3 text-muted-foreground" />
-                    </span>
-                  </TableCell>
+          {sessions === undefined ? (
+            <div className="text-sm text-muted-foreground">
+              Loading sessions...
+            </div>
+          ) : sessions.length === 0 ? (
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <ShieldCheck className="size-5" />
+                </EmptyMedia>
+                <EmptyTitle>No sessions yet</EmptyTitle>
+                <EmptyDescription>
+                  Sessions will appear here as soon as minigames start running.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Session</TableHead>
+                  <TableHead>Game</TableHead>
+                  <TableHead>Score</TableHead>
+                  <TableHead>Result</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {sessions.map((session) => (
+                  <TableRow key={session._id}>
+                    <TableCell className="font-medium">
+                      {formatSessionId(session._id)}
+                    </TableCell>
+                    <TableCell>{session.minigameName}</TableCell>
+                    <TableCell>{session.scorePercent}</TableCell>
+                    <TableCell>
+                      <span className="inline-flex items-center gap-1 text-sm">
+                        {session.result}
+                        <ArrowUpRight className="size-3 text-muted-foreground" />
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

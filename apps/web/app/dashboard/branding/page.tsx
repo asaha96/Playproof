@@ -1,4 +1,7 @@
+"use client";
+
 import { Palette, Type, Wand2 } from "lucide-react";
+import { useQuery } from "convex/react";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -9,15 +12,32 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-
-const colors = [
-  { name: "Primary", className: "bg-primary" },
-  { name: "Accent", className: "bg-accent" },
-  { name: "Muted", className: "bg-muted" },
-  { name: "Sidebar", className: "bg-sidebar" },
-];
+import { api } from "@/convex/_generated/api";
+import { resolveBranding } from "@/convex/branding";
 
 export default function BrandingPage() {
+  const viewer = useQuery(api.users.viewer);
+  const branding = resolveBranding(
+    viewer
+      ? {
+          primaryColor: viewer.primaryColor,
+          secondaryColor: viewer.secondaryColor,
+          tertiaryColor: viewer.tertiaryColor,
+          typography: viewer.typography,
+          brandingType: viewer.brandingType,
+        }
+      : undefined
+  );
+
+  const themeLabel =
+    branding.brandingType.charAt(0).toUpperCase() +
+    branding.brandingType.slice(1);
+  const colors = [
+    { name: "Primary", value: branding.primaryColor },
+    { name: "Secondary", value: branding.secondaryColor },
+    { name: "Tertiary", value: branding.tertiaryColor },
+  ];
+
   return (
     <div className="flex flex-col gap-6 p-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -28,7 +48,7 @@ export default function BrandingPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="secondary">Theme: Studio</Badge>
+          <Badge variant="secondary">Theme: {themeLabel}</Badge>
           <Button size="sm" variant="outline">
             Preview changes
           </Button>
@@ -49,12 +69,13 @@ export default function BrandingPage() {
               {colors.map((color) => (
                 <div key={color.name} className="rounded-lg border p-3">
                   <div
-                    className={`h-16 rounded-md ${color.className}`}
+                    className="h-16 rounded-md"
+                    style={{ backgroundColor: color.value }}
                     aria-hidden="true"
                   />
                   <div className="mt-3 text-sm font-medium">{color.name}</div>
                   <div className="text-xs text-muted-foreground">
-                    Token linked
+                    {color.value}
                   </div>
                 </div>
               ))}
@@ -71,15 +92,9 @@ export default function BrandingPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="rounded-lg border p-3">
-              <div className="text-sm font-medium">Nunito Sans</div>
+              <div className="text-sm font-medium">{branding.typography}</div>
               <div className="text-xs text-muted-foreground">
-                Headings and prompts
-              </div>
-            </div>
-            <div className="rounded-lg border p-3">
-              <div className="text-sm font-medium">Geist Mono</div>
-              <div className="text-xs text-muted-foreground">
-                Token labels and metrics
+                Primary typography selection
               </div>
             </div>
           </CardContent>
