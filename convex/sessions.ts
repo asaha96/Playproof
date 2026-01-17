@@ -46,11 +46,11 @@ export const recent = query({
 
     const results = await Promise.all(
       sessions.map(async (session) => {
-        const minigame = await ctx.db.get(session.minigameId);
+        const deployment = await ctx.db.get(session.deploymentId);
         return {
           _id: session._id,
-          minigameId: session.minigameId,
-          minigameName: minigame?.name ?? "Unknown minigame",
+          deploymentId: session.deploymentId,
+          deploymentName: deployment?.name ?? "Unknown deployment",
           suspectScore: session.suspectScore,
           scorePercent: Math.round(session.suspectScore * 100),
           startAt: session.startAt,
@@ -100,7 +100,7 @@ export const stats = query({
 
 export const create = mutation({
   args: {
-    minigameId: v.id("minigames"),
+    deploymentId: v.id("deployments"),
     startAt: v.number(),
     endAt: v.number(),
     durationMs: v.number(),
@@ -108,13 +108,13 @@ export const create = mutation({
     clientInfo: v.optional(clientInfoInput),
   },
   handler: async (ctx, args) => {
-    const minigame = await ctx.db.get(args.minigameId);
-    if (!minigame) {
-      throw new Error("Minigame not found");
+    const deployment = await ctx.db.get(args.deploymentId);
+    if (!deployment) {
+      throw new Error("Deployment not found");
     }
 
     const sessionId = await ctx.db.insert("sessions", {
-      minigameId: args.minigameId,
+      deploymentId: args.deploymentId,
       startAt: args.startAt,
       endAt: args.endAt,
       durationMs: args.durationMs,
@@ -122,8 +122,8 @@ export const create = mutation({
       clientInfo: args.clientInfo,
     });
 
-    const sessionIds = minigame.sessionIds ?? [];
-    await ctx.db.patch(args.minigameId, {
+    const sessionIds = deployment.sessionIds ?? [];
+    await ctx.db.patch(args.deploymentId, {
       sessionIds: [...sessionIds, sessionId],
       updatedAt: Date.now(),
     });
