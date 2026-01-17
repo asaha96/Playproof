@@ -3,8 +3,20 @@
  * A simple ~10 second game for behavior verification
  */
 
+import type { BehaviorData, PlayproofConfig } from '../types';
+
 export class BubblePopGame {
-    constructor(gameArea, config) {
+    private gameArea: HTMLElement;
+    private config: PlayproofConfig;
+    private bubbles: HTMLDivElement[];
+    private behaviorData: BehaviorData;
+    private currentTrajectory: { x: number; y: number; timestamp: number }[];
+    private isRunning: boolean;
+    private startTime: number | null;
+    private bubbleInterval: ReturnType<typeof setInterval> | null;
+    private onComplete: ((data: BehaviorData) => void) | null;
+
+    constructor(gameArea: HTMLElement, config: PlayproofConfig) {
         this.gameArea = gameArea;
         this.config = config;
         this.bubbles = [];
@@ -13,7 +25,8 @@ export class BubblePopGame {
             clickTimings: [],
             trajectories: [],
             hits: 0,
-            misses: 0
+            misses: 0,
+            clickAccuracy: 0
         };
         this.currentTrajectory = [];
         this.isRunning = false;
@@ -24,9 +37,9 @@ export class BubblePopGame {
         this.bindEvents();
     }
 
-    bindEvents() {
+    private bindEvents(): void {
         // Track mouse movements
-        this.gameArea.addEventListener('mousemove', (e) => {
+        this.gameArea.addEventListener('mousemove', (e: MouseEvent) => {
             if (!this.isRunning) return;
 
             const rect = this.gameArea.getBoundingClientRect();
@@ -41,7 +54,7 @@ export class BubblePopGame {
         });
 
         // Track clicks
-        this.gameArea.addEventListener('click', (e) => {
+        this.gameArea.addEventListener('click', (e: MouseEvent) => {
             if (!this.isRunning) return;
 
             this.behaviorData.clickTimings.push(Date.now());
@@ -63,7 +76,7 @@ export class BubblePopGame {
         });
     }
 
-    start(onComplete) {
+    start(onComplete: (data: BehaviorData) => void): void {
         this.onComplete = onComplete;
         this.isRunning = true;
         this.startTime = Date.now();
@@ -72,7 +85,8 @@ export class BubblePopGame {
             clickTimings: [],
             trajectories: [],
             hits: 0,
-            misses: 0
+            misses: 0,
+            clickAccuracy: 0
         };
 
         // Clear game area
@@ -87,10 +101,10 @@ export class BubblePopGame {
         }, 800);
 
         // End game after duration
-        setTimeout(() => this.end(), this.config.gameDuration);
+        setTimeout(() => this.end(), this.config.gameDuration || 10000);
     }
 
-    spawnBubble() {
+    private spawnBubble(): void {
         const bubble = document.createElement('div');
         bubble.className = 'playproof-bubble';
 
@@ -109,7 +123,7 @@ export class BubblePopGame {
       inset 0 -2px 10px rgba(0,0,0,0.2),
       inset 0 2px 10px rgba(255,255,255,0.3)`;
 
-        bubble.dataset.id = Date.now() + Math.random();
+        bubble.dataset.id = String(Date.now() + Math.random());
 
         this.gameArea.appendChild(bubble);
         this.bubbles.push(bubble);
@@ -122,7 +136,7 @@ export class BubblePopGame {
         }, 3000);
     }
 
-    getBubbleAtPosition(clientX, clientY) {
+    private getBubbleAtPosition(clientX: number, clientY: number): HTMLDivElement | null {
         const rect = this.gameArea.getBoundingClientRect();
         const x = clientX - rect.left;
         const y = clientY - rect.top;
@@ -142,14 +156,14 @@ export class BubblePopGame {
         return null;
     }
 
-    popBubble(bubble) {
+    private popBubble(bubble: HTMLDivElement): void {
         bubble.classList.add('popping');
         setTimeout(() => {
             this.removeBubble(bubble);
         }, 200);
     }
 
-    removeBubble(bubble) {
+    private removeBubble(bubble: HTMLDivElement): void {
         const index = this.bubbles.indexOf(bubble);
         if (index > -1) {
             this.bubbles.splice(index, 1);
@@ -159,9 +173,11 @@ export class BubblePopGame {
         }
     }
 
-    end() {
+    private end(): void {
         this.isRunning = false;
-        clearInterval(this.bubbleInterval);
+        if (this.bubbleInterval) {
+            clearInterval(this.bubbleInterval);
+        }
 
         // Calculate click accuracy
         const totalClicks = this.behaviorData.hits + this.behaviorData.misses;
@@ -174,9 +190,11 @@ export class BubblePopGame {
         }
     }
 
-    destroy() {
+    destroy(): void {
         this.isRunning = false;
-        clearInterval(this.bubbleInterval);
+        if (this.bubbleInterval) {
+            clearInterval(this.bubbleInterval);
+        }
         this.bubbles.forEach(b => b.remove());
         this.bubbles = [];
     }

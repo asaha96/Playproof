@@ -1,15 +1,20 @@
 /**
- * Playproof Verification Module
+ * PlayProof Verification Module
  * Handles behavior analysis and confidence scoring
  */
 
+import type { BehaviorData, MouseMovement, VerificationResult } from './types';
+
+interface ScoreComponent {
+    weight: number;
+    score: number;
+}
+
 /**
  * Calculates confidence score from behavior data
- * @param {Object} behaviorData - Collected behavior metrics
- * @returns {number} Confidence score between 0 and 1
  */
-export function calculateConfidence(behaviorData) {
-    const scores = [];
+export function calculateConfidence(behaviorData: BehaviorData): number {
+    const scores: ScoreComponent[] = [];
 
     // Mouse movement analysis (natural movements vs. linear bot movements)
     if (behaviorData.mouseMovements && behaviorData.mouseMovements.length > 0) {
@@ -48,7 +53,7 @@ export function calculateConfidence(behaviorData) {
  * Analyzes mouse movement patterns
  * Humans have curved, slightly jittery movements; bots are linear
  */
-function analyzeMouseMovements(movements) {
+function analyzeMouseMovements(movements: MouseMovement[]): number {
     if (movements.length < 3) return 0.3;
 
     let totalVariance = 0;
@@ -88,10 +93,10 @@ function analyzeMouseMovements(movements) {
  * Analyzes click timing patterns
  * Humans have variable reaction times; bots are too consistent
  */
-function analyzeClickTimings(timings) {
+function analyzeClickTimings(timings: number[]): number {
     if (timings.length < 2) return 0.5;
 
-    const intervals = [];
+    const intervals: number[] = [];
     for (let i = 1; i < timings.length; i++) {
         intervals.push(timings[i] - timings[i - 1]);
     }
@@ -115,7 +120,7 @@ function analyzeClickTimings(timings) {
  * Analyzes click accuracy
  * Humans miss sometimes; perfect accuracy is suspicious
  */
-function analyzeClickAccuracy(accuracy) {
+function analyzeClickAccuracy(accuracy: number): number {
     // Perfect accuracy (1.0) is suspicious
     if (accuracy >= 0.98) return 0.5;
     // Very low accuracy might be random clicking
@@ -130,7 +135,7 @@ function analyzeClickAccuracy(accuracy) {
  * Analyzes movement trajectories
  * Humans have smooth curves; bots have straight lines
  */
-function analyzeTrajectories(trajectories) {
+function analyzeTrajectories(trajectories: MouseMovement[][]): number {
     if (trajectories.length < 1) return 0.5;
 
     let curvatureScore = 0;
@@ -174,18 +179,19 @@ function analyzeTrajectories(trajectories) {
 
 /**
  * Checks if score meets threshold
- * @param {number} score - Calculated confidence score
- * @param {number} threshold - Required threshold
- * @returns {boolean} Whether user passes verification
  */
-export function meetsThreshold(score, threshold) {
+export function meetsThreshold(score: number, threshold: number): boolean {
     return score >= threshold;
 }
 
 /**
  * Creates verification result object
  */
-export function createVerificationResult(score, threshold, behaviorData) {
+export function createVerificationResult(
+    score: number,
+    threshold: number,
+    behaviorData: BehaviorData
+): VerificationResult {
     const passed = meetsThreshold(score, threshold);
 
     return {
