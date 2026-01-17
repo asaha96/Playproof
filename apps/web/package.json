@@ -1,7 +1,8 @@
 {
-  "name": "web",
+  "name": "@playproof/web",
   "version": "0.1.0",
   "private": true,
+  "description": "PlayProof canonical web application",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

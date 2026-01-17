@@ -1,0 +1,34 @@
+{
+  "name": "playproof-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PlayProof monorepo - Game-based verification SDK + services",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "demo-app"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w apps/web",
+    "dev:web": "npm run dev -w apps/web",
+    "dev:demo": "npm run dev -w demo-app",
+    "dev:api": "npm run dev -w apps/api",
+    "dev:worker": "npm run dev -w apps/edge-worker",
+    "build": "npm run build -w apps/web",
+    "build:demo": "npm run build -w demo-app"
+  },
+  "keywords": [
+    "captcha",
+    "verification",
+    "bot-detection",
+    "human-verification",
+    "game-captcha",
+    "monorepo"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": ""
+  }
+}

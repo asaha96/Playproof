@@ -1,0 +1,7 @@
+name = "playproof-edge-worker"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# Uncomment and configure when ready for deployment
+# [vars]
+# ENVIRONMENT = "development"
