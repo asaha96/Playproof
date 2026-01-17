@@ -61,7 +61,7 @@ Playproof/
 | `apps/web` | Primary web application | Next.js (placeholder for now) |
 | `apps/api` | API orchestrator, endpoints: `/issue`, `/events`, `/finalize` | Fastify + TypeScript |
 | `apps/edge-worker` | Edge token issuance, caching, prefilter | Cloudflare Workers |
-| `packages/playproof` | Client SDK for embedding verification games | Vanilla JS (ESM) |
+| `packages/playproof` | Client SDK for embedding verification games | TypeScript + PixiJS |
 | `packages/shared` | Shared types, contracts, utilities | TypeScript |
 | `services/scoring` | ML scoring service | Python + FastAPI + XGBoost |
 | `demo-app` | Interactive demo for testing SDK | Next.js |
