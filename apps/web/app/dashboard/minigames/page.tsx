@@ -1,4 +1,8 @@
+"use client";
+
+import { format } from "date-fns";
 import { Gamepad2, Layers3, Sparkles } from "lucide-react";
+import { useQuery } from "convex/react";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -9,36 +13,20 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-
-const games = [
-  {
-    name: "Orbital Drift",
-    type: "Reflex",
-    status: "Live",
-    completion: 94,
-  },
-  {
-    name: "Glyph Match",
-    type: "Perception",
-    status: "Live",
-    completion: 88,
-  },
-  {
-    name: "Signal Sprint",
-    type: "Timing",
-    status: "Draft",
-    completion: 62,
-  },
-  {
-    name: "Orbit Lab",
-    type: "Logic",
-    status: "Paused",
-    completion: 51,
-  },
-];
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { api } from "@/convex/_generated/api";
 
 export default function MinigamesPage() {
+  const minigames = useQuery(api.minigames.list);
+  const isLoading = minigames === undefined;
+
   return (
     <div className="flex flex-col gap-6 p-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -51,43 +39,73 @@ export default function MinigamesPage() {
         <Button size="sm">Create minigame</Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {games.map((game) => (
-          <Card key={game.name}>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between text-base">
-                <span>{game.name}</span>
-                <Badge variant="secondary">{game.status}</Badge>
-              </CardTitle>
-              <CardDescription>{game.type} challenge</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Progress value={game.completion}>
-                <span className="text-sm font-medium">
-                  Tuning progress
-                </span>
-                <span className="text-muted-foreground text-sm">
-                  {game.completion}%
-                </span>
-              </Progress>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1 rounded-full border px-2 py-1">
-                  <Sparkles className="size-3" />
-                  Signals stable
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <Button size="sm" variant="outline">
-                  Edit
-                </Button>
-                <Button size="sm" variant="ghost">
-                  Preview
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {isLoading ? (
+        <div className="text-sm text-muted-foreground">
+          Loading minigames...
+        </div>
+      ) : minigames.length === 0 ? (
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Gamepad2 className="size-5" />
+            </EmptyMedia>
+            <EmptyTitle>No minigames yet</EmptyTitle>
+            <EmptyDescription>
+              Create your first verification game to start collecting sessions.
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button size="sm">Create minigame</Button>
+          </EmptyContent>
+        </Empty>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {minigames.map((game) => {
+            const sessionCount = game.sessionIds?.length ?? 0;
+            const statusLabel = game.isReady ? "Ready" : "Draft";
+            const brandingLabel = game.brandingType
+              ? `${game.brandingType} branding`
+              : "Default branding";
+            return (
+              <Card key={game._id}>
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between text-base">
+                    <span>{game.name}</span>
+                    <Badge variant="secondary">{statusLabel}</Badge>
+                  </CardTitle>
+                  <CardDescription>{brandingLabel}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Sessions</span>
+                    <span className="text-foreground">{sessionCount}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Last updated</span>
+                    <span className="text-foreground">
+                      {format(new Date(game.updatedAt), "MMM d, yyyy")}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1 rounded-full border px-2 py-1">
+                      <Sparkles className="size-3" />
+                      {game.isReady ? "Signals stable" : "Tuning in progress"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Button size="sm" variant="outline">
+                      Edit
+                    </Button>
+                    <Button size="sm" variant="ghost">
+                      Preview
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
         <Card>

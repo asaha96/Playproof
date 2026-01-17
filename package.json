@@ -30,5 +30,8 @@
   "repository": {
     "type": "git",
     "url": ""
+  },
+  "dependencies": {
+    "convex": "^1.31.5"
   }
 }
