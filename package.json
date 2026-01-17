@@ -1,29 +1,29 @@
 {
-  "name": "playproof",
+  "name": "playproof-monorepo",
   "version": "1.0.0",
-  "description": "Game-based captcha SDK for better human/bot segmentation",
-  "main": "src/index.js",
-  "module": "src/index.js",
-  "type": "module",
-  "exports": {
-    ".": {
-      "import": "./src/index.js",
-      "require": "./src/index.js"
-    },
-    "./styles": "./src/styles/captcha.css"
-  },
-  "files": [
-    "src"
+  "private": true,
+  "description": "PlayProof monorepo - Game-based verification SDK + services",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "demo-app"
   ],
   "scripts": {
-    "dev": "cd demo-app && npm run dev"
+    "dev": "npm run dev -w apps/web",
+    "dev:web": "npm run dev -w apps/web",
+    "dev:demo": "npm run dev -w demo-app",
+    "dev:api": "npm run dev -w apps/api",
+    "dev:worker": "npm run dev -w apps/edge-worker",
+    "build": "npm run build -w apps/web",
+    "build:demo": "npm run build -w demo-app"
   },
   "keywords": [
     "captcha",
     "verification",
     "bot-detection",
     "human-verification",
-    "game-captcha"
+    "game-captcha",
+    "monorepo"
   ],
   "author": "",
   "license": "MIT",
