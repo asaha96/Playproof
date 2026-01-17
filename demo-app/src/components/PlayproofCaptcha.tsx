@@ -65,6 +65,7 @@ export default function PlayproofCaptcha({
 }: PlayproofCaptchaProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const gameAreaRef = useRef<HTMLDivElement>(null);
+    const bubbleContainerRef = useRef<HTMLDivElement>(null);
     const [gameState, setGameState] = useState<'idle' | 'playing' | 'success' | 'failure'>('idle');
     const [progress, setProgress] = useState(0);
     const [timeLeft, setTimeLeft] = useState(gameDuration / 1000);
@@ -86,7 +87,7 @@ export default function PlayproofCaptcha({
     const intervals = useRef<{ bubble?: NodeJS.Timeout; progress?: NodeJS.Timeout; game?: NodeJS.Timeout }>({});
 
     const startGame = () => {
-        if (!gameAreaRef.current) return;
+        if (!bubbleContainerRef.current) return;
 
         setGameState('playing');
         onStart?.();
@@ -102,22 +103,22 @@ export default function PlayproofCaptcha({
         };
         currentTrajectory.current = [];
 
-        // Clear game area
-        gameAreaRef.current.innerHTML = '';
+        // Clear bubble container (not the React-managed game area)
+        bubbleContainerRef.current.innerHTML = '';
         bubbles.current = [];
 
         const startTime = Date.now();
 
         // Spawn bubbles
         const spawnBubble = () => {
-            if (!gameAreaRef.current || bubbles.current.length >= 5) return;
+            if (!bubbleContainerRef.current || bubbles.current.length >= 5) return;
 
             const bubble = document.createElement('div');
             bubble.className = 'playproof-bubble';
 
             const size = 40 + Math.random() * 30;
-            const maxX = gameAreaRef.current.offsetWidth - size;
-            const maxY = gameAreaRef.current.offsetHeight - size;
+            const maxX = bubbleContainerRef.current.offsetWidth - size;
+            const maxY = bubbleContainerRef.current.offsetHeight - size;
 
             bubble.style.cssText = `
         position: absolute;
@@ -135,7 +136,7 @@ export default function PlayproofCaptcha({
           inset 0 2px 10px rgba(255,255,255,0.3);
       `;
 
-            gameAreaRef.current.appendChild(bubble);
+            bubbleContainerRef.current.appendChild(bubble);
             bubbles.current.push(bubble);
 
             // Auto-remove after 3 seconds
@@ -374,6 +375,13 @@ export default function PlayproofCaptcha({
                     cursor: gameState === 'playing' ? 'crosshair' : 'default'
                 }}
             >
+                {/* Bubble container for direct DOM manipulation - separate from React-managed content */}
+                <div
+                    ref={bubbleContainerRef}
+                    className="absolute inset-0"
+                    style={{ pointerEvents: gameState === 'playing' ? 'auto' : 'none' }}
+                />
+
                 {gameState === 'idle' && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-5">
                         <h3 className="text-base font-semibold mb-2" style={{ color: mergedTheme.text }}>
