@@ -6,6 +6,13 @@
 import { mergeConfig, validateThreshold } from './config.js';
 import { calculateConfidence, createVerificationResult } from './verification.js';
 import { BubblePopGame } from './games/bubble-pop.js';
+import { TargetClickGame } from './games/target-click.js';
+
+// Available games for rotation
+const AVAILABLE_GAMES = [
+  { Game: BubblePopGame, name: 'Bubble Pop', description: 'Pop the bubbles as fast as you can!', icon: '🎮' },
+  { Game: TargetClickGame, name: 'Target Click', description: 'Click the highlighted targets!', icon: '🎯' }
+];
 
 // Inline CSS as string
 const themeCSS = `
@@ -72,6 +79,9 @@ const themeCSS = `
 @keyframes bubbleAppear { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes bubblePop { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.3); } 100% { transform: scale(0); opacity: 0; } }
 .playproof-bubble.popping { animation: bubblePop 0.2s ease forwards; pointer-events: none; }
+@keyframes targetPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+@keyframes targetHit { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.2); } 100% { transform: scale(0); opacity: 0; } }
+.playproof-target:hover { transform: scale(1.05); }
 `;
 
 export class Playproof {
@@ -94,6 +104,14 @@ export class Playproof {
       console.warn('Playproof: Invalid confidenceThreshold, using default 0.7');
       this.config.confidenceThreshold = 0.7;
     }
+  }
+
+  /**
+   * Get current game info based on game index
+   */
+  getCurrentGameInfo() {
+    const gameIndex = this.currentGameIndex % AVAILABLE_GAMES.length;
+    return AVAILABLE_GAMES[gameIndex];
   }
 
   /**
@@ -169,9 +187,9 @@ export class Playproof {
               <path fill="url(#playproof-icon-gradient)" d="M21.58 16.09l-1.09-7.66C20.21 6.46 18.52 5 16.53 5H7.47C5.48 5 3.79 6.46 3.51 8.43l-1.09 7.66C2.2 17.63 3.39 19 4.94 19c.68 0 1.32-.27 1.8-.75L9 16h6l2.25 2.25c.48.48 1.13.75 1.8.75c1.56 0 2.75-1.37 2.53-2.91zM11 11H9v2H8v-2H6v-1h2V8h1v2h2v1zm4 2c-.55 0-1-.45-1-1s.45-1 1-1s1 .45 1 1s-.45 1-1 1zm2-3c-.55 0-1-.45-1-1s.45-1 1-1s1 .45 1 1s-.45 1-1 1z"/>
             </svg>
           </div>
-          <h3>Quick Challenge</h3>
-          <p>Pop the bubbles as fast as you can!</p>
-          <button class="playproof-start-btn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+          <h3>${this.getCurrentGameInfo().name}</h3>
+          <p>${this.getCurrentGameInfo().description}</p>
+          <button class="playproof-start-btn"><svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg></button>
         </div>
       </div>
       <div class="playproof-progress">
@@ -211,8 +229,9 @@ export class Playproof {
     const instructions = this.gameArea.querySelector('.playproof-instructions');
     if (instructions) instructions.remove();
 
-    // Initialize game
-    this.game = new BubblePopGame(this.gameArea, this.config);
+    // Initialize game based on current game index
+    const gameInfo = this.getCurrentGameInfo();
+    this.game = new gameInfo.Game(this.gameArea, this.config);
 
     // Start progress animation
     const startTime = Date.now();
@@ -275,7 +294,7 @@ export class Playproof {
     // Show retry button if failed
     const retryButton = result.passed ? '' : `
           <button class="playproof-retry-btn">
-            <svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+            <svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
           </button>
         `;
 
