@@ -143,38 +143,40 @@ export class MiniGolfGame extends PixiGameBase {
     update(dt) {
         // Check for shot input
         if (!this.hasShot) {
-            const drag = this.input.getDragInfo();
+            // Check if a drag just completed
+            const completedDrag = this.input.consumeCompletedDrag();
             
-            if (drag && !this.input.isDragging) {
-                // Drag ended - take shot
+            if (completedDrag) {
                 const ballPos = this.ball.position;
                 
                 // Check if drag started near ball
                 const distToBall = Vec2.distance(
-                    { x: drag.startX, y: drag.startY },
+                    { x: completedDrag.startX, y: completedDrag.startY },
                     ballPos
                 );
                 
                 if (distToBall < this.ball.radius * 3) {
                     // Calculate impulse (opposite of drag direction)
-                    const dx = drag.startX - drag.currentX;
-                    const dy = drag.startY - drag.currentY;
+                    const dx = completedDrag.startX - completedDrag.endX;
+                    const dy = completedDrag.startY - completedDrag.endY;
                     const power = Math.min(Vec2.length({ x: dx, y: dy }) * 0.15, 25);
                     
-                    const impulse = Vec2.scale(Vec2.normalize({ x: dx, y: dy }), power);
-                    this.ball.applyImpulse(impulse);
-                    
-                    this.hasShot = true;
-                    this.shotData = {
-                        startX: drag.startX,
-                        startY: drag.startY,
-                        endX: drag.currentX,
-                        endY: drag.currentY,
-                        power,
-                        timestamp: performance.now()
-                    };
-                    
-                    this.input.recordHit(); // Shot taken
+                    if (power > 0.5) { // Minimum power threshold
+                        const impulse = Vec2.scale(Vec2.normalize({ x: dx, y: dy }), power);
+                        this.ball.applyImpulse(impulse);
+                        
+                        this.hasShot = true;
+                        this.shotData = {
+                            startX: completedDrag.startX,
+                            startY: completedDrag.startY,
+                            endX: completedDrag.endX,
+                            endY: completedDrag.endY,
+                            power,
+                            timestamp: performance.now()
+                        };
+                        
+                        this.input.recordHit(); // Shot taken
+                    }
                 }
             }
         }

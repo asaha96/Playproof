@@ -189,20 +189,21 @@ export class BasketballGame extends PixiGameBase {
     update(dt) {
         // Check for shot input
         if (!this.hasShot) {
-            const drag = this.input.getDragInfo();
+            // Check if a drag just completed
+            const completedDrag = this.input.consumeCompletedDrag();
             
-            if (drag && !this.input.isDragging) {
-                // Drag ended - take shot
+            if (completedDrag) {
+                // Check if drag started in shoot zone
                 const startInZone = Collision.pointInRect(
-                    drag.startX, drag.startY,
+                    completedDrag.startX, completedDrag.startY,
                     this.shootZone.x, this.shootZone.y,
                     this.shootZone.w, this.shootZone.h
                 );
                 
                 if (startInZone) {
                     // Upward swipe = shot
-                    const dx = drag.currentX - drag.startX;
-                    const dy = drag.startY - drag.currentY; // Invert Y (up is negative in screen coords)
+                    const dx = completedDrag.endX - completedDrag.startX;
+                    const dy = completedDrag.startY - completedDrag.endY; // Invert Y (up is negative in screen coords)
                     
                     if (dy > 20) { // Minimum upward swipe
                         const power = Math.min(Math.sqrt(dx * dx + dy * dy) * 0.4, 20);
@@ -215,10 +216,10 @@ export class BasketballGame extends PixiGameBase {
                         
                         this.hasShot = true;
                         this.shotData = {
-                            startX: drag.startX,
-                            startY: drag.startY,
-                            endX: drag.currentX,
-                            endY: drag.currentY,
+                            startX: completedDrag.startX,
+                            startY: completedDrag.startY,
+                            endX: completedDrag.endX,
+                            endY: completedDrag.endY,
                             power,
                             angle,
                             timestamp: performance.now()

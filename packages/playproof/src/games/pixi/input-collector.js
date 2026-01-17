@@ -41,6 +41,9 @@ export class InputCollector {
         this.isDragging = false;
         this.dragStart = null;
         this.currentDragPath = [];
+        
+        // Last completed drag (for games to detect drag-end)
+        this.lastCompletedDrag = null;
 
         // Bound handlers for cleanup
         this._boundHandlers = {};
@@ -86,6 +89,7 @@ export class InputCollector {
         this.isDragging = false;
         this.dragStart = null;
         this.currentDragPath = [];
+        this.lastCompletedDrag = null;
     }
 
     /**
@@ -103,7 +107,7 @@ export class InputCollector {
     }
 
     /**
-     * Get current drag info (for games to read)
+     * Get current drag info (for games to read while dragging)
      */
     getDragInfo() {
         if (!this.isDragging || !this.dragStart) return null;
@@ -121,6 +125,16 @@ export class InputCollector {
             duration: last.timestamp - this.dragStart.timestamp,
             path: this.currentDragPath
         };
+    }
+
+    /**
+     * Get the last completed drag (call once per frame, auto-clears)
+     * Returns null if no drag was completed since last call
+     */
+    consumeCompletedDrag() {
+        const drag = this.lastCompletedDrag;
+        this.lastCompletedDrag = null;
+        return drag;
     }
 
     /**
@@ -256,25 +270,39 @@ export class InputCollector {
         });
 
         // Complete drag tracking
-        if (this.isDragging && this.currentDragPath.length > 2) {
+        if (this.isDragging && this.dragStart) {
             this.currentDragPath.push(coords);
             
-            // Save as trajectory for verification scoring
-            this.behaviorData.trajectories.push(
-                this.currentDragPath.map(p => ({
-                    x: p.x,
-                    y: p.y,
-                    timestamp: p.timestamp
-                }))
-            );
+            // Store completed drag for game to consume
+            this.lastCompletedDrag = {
+                startX: this.dragStart.x,
+                startY: this.dragStart.y,
+                endX: coords.x,
+                endY: coords.y,
+                dx: coords.x - this.dragStart.x,
+                dy: coords.y - this.dragStart.y,
+                duration: coords.timestamp - this.dragStart.timestamp,
+                path: [...this.currentDragPath]
+            };
             
-            // Save extended drag info
-            this.extendedTelemetry.dragPaths.push({
-                start: this.dragStart,
-                end: coords,
-                path: [...this.currentDragPath],
-                duration: coords.timestamp - this.dragStart.timestamp
-            });
+            // Save as trajectory for verification scoring
+            if (this.currentDragPath.length > 2) {
+                this.behaviorData.trajectories.push(
+                    this.currentDragPath.map(p => ({
+                        x: p.x,
+                        y: p.y,
+                        timestamp: p.timestamp
+                    }))
+                );
+                
+                // Save extended drag info
+                this.extendedTelemetry.dragPaths.push({
+                    start: this.dragStart,
+                    end: coords,
+                    path: [...this.currentDragPath],
+                    duration: coords.timestamp - this.dragStart.timestamp
+                });
+            }
         }
 
         this.isDragging = false;
