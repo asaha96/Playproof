@@ -96,8 +96,8 @@ export function AppSidebar() {
         <SidebarGroupContent>
           <SidebarMenu>
             <SidebarMenuItem>
-              <div className="flex items-center justify-between px-2 py-1.5">
-                <span className="text-xs text-muted-foreground">Theme</span>
+              <div className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-md hover:bg-sidebar-accent transition-colors group-data-[collapsible=icon]:justify-center">
+                <span className="text-sm text-sidebar-foreground group-data-[collapsible=icon]:hidden">Theme</span>
                 <ThemeToggle />
               </div>
             </SidebarMenuItem>
