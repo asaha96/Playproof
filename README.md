@@ -14,9 +14,10 @@ Playproof is a modern, game-based captcha verification SDK designed to distingui
 
 This is a monorepo containing the following workspaces:
 
-- `playproof/`: The core SDK package.
+- `packages/playproof/`: The core SDK package.
 - `demo-app/`: A Next.js application demonstrating the SDK usage.
-- `apps/`: Additional applications (web, api, edge-worker).
+- `apps/web`: The primary web application.
+- `convex/`: The backend infrastructure.
 
 ## 🚀 Getting Started
 
@@ -51,6 +52,11 @@ You can run the different parts of the project using the following commands from
 - **Run the Web App**:
   ```bash
   npm run dev:web
+  ```
+
+- **Run Convex Dev**:
+  ```bash
+  npm run convex:dev
   ```
 
 - **Build Utilities**:
