@@ -1,21 +1,18 @@
 # apps/web
 
-This is the **canonical web application** location for PlayProof.
+This is the **canonical web application** for PlayProof.
 
-## Status
+## Getting Started
 
-Currently a placeholder. When ready, scaffold a Next.js app here:
+From this folder:
 
 ```bash
-cd apps/web
-npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir
+npm run dev
 ```
 
-## Why This Folder Exists
+Then open http://localhost:3000.
 
-Per `AGENTS.md`, this folder **must exist on all branches** to prevent merge conflicts. It serves as the canonical path for the primary web application.
+## Notes
 
-## See Also
-
-- `demo-app/` - Legacy/demo application (currently functional)
-- `AGENTS.md` - Repository conventions and rules
+- This folder must exist on all branches (see `AGENTS.md`).
+- `demo-app/` remains the legacy/demo Next.js app for testing until explicitly deprecated.
