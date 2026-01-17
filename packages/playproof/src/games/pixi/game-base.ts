@@ -199,27 +199,73 @@ export abstract class PixiGameBase {
 
         const { width, height } = this.host!.getSize();
 
-        // Result circle
-        const color = success
+        // Background overlay with blur effect
+        const bg = this.host!.createRect(0, 0, width, height, 'rgba(15, 15, 26, 0.7)');
+        this.host!.layers.ui.addChild(bg);
+
+        // Result icon background circle with glow
+        const iconColor = success
             ? (this.theme.success || '#10b981')
             : (this.theme.error || '#ef4444');
 
-        const circle = this.host!.createCircle(width / 2, height / 2 - 20, 30, color);
-        circle.alpha = 0.3;
+        const glowColor = success ? 0x10b981 : 0xef4444;
+
+        // Outer glow ring
+        const glow = this.host!.createCircle(width / 2, height / 2 - 20, 40, iconColor);
+        glow.alpha = 0.15;
+        this.host!.layers.ui.addChild(glow);
+
+        // Main icon circle
+        const circle = this.host!.createCircle(width / 2, height / 2 - 20, 32, iconColor);
+        circle.alpha = 0.2;
         this.host!.layers.ui.addChild(circle);
 
-        // Result text
+        // Inner icon - checkmark or X
+        const iconSymbol = this.host!.createText(
+            success ? '✓' : '✕',
+            { fontSize: 28, fill: iconColor, fontWeight: 'bold' }
+        );
+        iconSymbol.anchor.set(0.5);
+        iconSymbol.x = width / 2;
+        iconSymbol.y = height / 2 - 20;
+        this.host!.layers.ui.addChild(iconSymbol);
+
+        // Result text with better styling
         const text = this.host!.createText(
             success ? 'Success!' : 'Try Again',
-            { fontSize: 20, fill: color }
+            { fontSize: 18, fill: this.theme.text || '#f8fafc', fontWeight: '600' }
         );
         text.anchor.set(0.5);
         text.x = width / 2;
-        text.y = height / 2 + 30;
+        text.y = height / 2 + 35;
         this.host!.layers.ui.addChild(text);
 
+        // Animate entrance (scale effect simulation via alpha)
+        let elapsed = 0;
+        const animDuration = 300;
+        const animate = () => {
+            elapsed += 16;
+            const progress = Math.min(1, elapsed / animDuration);
+            const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+
+            circle.scale.set(0.8 + eased * 0.2);
+            glow.scale.set(0.6 + eased * 0.4);
+            iconSymbol.alpha = eased;
+            text.alpha = eased;
+
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            }
+        };
+
+        circle.scale.set(0.8);
+        glow.scale.set(0.6);
+        iconSymbol.alpha = 0;
+        text.alpha = 0;
+        requestAnimationFrame(animate);
+
         // Wait then callback
-        setTimeout(callback, 800);
+        setTimeout(callback, 900);
     }
 
     /**
