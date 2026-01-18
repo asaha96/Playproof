@@ -128,11 +128,6 @@ export function AppSidebar() {
               ) : null}
             </div>
           </div>
-          <SignOutButton>
-            <Button variant="ghost" size="sm" className="w-full mt-2 group-data-[collapsible=icon]:hidden">
-              Sign Out
-            </Button>
-          </SignOutButton>
         </SignedIn>
         <SignedOut>
           <div className="flex flex-col gap-2">
