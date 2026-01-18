@@ -1,7 +1,6 @@
-"use client";
-
 import Link from "next/link";
-import { SignInButton, SignUpButton, SignedIn, SignedOut } from "@clerk/nextjs";
+import { SignInButton, SignUpButton } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -91,8 +90,9 @@ function CheckCircle(props: React.SVGProps<SVGSVGElement>) {
 const features = [
   {
     icon: Gamepad2,
-    title: "Engaging Mini-Games",
-    description: "Replace boring CAPTCHAs with fun, quick mini-games that users actually enjoy completing.",
+    title: "Verification Deployments",
+    description:
+      "Replace CAPTCHAs with fast, branded deployments users complete in seconds.",
   },
   {
     icon: Bot,
@@ -121,14 +121,16 @@ const features = [
   },
 ];
 
-const games = [
-  { name: "Mini Golf", description: "Putt the ball into the hole" },
-  { name: "Basketball", description: "Shoot hoops with perfect aim" },
-  { name: "Archery", description: "Hit the bullseye target" },
-  { name: "Bubble Pop", description: "Pop bubbles before they disappear" },
+const deploymentTypes = [
+  { name: "Mini Golf", description: "Precision-focused putting experience." },
+  { name: "Basketball", description: "High-tempo shot selection." },
+  { name: "Archery", description: "Targeted accuracy flow." },
+  { name: "Bubble Pop", description: "Rapid pattern recognition." },
 ];
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const { userId } = await auth();
+
   return (
     <div className="flex flex-col">
       {/* Hero Section */}
@@ -151,38 +153,39 @@ export default function LandingPage() {
         <h1 className="max-w-4xl text-center text-4xl font-bold tracking-tight md:text-5xl lg:text-6xl">
           Stop Bots with{" "}
           <span className="bg-gradient-to-r from-primary to-chart-2 bg-clip-text text-transparent">
-            Games
+            Deployments
           </span>
           , Not Frustration
         </h1>
 
         <p className="mt-6 max-w-2xl text-center text-lg text-muted-foreground md:text-xl">
-          PlayProof replaces annoying CAPTCHAs with engaging mini-games. Better security, 
+          PlayProof replaces CAPTCHAs with engaging deployments. Better security,
           happier users, and advanced behavioral analysis to catch bots.
         </p>
 
         <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row">
-          <SignedOut>
-            <SignUpButton mode="modal">
-              <Button size="lg" className="gap-2">
-                Get Started Free
-                <ArrowRight className="size-4" />
-              </Button>
-            </SignUpButton>
-            <SignInButton mode="modal">
-              <Button variant="outline" size="lg">
-                Sign In
-              </Button>
-            </SignInButton>
-          </SignedOut>
-          <SignedIn>
+          {!userId ? (
+            <>
+              <SignUpButton mode="modal">
+                <Button size="lg" className="gap-2">
+                  Get Started Free
+                  <ArrowRight className="size-4" />
+                </Button>
+              </SignUpButton>
+              <SignInButton mode="modal">
+                <Button variant="outline" size="lg">
+                  Sign In
+                </Button>
+              </SignInButton>
+            </>
+          ) : (
             <Link href="/dashboard">
               <Button size="lg" className="gap-2">
                 Go to Dashboard
                 <ArrowRight className="size-4" />
               </Button>
             </Link>
-          </SignedIn>
+          )}
         </div>
 
         {/* Stats */}
@@ -233,42 +236,47 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Games Showcase */}
+      {/* Deployments Showcase */}
       <section className="px-6 py-24">
         <div className="mx-auto max-w-6xl">
           <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
             <div>
-              <Badge variant="outline" className="mb-4">Mini-Games</Badge>
+              <Badge variant="outline" className="mb-4">Deployments</Badge>
               <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
                 Verification that users actually enjoy
               </h2>
               <p className="mt-4 text-muted-foreground">
-                Our collection of micro-games turns verification into a delightful experience. 
-                Each game takes just a few seconds while collecting behavioral data to detect bots.
+                Our deployment library keeps verification efficient and branded.
+                Each deployment completes in seconds while collecting behavioral
+                signals to detect bots.
               </p>
 
               <div className="mt-8 space-y-4">
-                {games.map((game) => (
-                  <div key={game.name} className="flex items-center gap-4">
+                {deploymentTypes.map((deployment) => (
+                  <div key={deployment.name} className="flex items-center gap-4">
                     <CheckCircle className="size-5 shrink-0 text-primary" />
                     <div>
-                      <div className="font-medium">{game.name}</div>
-                      <div className="text-sm text-muted-foreground">{game.description}</div>
+                      <div className="font-medium">{deployment.name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {deployment.description}
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Game Preview Card */}
+            {/* Deployment Preview Card */}
             <Card className="overflow-hidden">
               <div className="relative aspect-video bg-gradient-to-br from-muted to-muted/50">
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
                   <div className="mb-4 flex size-16 items-center justify-center rounded-2xl bg-primary/10">
                     <Gamepad2 className="size-8 text-primary" />
                   </div>
-                  <p className="text-lg font-medium">Interactive Game Preview</p>
-                  <p className="text-sm text-muted-foreground">Sign up to try the games yourself</p>
+                  <p className="text-lg font-medium">Deployment Preview</p>
+                  <p className="text-sm text-muted-foreground">
+                    Sign up to try the deployments yourself
+                  </p>
                 </div>
               </div>
               <CardContent className="mt-4">
@@ -293,31 +301,32 @@ export default function LandingPage() {
             Ready to upgrade your verification?
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            Join developers who have replaced frustrating CAPTCHAs with engaging mini-games.
+            Join developers who have replaced frustrating CAPTCHAs with engaging deployments.
             Get started in minutes with our simple SDK.
           </p>
           <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-            <SignedOut>
-              <SignUpButton mode="modal">
-                <Button size="lg" className="gap-2">
-                  Start Building
-                  <ArrowRight className="size-4" />
-                </Button>
-              </SignUpButton>
-              <a href="https://github.com/asaha96/Playproof" target="_blank" rel="noopener noreferrer">
-                <Button variant="outline" size="lg">
-                  View on GitHub
-                </Button>
-              </a>
-            </SignedOut>
-            <SignedIn>
+            {!userId ? (
+              <>
+                <SignUpButton mode="modal">
+                  <Button size="lg" className="gap-2">
+                    Start Building
+                    <ArrowRight className="size-4" />
+                  </Button>
+                </SignUpButton>
+                <a href="https://github.com/asaha96/Playproof" target="_blank" rel="noopener noreferrer">
+                  <Button variant="outline" size="lg">
+                    View on GitHub
+                  </Button>
+                </a>
+              </>
+            ) : (
               <Link href="/dashboard">
                 <Button size="lg" className="gap-2">
                   Go to Dashboard
                   <ArrowRight className="size-4" />
                 </Button>
               </Link>
-            </SignedIn>
+            )}
           </div>
         </div>
       </section>

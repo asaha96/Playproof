@@ -9,7 +9,7 @@
  */
 
 import type * as branding from "../branding.js";
-import type * as minigames from "../minigames.js";
+import type * as deployments from "../deployments.js";
 import type * as sessions from "../sessions.js";
 import type * as users from "../users.js";
 
@@ -21,7 +21,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   branding: typeof branding;
-  minigames: typeof minigames;
+  deployments: typeof deployments;
   sessions: typeof sessions;
   users: typeof users;
 }>;

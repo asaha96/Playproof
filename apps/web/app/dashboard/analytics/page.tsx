@@ -1,8 +1,8 @@
 "use client";
 
-import { ArrowUpRight, ShieldCheck, Sparkles, Target, TrendingUp, Bot, UserCheck } from "lucide-react";
+import { ShieldCheck, Sparkles, Target, TrendingUp, Bot, UserCheck } from "lucide-react";
 import { useQuery } from "convex/react";
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -38,7 +38,6 @@ import { api } from "@/convex/_generated/api";
 export default function AnalyticsPage() {
   const stats = useQuery(api.sessions.stats);
   const sessions = useQuery(api.sessions.recent, { limit: 10 });
-  // @ts-expect-error - timeSeries will be available after Convex generates types
   const timeSeriesData = useQuery(api.sessions.timeSeries, { days: 14 });
 
   const statCards = stats
@@ -98,7 +97,7 @@ export default function AnalyticsPage() {
 
   // Prepare time series chart data
   const chartData = timeSeriesData
-    ? (timeSeriesData as Array<{ date: string; humans: number; bots: number; total: number }>).map((day) => ({
+    ? timeSeriesData.map((day) => ({
         date: new Date(day.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
         humans: day.humans,
         bots: day.bots,
@@ -106,25 +105,13 @@ export default function AnalyticsPage() {
       }))
     : [];
 
-  // Prepare game breakdown data
-  const gameBreakdown = stats && 'byGame' in stats && stats.byGame
-    ? Object.entries(stats.byGame as Record<string, { count: number; passRate: number }>).map(([gameId, data]) => ({
-        game: gameId.charAt(0).toUpperCase() + gameId.slice(1).replace("-", " "),
+  // Prepare deployment breakdown data
+  const deploymentBreakdown = stats && 'byDeployment' in stats && stats.byDeployment
+    ? Object.entries(stats.byDeployment as Record<string, { count: number; passRate: number }>).map(([deploymentId, data]) => ({
+        deployment: deploymentId.slice(-8),
         passRate: data.passRate * 100,
         count: data.count,
       }))
-    : [];
-
-  // Top risk flags
-  const topRiskFlags = stats && 'riskFlags' in stats && stats.riskFlags
-    ? Object.entries(stats.riskFlags as Record<string, number>)
-        .map(([flag, count]) => ({
-          label: flag.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
-          value: `${((count / (stats.totalSessions || 1)) * 100).toFixed(1)}%`,
-          count: count as number,
-        }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 5)
     : [];
 
   const chartConfig = {
@@ -197,7 +184,7 @@ export default function AnalyticsPage() {
                 <div className="text-center text-sm text-muted-foreground">
                   <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-50" />
                   <p>No data yet</p>
-                  <p className="text-xs">Sessions will appear here once games start running</p>
+                  <p className="text-xs">Sessions will appear here once deployments start running</p>
                 </div>
               </div>
             ) : (
@@ -253,43 +240,62 @@ export default function AnalyticsPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Top risk signals</CardTitle>
-            <CardDescription>Patterns that triggered bot reviews.</CardDescription>
+            <CardTitle>Detection summary</CardTitle>
+            <CardDescription>Session outcomes overview.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {topRiskFlags.length === 0 ? (
+            {!stats ? (
               <div className="text-sm text-muted-foreground text-center py-8">
                 <Bot className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>No risk flags detected</p>
-                <p className="text-xs">All sessions appear legitimate</p>
+                <p>Loading...</p>
+              </div>
+            ) : stats.totalSessions === 0 ? (
+              <div className="text-sm text-muted-foreground text-center py-8">
+                <Bot className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p>No sessions yet</p>
+                <p className="text-xs">Data will appear once sessions are recorded</p>
               </div>
             ) : (
-              topRiskFlags.map((item) => (
-                <div
-                  key={item.label}
-                  className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2 hover:bg-muted/50 transition-colors"
-                >
-                  <span className="text-sm">{item.label}</span>
-                  <span className="text-sm font-medium">{item.value}</span>
+              <>
+                <div className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2 hover:bg-muted/50 transition-colors">
+                  <span className="text-sm flex items-center gap-2">
+                    <UserCheck className="size-4 text-green-500" />
+                    Humans verified
+                  </span>
+                  <span className="text-sm font-medium">{stats.totalSessions - stats.botDetections}</span>
                 </div>
-              ))
+                <div className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2 hover:bg-muted/50 transition-colors">
+                  <span className="text-sm flex items-center gap-2">
+                    <Bot className="size-4 text-red-500" />
+                    Bots detected
+                  </span>
+                  <span className="text-sm font-medium">{stats.botDetections}</span>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2 hover:bg-muted/50 transition-colors">
+                  <span className="text-sm flex items-center gap-2">
+                    <TrendingUp className="size-4 text-blue-500" />
+                    Avg. duration
+                  </span>
+                  <span className="text-sm font-medium">{(stats.avgSessionMs / 1000).toFixed(1)}s</span>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {gameBreakdown.length > 0 && (
+      {deploymentBreakdown.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Performance by game</CardTitle>
-            <CardDescription>Human pass rate across different minigames.</CardDescription>
+            <CardTitle>Performance by deployment</CardTitle>
+            <CardDescription>Human pass rate across different deployments.</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer config={chartConfig} className="h-64">
-              <BarChart data={gameBreakdown}>
+              <BarChart data={deploymentBreakdown}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis
-                  dataKey="game"
+                  dataKey="deployment"
                   className="text-xs"
                   tickLine={false}
                   axisLine={false}
@@ -332,74 +338,47 @@ export default function AnalyticsPage() {
                 </EmptyMedia>
                 <EmptyTitle>No sessions yet</EmptyTitle>
                 <EmptyDescription>
-                  Sessions will appear here as soon as minigames start running.
+                  Sessions will appear here as soon as deployments go live.
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (
-            <div className="rounded-lg border border-border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Session</TableHead>
-                    <TableHead>Game</TableHead>
-                    <TableHead>Score</TableHead>
-                    <TableHead>Result</TableHead>
-                    <TableHead>Risk Flags</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sessions.map((session) => (
-                    <TableRow key={session._id}>
-                      <TableCell className="font-medium">
-                        {formatSessionId(session._id)}
-                      </TableCell>
-                      <TableCell className="capitalize">
-                        {(session as any).gameId?.replace("-", " ") || session.minigameName}
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-mono">{session.scorePercent}%</span>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={session.result === "Human" ? "default" : "destructive"}
-                          className="gap-1"
-                        >
-                          {session.result === "Human" ? (
-                            <UserCheck className="size-3" />
-                          ) : (
-                            <Bot className="size-3" />
-                          )}
-                          {session.result}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {(session as any).riskFlags && Array.isArray((session as any).riskFlags) && (session as any).riskFlags.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {((session as any).riskFlags as string[]).slice(0, 2).map((flag: string) => (
-                              <Badge
-                                key={flag}
-                                variant="outline"
-                                className="text-xs"
-                              >
-                                {flag.replace(/_/g, " ")}
-                              </Badge>
-                            ))}
-                            {(session as any).riskFlags.length > 2 && (
-                              <Badge variant="outline" className="text-xs">
-                                +{(session as any).riskFlags.length - 2}
-                              </Badge>
-                            )}
-                          </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Session</TableHead>
+                  <TableHead>Deployment</TableHead>
+                  <TableHead>Score</TableHead>
+                  <TableHead>Result</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sessions.map((session) => (
+                  <TableRow key={session._id}>
+                    <TableCell className="font-medium">
+                      {formatSessionId(session._id)}
+                    </TableCell>
+                    <TableCell>{session.deploymentName}</TableCell>
+                    <TableCell>
+                      <span className="font-mono">{session.scorePercent}%</span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={session.result === "Human" ? "default" : "destructive"}
+                        className="gap-1"
+                      >
+                        {session.result === "Human" ? (
+                          <UserCheck className="size-3" />
                         ) : (
-                          <span className="text-xs text-muted-foreground">None</span>
+                          <Bot className="size-3" />
                         )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                        {session.result}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>
