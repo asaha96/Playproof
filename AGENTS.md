@@ -18,16 +18,11 @@ A human verification system that replaces traditional CAPTCHAs with branded depl
    - Never rename or remove this folder
    - Never duplicate web app logic elsewhere without updating this document
 
-2. **Keep `demo-app/` intact**
-   - Legacy/demo application for testing
-   - Must remain functional until explicitly deprecated
-   - Long-term: `apps/web` is the canonical web app; `demo-app` is for quick demos/testing
-
-3. **SDK published name stays `playproof`**
+2. **SDK published name stays `playproof`**
    - Package lives at `packages/playproof/`
    - npm publish name: `playproof`
 
-4. **Always use TypeScript, never JavaScript**
+3. **Always use TypeScript, never JavaScript**
    - All new code must be written in TypeScript (`.ts`, `.tsx`)
    - Never create `.js` or `.jsx` files (except for config files like `next.config.js`)
    - Prefer strict type safety over `any` types
@@ -48,7 +43,6 @@ Playproof/
 │   ├── playproof/        # SDK package (published as 'playproof')
 │   │   └── src/          # SDK source code
 │   └── shared/           # Shared types, contracts, utilities
-├── demo-app/             # Legacy Next.js demo (kept for testing)
 ├── AGENTS.md             # THIS FILE - agent synchronization
 ├── README.md             # Project documentation
 └── package.json          # Workspace root (npm workspaces)
@@ -64,9 +58,8 @@ Playproof/
 | `apps/web/woodwide` | Woodwide training data/scripts/tests/docs | TypeScript + Shell |
 | `apps/api` | Legacy API orchestrator (deprecated) | Fastify + TypeScript |
 | `apps/edge-worker` | Edge token issuance, caching, prefilter | Cloudflare Workers |
-| `packages/playproof` | Client SDK for embedding verification deployments | TypeScript + PixiJS |
+| `packages/playproof` | Client SDK for embedding verification deployments | TypeScript + Three.js |
 | `packages/shared` | Shared types, contracts, scoring schemas | TypeScript |
-| `demo-app` | Interactive demo for testing SDK | Next.js |
 
 ### API Endpoints (`apps/web` app router)
 
@@ -152,7 +145,6 @@ npm install
 # Development
 npm run dev              # Default dev (apps/web)
 npm run dev:web          # apps/web
-npm run dev:demo         # demo-app
 npm run dev:api          # legacy Fastify (deprecated)
 npm run dev:worker       # apps/edge-worker
 npm run convex:dev       # convex dev
@@ -163,13 +155,12 @@ npm run convex:dev       # convex dev
 ```bash
 # Run specific workspace
 npm run dev -w apps/web
-npm run dev -w demo-app
 npm run dev -w apps/api  # legacy Fastify (deprecated)
 npm run dev -w apps/edge-worker
 
 # Build specific workspace
 npm run build -w apps/web
-npm run build -w demo-app
+npm run build -w packages/playproof
 ```
 
 ### API Service (apps/web Next.js)
@@ -235,21 +226,48 @@ git pull --ff-only
 
 - **Workspace root**: Configured with npm workspaces
 - **SDK**: `packages/playproof/` (published name: `playproof`)
+  - TelemetrySink abstraction for pluggable transports
+  - HookSink: Original callback-based telemetry (always enabled)
+  - LiveKitSink: Real-time streaming via LiveKit (enabled by default when credentials present)
+  - Config flag `telemetryTransport.livekit.enabled` controls LiveKit (default: true)
 - **Web app**: `apps/web/` (canonical path)
-- **Dashboard**: Deployments page at `/dashboard/deployments`
+- **Dashboard**: 
+  - Deployments page at `/dashboard/deployments`
+  - Attempts page at `/dashboard/attempts` (shows verification results from Woodwide)
+  - Observability page at `/dashboard/observability` (local telemetry testing)
+  - Woodwide Test page at `/dashboard/woodwide-test` (game testing with Woodwide scoring)
 - **Deployments**: Branding stored per deployment with `type` enum and `isActive` flag
-- **Demo**: `demo-app/` (legacy, functional)
 - **API**: `apps/web/app/api/` + `apps/web/server/` (Next.js route handlers, Woodwide integration)
   - Bot detection scoring via movement telemetry analysis
   - Feature extraction: velocity, acceleration, jerk, path efficiency, jitter, etc.
   - Woodwide ML platform integration for anomaly detection
-  - Three-tier decision: PASS (≤1.0) / REVIEW (≤2.5) / FAIL (>2.5)
+  - Three-tier decision: PASS (<=1.0) / REVIEW (<=2.5) / FAIL (>2.5)
 - **Woodwide assets**: `apps/web/woodwide/` (training data, scripts, tests, docs)
 - **Legacy API**: `apps/api/` (Fastify, deprecated)
 - **Worker**: `apps/edge-worker/` (Cloudflare placeholder)
 - **Shared types**: `packages/shared/` includes `SessionTelemetry`, `MovementFeatures`, `ScoringResponse`
 - **Convex**: `convex/` (Backend functions & schema)
+  - `realtime.ts`: Active attempts registry, token minting queries/mutations
+  - `livekit.ts`: LiveKit token minting actions (Node.js runtime)
+  - `activeAttempts` table: Tracks verification attempts with results
+
+### LiveKit Telemetry Transport
+
+SDK telemetry can be streamed via LiveKit for real-time observation:
+
+1. **SDK Publisher**: When `telemetryTransport.livekit.enabled: true` (default) and `apiKey`/`deploymentId` are provided, SDK connects to LiveKit room and publishes pointer events
+2. **Topics**: `playproof.pointer.v1` for pointer telemetry
+3. **Reliability**: Move events use LOSSY delivery (low latency), state events (down/up) use RELIABLE
+4. **Dashboard Observer**: Authenticated users can observe live telemetry streams
+5. **Results**: Woodwide scoring results are stored in `activeAttempts` table
+
+**Environment Variables** (set in Convex dashboard):
+```
+LIVEKIT_URL=wss://your-livekit-instance.livekit.cloud
+LIVEKIT_API_KEY=xxx
+LIVEKIT_API_SECRET=xxx
+```
 
 ---
 
-*Last updated: Next.js API routes + Woodwide assets moved into apps/web*
+*Last updated: Removed deprecated demo-app references, updated SDK tech stack to Three.js*

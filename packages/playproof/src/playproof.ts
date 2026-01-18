@@ -410,7 +410,9 @@ export class Playproof {
    * Evaluate game results
    */
   private async evaluateResult(behaviorData: BehaviorData): Promise<void> {
-    // Call telemetry hook if available (with BehaviorData after game completion)
+    // Note: Telemetry is now sent via the TelemetrySink abstraction in base-game.ts
+    // The hook is called in real-time during the game via TelemetrySink.
+    // BehaviorData is also passed for backward compatibility with onTelemetry callbacks.
     if (this.config.hooks?.onTelemetryBatch) {
       // The hook accepts both PointerTelemetryEvent[] and BehaviorData
       (this.config.hooks.onTelemetryBatch as any)(behaviorData);

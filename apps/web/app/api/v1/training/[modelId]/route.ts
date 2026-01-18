@@ -7,9 +7,12 @@ interface RouteParams {
   modelId: string;
 }
 
-export async function GET(request: Request, context: { params: RouteParams }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<RouteParams> }
+) {
   const methods = ["GET", "OPTIONS"];
-  const { modelId } = context.params;
+  const { modelId } = await params;
 
   try {
     const status = await woodwideClient.getModelStatus(modelId);

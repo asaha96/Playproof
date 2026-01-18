@@ -6,6 +6,8 @@
 import * as THREE from 'three';
 import { ThreeEngine, EngineConfig } from './engine';
 import { PointerTelemetryTracker } from '../../telemetry/pointer-tracker';
+import { HookSink, CompositeSink, LiveKitSink } from '../../telemetry';
+import type { TelemetrySink } from '../../telemetry/sink';
 import type { BehaviorData, PlayproofConfig, SDKHooks, BaseGame, PointerTelemetryEvent } from '../../types';
 
 export interface MouseMovement {
@@ -29,6 +31,10 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
     protected pointerTracker: PointerTelemetryTracker;
     protected allTelemetryEvents: PointerTelemetryEvent[] = [];
 
+    // Telemetry sink abstraction (supports multiple transports)
+    protected telemetrySink: TelemetrySink | null = null;
+    protected livekitSink: LiveKitSink | null = null;
+
     constructor(gameArea: HTMLElement, config: PlayproofConfig, hooks: SDKHooks = {} as SDKHooks) {
         const engineConfig: EngineConfig = {
             container: gameArea,
@@ -43,6 +49,9 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
         this.currentTrajectory = [];
         this.behaviorData = this.createEmptyBehaviorData();
 
+        // Initialize telemetry sink based on config
+        this.telemetrySink = this.createTelemetrySink();
+
         // Initialize pointer telemetry tracker
         this.pointerTracker = new PointerTelemetryTracker({
             moveThrottleMs: 50,
@@ -53,6 +62,52 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
         this.bindEvents();
     }
 
+    /**
+     * Create the telemetry sink based on configuration.
+     * If LiveKit is enabled and credentials are present, use a composite sink.
+     * Otherwise, fall back to the hook sink only.
+     */
+    protected createTelemetrySink(): TelemetrySink {
+        const sinks: TelemetrySink[] = [];
+
+        // Always add the hook sink (original behavior)
+        const hookSink = new HookSink(this.hooks.onTelemetryBatch);
+        sinks.push(hookSink);
+
+        // Add LiveKit sink if enabled and credentials are present
+        const livekitEnabled = this.config.telemetryTransport?.livekit?.enabled ?? true;
+        const hasCredentials = this.config.apiKey && this.config.deploymentId;
+
+        if (livekitEnabled && hasCredentials) {
+            this.livekitSink = new LiveKitSink({
+                apiKey: this.config.apiKey!,
+                deploymentId: this.config.deploymentId!,
+                onConnected: (roomName, attemptId) => {
+                    console.log('[Playproof] LiveKit connected:', { roomName, attemptId });
+                },
+                onDisconnected: () => {
+                    console.log('[Playproof] LiveKit disconnected');
+                },
+                onError: (error) => {
+                    console.warn('[Playproof] LiveKit error:', error.message);
+                },
+            });
+            sinks.push(this.livekitSink);
+        } else if (livekitEnabled && !hasCredentials) {
+            // Warn when LiveKit is enabled but credentials are missing
+            console.warn(
+                '[Playproof] LiveKit telemetry is enabled but apiKey or deploymentId is missing. ' +
+                'Falling back to hook-only telemetry. To enable LiveKit, provide both apiKey and deploymentId in the config.'
+            );
+        }
+
+        // Use composite sink if multiple sinks, otherwise just return the hook sink
+        if (sinks.length > 1) {
+            return new CompositeSink(sinks);
+        }
+        return sinks[0];
+    }
+
     protected createEmptyBehaviorData(): BehaviorData {
         return {
             mouseMovements: [],
@@ -61,20 +116,27 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
             hits: 0,
             misses: 0,
             clickAccuracy: 0,
+            startTime: undefined,
+            endTime: undefined,
+            durationMs: undefined,
         };
     }
 
     /**
      * Handle batched telemetry events from the pointer tracker.
-     * This is called automatically by the tracker and fires the SDK hook.
+     * This is called automatically by the tracker and sends events through the sink.
      */
     protected handleTelemetryBatch(batch: PointerTelemetryEvent[]): void {
         // Store all events for final result
         this.allTelemetryEvents.push(...batch);
 
-        // Fire the hook so consumers can receive telemetry in real-time
-        if (this.hooks.onTelemetryBatch) {
-            this.hooks.onTelemetryBatch(batch);
+        // Determine reliability based on event types
+        // Important events (down, up, enter, leave) should be reliable
+        const hasImportantEvents = batch.some(e => e.eventType !== 'move');
+
+        // Send through the sink abstraction
+        if (this.telemetrySink) {
+            this.telemetrySink.sendPointerBatch(batch, hasImportantEvents);
         }
     }
 
@@ -177,6 +239,16 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
         // Attach pointer telemetry tracker to the canvas
         // This works on top of any game - completely game-agnostic
         this.pointerTracker.attach(this.renderer.domElement);
+
+        // Connect telemetry sink (async for LiveKit connection)
+        if (this.telemetrySink?.connect) {
+            try {
+                await this.telemetrySink.connect();
+            } catch (error) {
+                // Log but don't fail - hook sink will still work
+                console.warn('[Playproof] Telemetry sink connection failed:', error);
+            }
+        }
         
         await this.setupGame();
     }
@@ -188,6 +260,7 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
         this.behaviorData = this.createEmptyBehaviorData();
         this.allTelemetryEvents = []; // Clear previous telemetry
         this.startTime = Date.now();
+        this.behaviorData.startTime = this.startTime; // Store in behavior data
         this.startEngine();
 
         // Start pointer telemetry tracking
@@ -201,8 +274,18 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
     protected endGame(): void {
         this.stop();
 
+        // Set end time and calculate duration
+        const endTime = Date.now();
+        this.behaviorData.endTime = endTime;
+        this.behaviorData.durationMs = this.startTime ? endTime - this.startTime : 0;
+
         // Stop pointer telemetry tracking (flushes remaining events)
         this.pointerTracker.stop();
+
+        // Disconnect telemetry sink
+        if (this.telemetrySink?.disconnect) {
+            this.telemetrySink.disconnect();
+        }
 
         // Calculate accuracy
         const totalClicks = this.behaviorData.hits + this.behaviorData.misses;
@@ -215,9 +298,21 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
         }
     }
 
+    /**
+     * Get the current LiveKit attempt ID (if connected)
+     */
+    public getLivekitAttemptId(): string | null {
+        return this.livekitSink?.getAttemptId() ?? null;
+    }
+
     destroy(): void {
         // Clean up pointer telemetry tracker
         this.pointerTracker.destroy();
+
+        // Disconnect telemetry sink
+        if (this.telemetrySink?.disconnect) {
+            this.telemetrySink.disconnect();
+        }
 
         const canvas = this.renderer.domElement;
         canvas.removeEventListener('mousemove', this.handleMouseMove);

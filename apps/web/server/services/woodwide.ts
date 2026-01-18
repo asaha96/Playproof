@@ -124,8 +124,9 @@ export class WoodwideClient {
     const url = `${this.baseUrl}/api/datasets`;
 
     const formData = new FormData();
-    const file = new Blob([csvData], { type: "text/csv" });
-    formData.append("file", file, `${name}.csv`);
+    // Use File constructor for Node.js FormData compatibility
+    const file = new File([csvData], `${name}.csv`, { type: "text/csv" });
+    formData.append("file", file);
     formData.append("name", name);
     formData.append("overwrite", String(overwrite));
 

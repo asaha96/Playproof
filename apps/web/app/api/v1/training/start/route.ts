@@ -49,7 +49,7 @@ export async function POST(request: Request) {
         : await woodwideClient.trainPredictionModel({
             datasetName,
             modelName,
-            labelColumn,
+            labelColumn: labelColumn!, // Validated above at line 37
             inputColumns,
             overwrite,
           });

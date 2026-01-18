@@ -8,9 +8,12 @@ interface RouteParams {
   sessionId: string;
 }
 
-export async function GET(request: Request, context: { params: RouteParams }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<RouteParams> }
+) {
   const methods = ["GET", "OPTIONS"];
-  const { sessionId } = context.params;
+  const { sessionId } = await params;
   const result = getSessionResult(sessionId);
 
   if (!result) {
