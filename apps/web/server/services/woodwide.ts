@@ -28,43 +28,88 @@ interface InferenceResult {
 
 /**
  * Woodwide ML Platform HTTP Client
+ * Supports rotating API keys for load balancing and rate limit management
  */
 export class WoodwideClient {
-  private apiKey: string;
+  private apiKeys: string[];
+  private currentKeyIndex: number = 0;
   private baseUrl: string;
 
-  constructor(apiKey: string, baseUrl: string = "https://beta.woodwide.ai") {
-    this.apiKey = apiKey;
+  constructor(apiKeyOrKeys: string | string[], baseUrl: string = "https://beta.woodwide.ai") {
+    // Support both single key (string) or array of keys for rotation
+    this.apiKeys = Array.isArray(apiKeyOrKeys) ? apiKeyOrKeys : [apiKeyOrKeys];
+    if (this.apiKeys.length === 0) {
+      throw new Error("At least one API key is required");
+    }
     this.baseUrl = baseUrl.replace(/\/$/, ""); // Remove trailing slash
   }
 
   /**
+   * Get the current API key (for rotation)
+   */
+  private getCurrentApiKey(): string {
+    return this.apiKeys[this.currentKeyIndex];
+  }
+
+  /**
+   * Rotate to the next API key (round-robin)
+   */
+  private rotateApiKey(): void {
+    this.currentKeyIndex = (this.currentKeyIndex + 1) % this.apiKeys.length;
+  }
+
+  /**
    * Make an authenticated request to Woodwide API
+   * Automatically rotates keys on failure and retries
    */
   private async request<T>(
     method: string,
     path: string,
-    body?: unknown
+    body?: unknown,
+    retryWithRotation: boolean = true
   ): Promise<T> {
     const url = `${this.baseUrl}${path}`;
+    const startKeyIndex = this.currentKeyIndex;
+    let lastError: Error | null = null;
 
-    const headers: Record<string, string> = {
-      "Authorization": `Bearer ${this.apiKey}`,
-      "Content-Type": "application/json",
-    };
+    // Try all keys if rotation is enabled
+    for (let attempt = 0; attempt < (retryWithRotation ? this.apiKeys.length : 1); attempt++) {
+      const headers: Record<string, string> = {
+        "Authorization": `Bearer ${this.getCurrentApiKey()}`,
+        "Content-Type": "application/json",
+      };
 
-    const response = await fetch(url, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
+      try {
+        const response = await fetch(url, {
+          method,
+          headers,
+          body: body ? JSON.stringify(body) : undefined,
+        });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Woodwide API error: ${response.status} - ${errorText}`);
+        if (!response.ok) {
+          const errorText = await response.text();
+          // If it's a 401/403 (auth error) and we have multiple keys, try next key
+          if ((response.status === 401 || response.status === 403) && retryWithRotation && this.apiKeys.length > 1 && attempt < this.apiKeys.length - 1) {
+            this.rotateApiKey();
+            continue;
+          }
+          throw new Error(`Woodwide API error: ${response.status} - ${errorText}`);
+        }
+
+        return response.json() as Promise<T>;
+      } catch (error) {
+        lastError = error as Error;
+        // If we have multiple keys and this isn't the last attempt, rotate and retry
+        if (retryWithRotation && this.apiKeys.length > 1 && attempt < this.apiKeys.length - 1) {
+          this.rotateApiKey();
+          continue;
+        }
+        throw error;
+      }
     }
 
-    return response.json() as Promise<T>;
+    // If we exhausted all keys, throw the last error
+    throw lastError || new Error("Failed to make request with any API key");
   }
 
   /**
@@ -89,7 +134,7 @@ export class WoodwideClient {
       method: "POST",
       headers: {
         "accept": "application/json",
-        "Authorization": `Bearer ${this.apiKey}`,
+        "Authorization": `Bearer ${this.getCurrentApiKey()}`,
       },
       body: formData,
     });
@@ -164,7 +209,7 @@ export class WoodwideClient {
       method: "POST",
       headers: {
         "accept": "application/json",
-        "Authorization": `Bearer ${this.apiKey}`,
+        "Authorization": `Bearer ${this.getCurrentApiKey()}`,
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: formData.toString(),
@@ -213,7 +258,7 @@ export class WoodwideClient {
       method: "POST",
       headers: {
         "accept": "application/json",
-        "Authorization": `Bearer ${this.apiKey}`,
+        "Authorization": `Bearer ${this.getCurrentApiKey()}`,
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: formData.toString(),
@@ -247,7 +292,7 @@ export class WoodwideClient {
       method: "GET",
       headers: {
         "accept": "application/json",
-        "Authorization": `Bearer ${this.apiKey}`,
+        "Authorization": `Bearer ${this.getCurrentApiKey()}`,
       },
     });
 
@@ -304,7 +349,7 @@ export class WoodwideClient {
         method: "POST",
         headers: {
           "accept": "application/json",
-          "Authorization": `Bearer ${this.apiKey}`,
+          "Authorization": `Bearer ${this.getCurrentApiKey()}`,
           "Content-Type": "application/x-www-form-urlencoded",
         },
       });
@@ -460,7 +505,7 @@ export class WoodwideClient {
       method: "POST",
       headers: {
         "accept": "application/json",
-        "Authorization": `Bearer ${this.apiKey}`,
+        "Authorization": `Bearer ${this.getCurrentApiKey()}`,
         "Content-Type": "application/x-www-form-urlencoded",
       },
     });
@@ -491,7 +536,7 @@ export class WoodwideClient {
         method: "GET",
         headers: {
           "accept": "application/json",
-          "Authorization": `Bearer ${this.apiKey}`,
+          "Authorization": `Bearer ${this.getCurrentApiKey()}`,
         },
       });
 
@@ -524,7 +569,7 @@ export class WoodwideClient {
         method: "GET",
         headers: {
           "accept": "text/csv",
-          "Authorization": `Bearer ${this.apiKey}`,
+          "Authorization": `Bearer ${this.getCurrentApiKey()}`,
         },
       });
 
@@ -564,7 +609,7 @@ export class WoodwideClient {
         method: "GET",
         headers: {
           "accept": "application/json",
-          "Authorization": `Bearer ${this.apiKey}`,
+          "Authorization": `Bearer ${this.getCurrentApiKey()}`,
         },
       });
 
