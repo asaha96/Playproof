@@ -54,6 +54,14 @@ export interface PlayproofCaptchaProps {
     onSuccess?: (result: PlayproofCaptchaResult) => void
     /** Called when verification fails */
     onFailure?: (result: PlayproofCaptchaResult) => void
+    /** Called with telemetry data when game completes */
+    onTelemetry?: (telemetry: {
+        movements: Array<{ x: number; y: number; timestamp: number }>;
+        clicks: Array<{ x: number; y: number; timestamp: number; targetHit: boolean }>;
+        hits: number;
+        misses: number;
+        durationMs: number;
+    }) => Promise<{ decision: "pass" | "review" | "fail"; anomalyScore: number } | null>
     /** Unique key to force re-render/reset */
     resetKey?: number
 }
@@ -84,6 +92,7 @@ export function PlayproofCaptcha({
     fontFamily = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
     onSuccess,
     onFailure,
+    onTelemetry,
     resetKey = 0,
 }: PlayproofCaptchaProps) {
     const uniqueId = useId()
@@ -146,6 +155,66 @@ export function PlayproofCaptcha({
                         success: successColor,
                         error: errorColor,
                         border: borderColor,
+                    },
+                    hooks: {
+                        onTelemetryBatch: async (batch: any) => {
+                            // Process telemetry and get Woodwide result before showing game result
+                            if (batch && onTelemetry) {
+                                try {
+                                    const behaviorData = batch as any;
+                                    console.log("Processing telemetry batch:", {
+                                        movements: behaviorData.mouseMovements?.length || 0,
+                                        clicks: behaviorData.clickTimings?.length || 0,
+                                        hits: behaviorData.hits || 0,
+                                        misses: behaviorData.misses || 0,
+                                    });
+                                    
+                                    if (behaviorData.mouseMovements && behaviorData.mouseMovements.length > 0) {
+                                        // Convert BehaviorData to telemetry format
+                                        const startTime = behaviorData.mouseMovements[0]?.timestamp || Date.now();
+                                        const endTime = behaviorData.mouseMovements[behaviorData.mouseMovements.length - 1]?.timestamp || Date.now();
+                                        
+                                        // Map click timings to click events
+                                        const clicks = behaviorData.clickTimings?.map((timestamp: number, index: number) => {
+                                            // Find nearest movement for click position
+                                            const movement = behaviorData.mouseMovements.find((m: any) => 
+                                                Math.abs(m.timestamp - timestamp) < 100
+                                            ) || behaviorData.mouseMovements[Math.floor(index * behaviorData.mouseMovements.length / (behaviorData.clickTimings.length || 1))];
+                                            
+                                            return {
+                                                x: movement?.x || 0,
+                                                y: movement?.y || 0,
+                                                timestamp: timestamp - startTime,
+                                                targetHit: index < (behaviorData.hits || 0),
+                                            };
+                                        }) || [];
+
+                                        const telemetry = {
+                                            movements: behaviorData.mouseMovements.map((m: any) => ({
+                                                x: m.x,
+                                                y: m.y,
+                                                timestamp: m.timestamp - startTime,
+                                            })),
+                                            clicks,
+                                            hits: behaviorData.hits || 0,
+                                            misses: behaviorData.misses || 0,
+                                            durationMs: endTime - startTime,
+                                        };
+
+                                        // Get Woodwide result and store it for the SDK to use
+                                        const woodwideResult = await onTelemetry(telemetry);
+                                        if (woodwideResult && instance) {
+                                            // Store result in config so SDK can access it
+                                            (instance as any).config.woodwideResult = woodwideResult;
+                                        }
+                                    }
+                                } catch (error) {
+                                    console.error("Error processing telemetry:", error);
+                                }
+                            }
+                        },
+                        onAttemptEnd: null,
+                        regenerate: null,
                     },
                     onSuccess: (result: PlayproofCaptchaResult) => {
                         onSuccess?.(result)

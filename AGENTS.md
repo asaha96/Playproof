@@ -39,16 +39,14 @@ A human verification system that replaces traditional CAPTCHAs with branded depl
 ```
 Playproof/
 ├── apps/
-│   ├── web/              # Canonical web app (Next.js when scaffolded)
-│   ├── api/              # Fastify API orchestrator
+│   ├── web/              # Canonical web app (Next.js)
+│   ├── api/              # Fastify API orchestrator + Woodwide scoring
 │   └── edge-worker/      # Cloudflare Worker (token issuance, caching, prefilter)
 ├── convex/               # Convex backend (schema, functions)
 ├── packages/
 │   ├── playproof/        # SDK package (published as 'playproof')
 │   │   └── src/          # SDK source code
 │   └── shared/           # Shared types, contracts, utilities
-├── services/
-│   └── scoring/          # Python FastAPI scoring service (XGBoost)
 ├── demo-app/             # Legacy Next.js demo (kept for testing)
 ├── AGENTS.md             # THIS FILE - agent synchronization
 ├── README.md             # Project documentation
@@ -59,13 +57,23 @@ Playproof/
 
 | Folder | Purpose | Tech Stack |
 |--------|---------|------------|
-| `apps/web` | Primary web application | Next.js (placeholder for now) |
-| `apps/api` | API orchestrator, endpoints: `/issue`, `/events`, `/finalize` | Fastify + TypeScript |
+| `apps/web` | Primary web application | Next.js |
+| `apps/api` | API orchestrator with Woodwide bot detection scoring | Fastify + TypeScript |
 | `apps/edge-worker` | Edge token issuance, caching, prefilter | Cloudflare Workers |
 | `packages/playproof` | Client SDK for embedding verification deployments | TypeScript + PixiJS |
-| `packages/shared` | Shared types, contracts, utilities | TypeScript |
-| `services/scoring` | ML scoring service | Python + FastAPI + XGBoost |
+| `packages/shared` | Shared types, contracts, scoring schemas | TypeScript |
 | `demo-app` | Interactive demo for testing SDK | Next.js |
+
+### API Endpoints (`apps/api`)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/ready` | GET | Readiness check |
+| `/api/v1/score` | POST | Score a verification session (returns PASS/REVIEW/FAIL) |
+| `/api/v1/training/start` | POST | Start Woodwide model training |
+| `/api/v1/training/:modelId` | GET | Get training status |
+| `/api/v1/datasets/upload` | POST | Upload dataset for training |
 
 ---
 
@@ -115,7 +123,7 @@ Update this file **immediately** after any of these changes:
 3. **Parallel work pattern**:
    - Branch A works in `packages/playproof`
    - Branch B works in `apps/api`
-   - Branch C works in `services/scoring`
+   - Branch C works in `packages/shared`
    - Branch D works in `apps/web`
    - Minimal collision because each touches different folders
 
@@ -152,14 +160,24 @@ npm run build -w apps/web
 npm run build -w demo-app
 ```
 
-### Python Service (services/scoring)
+### API Service (apps/api)
 
 ```bash
-cd services/scoring
-python -m venv venv
-source venv/bin/activate  # or venv\Scripts\activate on Windows
-pip install -r requirements.txt
-uvicorn main:app --reload
+# Development (from workspace root)
+npm run dev:api
+
+# Or directly
+cd apps/api
+npm run dev
+```
+
+**Environment Variables** (in `.env.local`):
+```
+WOODWIDE_API_KEY=xxx
+WOODWIDE_BASE_URL=https://api.woodwide.ai
+ANOMALY_MODEL_ID=mdl_xxx
+ANOMALY_THRESHOLD_PASS=1.0
+ANOMALY_THRESHOLD_REVIEW=2.5
 ```
 
 ---
@@ -203,16 +221,19 @@ git pull --ff-only
 
 - **Workspace root**: Configured with npm workspaces
 - **SDK**: `packages/playproof/` (published name: `playproof`)
-- **Web app**: `apps/web/` (placeholder, canonical path)
+- **Web app**: `apps/web/` (canonical path)
 - **Dashboard**: Deployments page at `/dashboard/deployments`
-- **Deployments**: Branding stored per deployment with `type` enum and `isActive` flag (user branding removed)
-- **Terminology**: Legacy naming updated to "deployments" across Convex and web UI
+- **Deployments**: Branding stored per deployment with `type` enum and `isActive` flag
 - **Demo**: `demo-app/` (legacy, functional)
-- **API**: `apps/api/` (Fastify placeholder)
+- **API**: `apps/api/` (Fastify + TypeScript, Woodwide integration)
+  - Bot detection scoring via movement telemetry analysis
+  - Feature extraction: velocity, acceleration, jerk, path efficiency, jitter, etc.
+  - Woodwide ML platform integration for anomaly detection
+  - Three-tier decision: PASS (≤1.0) / REVIEW (≤2.5) / FAIL (>2.5)
 - **Worker**: `apps/edge-worker/` (Cloudflare placeholder)
-- **Scoring**: `services/scoring/` (FastAPI placeholder)
+- **Shared types**: `packages/shared/` includes `SessionTelemetry`, `MovementFeatures`, `ScoringResponse`
 - **Convex**: `convex/` (Backend functions & schema)
 
 ---
 
-*Last updated: Deployment terminology and schema updates*
+*Last updated: Woodwide scoring integration in apps/api (TypeScript)*

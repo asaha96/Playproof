@@ -102,6 +102,7 @@ export interface PlayproofConfig {
     onStart: (() => void) | null;
     onProgress: ((progress: number) => void) | null;
     hooks: SDKHooks;
+    woodwideResult?: { decision: "pass" | "review" | "fail"; anomalyScore: number } | null;
 }
 
 export interface SDKHooks {

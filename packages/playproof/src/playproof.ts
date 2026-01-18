@@ -61,6 +61,7 @@ const themeCSS = `
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 .playproof-result-icon { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
 .playproof-result-icon.success { background: rgba(16, 185, 129, 0.15); color: var(--playproof-success); box-shadow: 0 0 24px rgba(16, 185, 129, 0.2); }
+.playproof-result-icon.warning { background: rgba(234, 179, 8, 0.15); color: #fbbf24; box-shadow: 0 0 24px rgba(234, 179, 8, 0.2); }
 .playproof-result-icon.error { background: rgba(239, 68, 68, 0.15); color: var(--playproof-error); box-shadow: 0 0 24px rgba(239, 68, 68, 0.2); }
 .playproof-result-icon svg { width: 26px; height: 26px; }
 .playproof-result-text { color: var(--playproof-text); font-size: 15px; font-weight: 600; }
@@ -288,7 +289,20 @@ export class Playproof {
   /**
    * Evaluate game results
    */
-  private evaluateResult(behaviorData: BehaviorData): void {
+  private async evaluateResult(behaviorData: BehaviorData): Promise<void> {
+    // Call telemetry hook if available
+    if (this.config.hooks?.onTelemetryBatch) {
+      this.config.hooks.onTelemetryBatch(behaviorData);
+    }
+
+    // Wait a bit for Woodwide result if available
+    let woodwideResult = this.config.woodwideResult;
+    if (!woodwideResult && this.config.hooks?.onTelemetryBatch) {
+      // Give a moment for async telemetry processing
+      await new Promise(resolve => setTimeout(resolve, 100));
+      woodwideResult = this.config.woodwideResult;
+    }
+
     const score = calculateConfidence(behaviorData);
     const result = createVerificationResult(
       score,
@@ -296,9 +310,19 @@ export class Playproof {
       behaviorData
     );
 
-    this.showResult(result);
+    // Use Woodwide result if available, otherwise use game's own result
+    if (woodwideResult) {
+      const woodwidePassed = woodwideResult.decision === "pass";
+      this.showResult({
+        ...result,
+        passed: woodwidePassed,
+        score: woodwideResult.anomalyScore,
+      }, woodwideResult);
+    } else {
+      this.showResult(result);
+    }
 
-    if (result.passed) {
+    if (woodwideResult ? woodwideResult.decision === "pass" : result.passed) {
       if (this.config.onSuccess) {
         this.config.onSuccess(result);
       }
@@ -312,14 +336,39 @@ export class Playproof {
   /**
    * Show verification result
    */
-  private showResult(result: VerificationResult): void {
+  private showResult(result: VerificationResult, woodwideResult?: { decision: "pass" | "review" | "fail"; anomalyScore: number }): void {
     if (!this.gameArea || !this.container) return;
 
-    const statusClass = result.passed ? 'success' : 'error';
-    const icon = result.passed
+    // Use Woodwide decision if available
+    let decision: "pass" | "review" | "fail";
+    let statusClass: string;
+    let text: string;
+    
+    if (woodwideResult) {
+      decision = woodwideResult.decision;
+      if (decision === "pass") {
+        statusClass = 'success';
+        text = 'Verification Passed!';
+      } else if (decision === "review") {
+        statusClass = 'warning';
+        text = 'Verification Under Review';
+      } else {
+        statusClass = 'error';
+        text = 'Verification Failed';
+      }
+    } else {
+      decision = result.passed ? "pass" : "fail";
+      statusClass = result.passed ? 'success' : 'error';
+      text = result.passed ? 'Verification Complete!' : 'Verification Failed';
+    }
+
+    const icon = decision === "pass"
       ? '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>'
+      : decision === "review"
+      ? '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>'
       : '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg>';
-    const text = result.passed ? 'Verification Complete!' : 'Verification Failed';
+
+    const scoreText = woodwideResult ? `Score: ${woodwideResult.anomalyScore.toFixed(2)}` : '';
 
     this.gameArea.innerHTML = `
       <div class="playproof-result">
@@ -327,6 +376,7 @@ export class Playproof {
           ${icon}
         </div>
         <span class="playproof-result-text">${text}</span>
+        ${scoreText ? `<span style="font-size: 12px; color: var(--playproof-text-muted); margin-top: 8px;">${scoreText}</span>` : ''}
       </div>
     `;
 
@@ -334,8 +384,10 @@ export class Playproof {
     const status = this.container.querySelector('.playproof-status');
     if (status) {
       status.className = `playproof-status ${statusClass}`;
-      status.innerHTML = result.passed
+      status.innerHTML = decision === "pass"
         ? `${icon} Verified`
+        : decision === "review"
+        ? `${icon} Review`
         : `${icon} Not Verified`;
     }
   }

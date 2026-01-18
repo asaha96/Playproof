@@ -11,7 +11,7 @@ import {
   UserButton,
   useUser,
 } from "@clerk/nextjs"
-import { BarChart3, BookOpen, Gamepad2, Palette, Rocket, ShieldCheck } from "lucide-react"
+import { BarChart3, BookOpen, Gamepad2, Rocket, ShieldCheck, TestTube } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -43,7 +43,7 @@ const navItems = [
   {
     title: "Branding",
     href: "/dashboard/branding",
-    icon: Palette,
+    icon: ShieldCheck, // Using ShieldCheck as placeholder
   },
   {
     title: "Playground",
@@ -54,6 +54,11 @@ const navItems = [
     title: "Docs",
     href: "/dashboard/docs",
     icon: BookOpen,
+  },
+  {
+    title: "Woodwide Test",
+    href: "/dashboard/woodwide-test",
+    icon: TestTube,
   },
 ]
 
