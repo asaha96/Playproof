@@ -256,7 +256,7 @@ SDK telemetry can be streamed via LiveKit for real-time observation:
 
 **Environment Variables** (set in Convex dashboard):
 ```
-LIVEKIT_URL=wss://playproof-nghc3aax.livekit.cloud
+LIVEKIT_URL=wss://your-livekit-instance.livekit.cloud
 LIVEKIT_API_KEY=xxx
 LIVEKIT_API_SECRET=xxx
 ```

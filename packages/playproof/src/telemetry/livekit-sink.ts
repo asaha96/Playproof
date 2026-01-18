@@ -208,5 +208,3 @@ export class LiveKitSink implements TelemetrySink {
     }
   }
 }
-
-export default LiveKitSink;

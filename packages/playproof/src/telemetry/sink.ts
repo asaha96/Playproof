@@ -96,5 +96,3 @@ export class CompositeSink implements TelemetrySink {
     return this.sinks.some(sink => sink.isReady());
   }
 }
-
-export default TelemetrySink;

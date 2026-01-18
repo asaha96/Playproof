@@ -2,7 +2,7 @@
  * LiveKit Realtime - Queries and Mutations
  *
  * This module handles database operations for active attempts.
- * Actions that need Node.js (livekit-server-sdk) are in realtime.actions.ts
+ * Actions that need Node.js (livekit-server-sdk) are in livekit.ts
  */
 
 import { v } from "convex/values";
