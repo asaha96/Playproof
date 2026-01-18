@@ -1,6 +1,7 @@
 /**
- * Snake Game - Mouse Controlled
- * A beautiful, theme-aware snake game where the snake follows the mouse cursor
+ * Snake Game - Mouse Controlled (Revamped)
+ * A beautiful, smooth, theme-aware snake game running at 60fps
+ * Features: Lerp-based movement, object pooling, enhanced particles
  */
 
 import * as THREE from 'three';
@@ -10,55 +11,101 @@ import type { PlayproofConfig, SDKHooks } from '../../types';
 interface SnakeSegment {
     mesh: THREE.Mesh;
     position: THREE.Vector2;
-    targetPosition: THREE.Vector2;
+    velocity: THREE.Vector2;
+    scale: number;
+    targetScale: number;
 }
 
 interface Food {
-    mesh: THREE.Mesh;
+    mesh: THREE.Group;
     position: THREE.Vector2;
     spawnTime: number;
     collected: boolean;
     pulsePhase: number;
 }
 
+interface Particle {
+    position: THREE.Vector3;
+    velocity: THREE.Vector3;
+    life: number;
+    color: THREE.Color;
+    size: number;
+}
+
+// Pre-allocated geometry and material caches for performance
+const geometryCache: Map<string, THREE.BufferGeometry> = new Map();
+const materialCache: Map<string, THREE.Material> = new Map();
+
+function getCircleGeometry(radius: number, segments: number = 32): THREE.CircleGeometry {
+    const key = `circle_${radius}_${segments}`;
+    if (!geometryCache.has(key)) {
+        geometryCache.set(key, new THREE.CircleGeometry(radius, segments));
+    }
+    return geometryCache.get(key) as THREE.CircleGeometry;
+}
+
+function getRingGeometry(inner: number, outer: number, segments: number = 32): THREE.RingGeometry {
+    const key = `ring_${inner}_${outer}_${segments}`;
+    if (!geometryCache.has(key)) {
+        geometryCache.set(key, new THREE.RingGeometry(inner, outer, segments));
+    }
+    return geometryCache.get(key) as THREE.RingGeometry;
+}
+
 export class SnakeGame extends ThreeBaseGame {
     private snake: SnakeSegment[] = [];
     private foods: Food[] = [];
     private mousePos: THREE.Vector2 = new THREE.Vector2(0, 0);
+    private smoothMousePos: THREE.Vector2 = new THREE.Vector2(0, 0);
     private orthoCamera!: THREE.OrthographicCamera;
     private viewSize: number = 5;
     private aspect: number = 1;
 
-    // Game settings
-    private readonly SEGMENT_SIZE = 0.25;
-    private readonly SEGMENT_SPACING = 0.35;
-    private readonly SNAKE_SPEED = 8;
-    private readonly INITIAL_LENGTH = 5;
-    private readonly MAX_FOOD = 4;
-    private readonly FOOD_SIZE = 0.2;
-    private readonly FOOD_SPAWN_INTERVAL = 1500;
+    // Game settings - tuned for smoothness
+    private readonly SEGMENT_SIZE = 0.28;
+    private readonly SEGMENT_SPACING = 0.32;
+    private readonly SNAKE_SPEED = 12;
+    private readonly MOUSE_SMOOTHING = 0.15;
+    private readonly MOVEMENT_SMOOTHING = 0.08;
+    private readonly INITIAL_LENGTH = 6;
+    private readonly MAX_FOOD = 5;
+    private readonly FOOD_SIZE = 0.22;
+    private readonly FOOD_SPAWN_INTERVAL = 1200;
 
-    // Visual colors from theme or defaults
-    private snakeHeadColor: THREE.Color = new THREE.Color(0x6366f1);
-    private snakeBodyColor: THREE.Color = new THREE.Color(0x8b5cf6);
+    // Modern vibrant color palette
+    private snakeHeadColor: THREE.Color = new THREE.Color(0x00f5d4);
+    private snakeBodyColor: THREE.Color = new THREE.Color(0x9b5de5);
+    private snakeTailColor: THREE.Color = new THREE.Color(0xf15bb5);
     private foodColors: THREE.Color[] = [
-        new THREE.Color(0x22d3ee),
-        new THREE.Color(0xf472b6),
-        new THREE.Color(0x34d399),
-        new THREE.Color(0xfbbf24),
+        new THREE.Color(0x00bbf9),
+        new THREE.Color(0xfee440),
+        new THREE.Color(0x00f5d4),
+        new THREE.Color(0xf15bb5),
+        new THREE.Color(0x9b5de5),
     ];
 
-    // Particles for collecting food
-    private particles: THREE.Points[] = [];
+    // Particle pool for performance
+    private particlePool: Particle[] = [];
+    private activeParticles: Particle[] = [];
+    private particleMesh: THREE.Points | null = null;
+    private readonly MAX_PARTICLES = 200;
+
     private foodSpawnTimer: number = 0;
     private score: number = 0;
     private scoreDisplay: HTMLDivElement | null = null;
+    private frameCounter: number = 0;
 
-    // Trail effect
+    // Trail effect with optimization
     private trailPoints: THREE.Points | null = null;
-    private trailPositions: Float32Array = new Float32Array(300);
-    private trailColors: Float32Array = new Float32Array(300);
+    private trailPositions: Float32Array = new Float32Array(150 * 3); // 50 points * 3 coords
+    private trailColors: Float32Array = new Float32Array(150 * 3);
+    private trailSizes: Float32Array = new Float32Array(50);
     private trailIndex: number = 0;
+    private trailUpdateCounter: number = 0;
+
+    // Background stars
+    private backgroundStars: THREE.Points | null = null;
+    private starPositions: Float32Array | null = null;
 
     constructor(gameArea: HTMLElement, config: PlayproofConfig, hooks: SDKHooks = {} as SDKHooks) {
         super(gameArea, config, hooks);
@@ -77,6 +124,17 @@ export class SnakeGame extends ThreeBaseGame {
             if (config.theme.success) {
                 this.foodColors[2] = new THREE.Color(config.theme.success);
             }
+        }
+
+        // Initialize particle pool
+        for (let i = 0; i < this.MAX_PARTICLES; i++) {
+            this.particlePool.push({
+                position: new THREE.Vector3(),
+                velocity: new THREE.Vector3(),
+                life: 0,
+                color: new THREE.Color(),
+                size: 0.1,
+            });
         }
     }
 
@@ -101,6 +159,9 @@ export class SnakeGame extends ThreeBaseGame {
         // Create beautiful background
         this.createBackground();
 
+        // Create particle system
+        this.createParticleSystem();
+
         // Create trail effect
         this.createTrailEffect();
 
@@ -111,7 +172,7 @@ export class SnakeGame extends ThreeBaseGame {
         this.createUI();
 
         // Spawn initial food
-        for (let i = 0; i < 2; i++) {
+        for (let i = 0; i < 3; i++) {
             this.spawnFood();
         }
     }
@@ -123,19 +184,21 @@ export class SnakeGame extends ThreeBaseGame {
             this.viewSize * 3
         );
 
-        // Create gradient texture
+        // Create beautiful gradient texture
         const canvas = document.createElement('canvas');
         canvas.width = 2;
-        canvas.height = 256;
+        canvas.height = 512;
         const ctx = canvas.getContext('2d')!;
 
-        const gradient = ctx.createLinearGradient(0, 0, 0, 256);
-        gradient.addColorStop(0, '#0f0f23');
-        gradient.addColorStop(0.5, '#1a1a2e');
-        gradient.addColorStop(1, '#16213e');
+        const gradient = ctx.createLinearGradient(0, 0, 0, 512);
+        gradient.addColorStop(0, '#0d0221');
+        gradient.addColorStop(0.3, '#0f0a1e');
+        gradient.addColorStop(0.5, '#150a2e');
+        gradient.addColorStop(0.7, '#1a0a3a');
+        gradient.addColorStop(1, '#0d0221');
 
         ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, 2, 256);
+        ctx.fillRect(0, 0, 2, 512);
 
         const texture = new THREE.CanvasTexture(canvas);
         const bgMaterial = new THREE.MeshBasicMaterial({
@@ -147,54 +210,63 @@ export class SnakeGame extends ThreeBaseGame {
         this.scene.add(bg);
         this.gameObjects.push(bg);
 
+        // Add animated stars background
+        this.createStars();
+
         // Add subtle grid pattern
         const gridHelper = this.createGridPattern();
         this.scene.add(gridHelper);
         this.gameObjects.push(gridHelper);
+    }
 
-        // Add floating particles in background
-        const particleCount = 30;
-        const positions = new Float32Array(particleCount * 3);
-        const colors = new Float32Array(particleCount * 3);
+    private createStars(): void {
+        const starCount = 60;
+        this.starPositions = new Float32Array(starCount * 3);
+        const colors = new Float32Array(starCount * 3);
+        const sizes = new Float32Array(starCount);
 
-        for (let i = 0; i < particleCount; i++) {
-            positions[i * 3] = (Math.random() - 0.5) * this.aspect * this.viewSize * 2;
-            positions[i * 3 + 1] = (Math.random() - 0.5) * this.viewSize * 2;
-            positions[i * 3 + 2] = -3 + Math.random() * 2;
+        for (let i = 0; i < starCount; i++) {
+            this.starPositions[i * 3] = (Math.random() - 0.5) * this.aspect * this.viewSize * 2.5;
+            this.starPositions[i * 3 + 1] = (Math.random() - 0.5) * this.viewSize * 2.5;
+            this.starPositions[i * 3 + 2] = -3 + Math.random() * 1.5;
 
-            const brightness = 0.2 + Math.random() * 0.3;
-            colors[i * 3] = brightness * 0.4;
-            colors[i * 3 + 1] = brightness * 0.4;
-            colors[i * 3 + 2] = brightness * 0.8;
+            const brightness = 0.3 + Math.random() * 0.5;
+            colors[i * 3] = brightness * 0.6;
+            colors[i * 3 + 1] = brightness * 0.7;
+            colors[i * 3 + 2] = brightness;
+
+            sizes[i] = 0.03 + Math.random() * 0.05;
         }
 
-        const bgGeo = new THREE.BufferGeometry();
-        bgGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        bgGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        const starGeo = new THREE.BufferGeometry();
+        starGeo.setAttribute('position', new THREE.BufferAttribute(this.starPositions, 3));
+        starGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        starGeo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
-        const bgMat = new THREE.PointsMaterial({
-            size: 0.08,
+        const starMat = new THREE.PointsMaterial({
+            size: 0.06,
             transparent: true,
-            opacity: 0.6,
+            opacity: 0.8,
             blending: THREE.AdditiveBlending,
             vertexColors: true,
+            sizeAttenuation: true,
         });
 
-        const bgPoints = new THREE.Points(bgGeo, bgMat);
-        this.scene.add(bgPoints);
-        this.gameObjects.push(bgPoints);
+        this.backgroundStars = new THREE.Points(starGeo, starMat);
+        this.scene.add(this.backgroundStars);
+        this.gameObjects.push(this.backgroundStars);
     }
 
     private createGridPattern(): THREE.Object3D {
         const group = new THREE.Group();
         const gridSize = Math.max(this.aspect * this.viewSize, this.viewSize) * 2;
-        const divisions = 20;
+        const divisions = 16;
         const step = gridSize / divisions;
 
         const lineMaterial = new THREE.LineBasicMaterial({
-            color: 0x2a2a4a,
+            color: 0x3a1a5a,
             transparent: true,
-            opacity: 0.3
+            opacity: 0.2
         });
 
         for (let i = -divisions / 2; i <= divisions / 2; i++) {
@@ -220,17 +292,44 @@ export class SnakeGame extends ThreeBaseGame {
         return group;
     }
 
+    private createParticleSystem(): void {
+        const positions = new Float32Array(this.MAX_PARTICLES * 3);
+        const colors = new Float32Array(this.MAX_PARTICLES * 3);
+        const sizes = new Float32Array(this.MAX_PARTICLES);
+
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+        const material = new THREE.PointsMaterial({
+            size: 0.12,
+            transparent: true,
+            opacity: 1,
+            blending: THREE.AdditiveBlending,
+            vertexColors: true,
+            sizeAttenuation: true,
+        });
+
+        this.particleMesh = new THREE.Points(geometry, material);
+        this.particleMesh.frustumCulled = false;
+        this.scene.add(this.particleMesh);
+    }
+
     private createTrailEffect(): void {
-        // Initialize trail arrays
-        for (let i = 0; i < 100; i++) {
+        // Initialize trail arrays with gradient colors
+        for (let i = 0; i < 50; i++) {
             this.trailPositions[i * 3] = 0;
             this.trailPositions[i * 3 + 1] = 0;
             this.trailPositions[i * 3 + 2] = 0;
 
-            const t = i / 100;
-            this.trailColors[i * 3] = this.snakeHeadColor.r * (1 - t);
-            this.trailColors[i * 3 + 1] = this.snakeHeadColor.g * (1 - t);
-            this.trailColors[i * 3 + 2] = this.snakeHeadColor.b * (1 - t);
+            const t = i / 50;
+            const color = this.snakeHeadColor.clone().lerp(this.snakeTailColor, t);
+            this.trailColors[i * 3] = color.r * (1 - t * 0.7);
+            this.trailColors[i * 3 + 1] = color.g * (1 - t * 0.7);
+            this.trailColors[i * 3 + 2] = color.b * (1 - t * 0.7);
+
+            this.trailSizes[i] = 0.08 * (1 - t * 0.5);
         }
 
         const trailGeometry = new THREE.BufferGeometry();
@@ -238,9 +337,9 @@ export class SnakeGame extends ThreeBaseGame {
         trailGeometry.setAttribute('color', new THREE.BufferAttribute(this.trailColors, 3));
 
         const trailMaterial = new THREE.PointsMaterial({
-            size: 0.1,
+            size: 0.08,
             transparent: true,
-            opacity: 0.5,
+            opacity: 0.6,
             blending: THREE.AdditiveBlending,
             vertexColors: true,
         });
@@ -251,7 +350,21 @@ export class SnakeGame extends ThreeBaseGame {
     }
 
     private createSnake(): void {
-        // Create snake head
+        // Create snake head with glow
+        const headGroup = new THREE.Group();
+
+        // Outer glow
+        const glowGeometry = new THREE.CircleGeometry(this.SEGMENT_SIZE * 1.8, 32);
+        const glowMaterial = new THREE.MeshBasicMaterial({
+            color: this.snakeHeadColor,
+            transparent: true,
+            opacity: 0.15,
+        });
+        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+        glow.position.z = -0.1;
+        headGroup.add(glow);
+
+        // Main head circle
         const headGeometry = new THREE.CircleGeometry(this.SEGMENT_SIZE * 1.2, 32);
         const headMaterial = new THREE.MeshBasicMaterial({
             color: this.snakeHeadColor,
@@ -259,106 +372,131 @@ export class SnakeGame extends ThreeBaseGame {
             opacity: 1,
         });
         const headMesh = new THREE.Mesh(headGeometry, headMaterial);
-        headMesh.position.set(0, 0, 1);
+        headMesh.position.z = 0.1;
+        headGroup.add(headMesh);
 
-        // Add glow ring to head
-        const glowGeometry = new THREE.RingGeometry(
-            this.SEGMENT_SIZE * 1.2,
-            this.SEGMENT_SIZE * 1.5,
-            32
-        );
-        const glowMaterial = new THREE.MeshBasicMaterial({
-            color: this.snakeHeadColor,
+        // Inner highlight
+        const highlightGeometry = new THREE.CircleGeometry(this.SEGMENT_SIZE * 0.6, 24);
+        const highlightMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
             transparent: true,
-            opacity: 0.4,
-            side: THREE.DoubleSide,
+            opacity: 0.25,
         });
-        const glowMesh = new THREE.Mesh(glowGeometry, glowMaterial);
-        glowMesh.position.z = 0.05;
-        headMesh.add(glowMesh);
+        const highlight = new THREE.Mesh(highlightGeometry, highlightMaterial);
+        highlight.position.set(-0.05, 0.05, 0.15);
+        headGroup.add(highlight);
 
-        // Add eye decorations
-        this.addEyesToHead(headMesh);
+        // Eye decorations
+        this.addEyesToHead(headGroup);
+
+        headGroup.position.set(0, 0, 1);
 
         this.snake.push({
-            mesh: headMesh,
+            mesh: headGroup as unknown as THREE.Mesh,
             position: new THREE.Vector2(0, 0),
-            targetPosition: new THREE.Vector2(0, 0),
+            velocity: new THREE.Vector2(0, 0),
+            scale: 1,
+            targetScale: 1,
         });
-        this.scene.add(headMesh);
-        this.gameObjects.push(headMesh);
+        this.scene.add(headGroup);
+        this.gameObjects.push(headGroup);
 
-        // Create initial body segments
+        // Create initial body segments with staggered spawn
         for (let i = 1; i < this.INITIAL_LENGTH; i++) {
-            this.addBodySegment(new THREE.Vector2(-i * this.SEGMENT_SPACING, 0));
+            this.addBodySegment(new THREE.Vector2(-i * this.SEGMENT_SPACING, 0), 1);
         }
     }
 
-    private addEyesToHead(headMesh: THREE.Mesh): void {
-        const eyeGeometry = new THREE.CircleGeometry(0.06, 16);
+    private addEyesToHead(headMesh: THREE.Object3D): void {
+        const eyeGeometry = new THREE.CircleGeometry(0.07, 16);
         const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-        const pupilGeometry = new THREE.CircleGeometry(0.03, 16);
+        const pupilGeometry = new THREE.CircleGeometry(0.035, 16);
         const pupilMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
 
         // Left eye
         const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-        leftEye.position.set(-0.08, 0.1, 0.1);
+        leftEye.position.set(-0.1, 0.12, 0.2);
         const leftPupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
-        leftPupil.position.set(0, 0.01, 0.01);
+        leftPupil.position.set(0.01, 0.01, 0.01);
         leftEye.add(leftPupil);
         headMesh.add(leftEye);
 
         // Right eye
         const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-        rightEye.position.set(0.08, 0.1, 0.1);
+        rightEye.position.set(0.1, 0.12, 0.2);
         const rightPupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
-        rightPupil.position.set(0, 0.01, 0.01);
+        rightPupil.position.set(0.01, 0.01, 0.01);
         rightEye.add(rightPupil);
         headMesh.add(rightEye);
     }
 
-    private addBodySegment(position: THREE.Vector2): void {
+    private addBodySegment(position: THREE.Vector2, initialScale: number = 0): void {
         const segmentIndex = this.snake.length;
-        const t = segmentIndex / (this.INITIAL_LENGTH + 10);
+        const t = Math.min(segmentIndex / (this.INITIAL_LENGTH + 15), 1);
 
-        // Gradient color from head to tail
-        const color = this.snakeHeadColor.clone().lerp(this.snakeBodyColor, t);
-        const size = this.SEGMENT_SIZE * (1 - t * 0.3);
+        // Gradient color from head to tail through body color
+        const color = this.snakeHeadColor.clone()
+            .lerp(this.snakeBodyColor, Math.min(t * 2, 1))
+            .lerp(this.snakeTailColor, Math.max(0, t * 2 - 1));
 
-        const geometry = new THREE.CircleGeometry(size, 24);
+        const baseSize = this.SEGMENT_SIZE * (1 - t * 0.4);
+
+        const segmentGroup = new THREE.Group();
+
+        // Outer glow
+        const glowGeometry = new THREE.CircleGeometry(baseSize * 1.4, 24);
+        const glowMaterial = new THREE.MeshBasicMaterial({
+            color: color,
+            transparent: true,
+            opacity: 0.12 * (1 - t * 0.5),
+        });
+        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+        glow.position.z = -0.05;
+        segmentGroup.add(glow);
+
+        // Main segment
+        const geometry = new THREE.CircleGeometry(baseSize, 24);
         const material = new THREE.MeshBasicMaterial({
             color: color,
             transparent: true,
-            opacity: 0.9 - t * 0.3,
+            opacity: 0.95 - t * 0.35,
         });
         const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.set(position.x, position.y, 0.5 - segmentIndex * 0.01);
+        mesh.position.z = 0.05;
+        segmentGroup.add(mesh);
+
+        segmentGroup.position.set(position.x, position.y, 0.5 - segmentIndex * 0.01);
+        segmentGroup.scale.setScalar(initialScale);
 
         this.snake.push({
-            mesh,
+            mesh: segmentGroup as unknown as THREE.Mesh,
             position: position.clone(),
-            targetPosition: position.clone(),
+            velocity: new THREE.Vector2(0, 0),
+            scale: initialScale,
+            targetScale: 1,
         });
-        this.scene.add(mesh);
-        this.gameObjects.push(mesh);
+        this.scene.add(segmentGroup);
+        this.gameObjects.push(segmentGroup);
     }
 
     private createUI(): void {
-        // Score display
+        // Score display with modern styling
         this.scoreDisplay = document.createElement('div');
         this.scoreDisplay.style.cssText = `
             position: absolute;
             top: 12px;
             right: 12px;
-            font-family: 'Inter', sans-serif;
-            font-size: 16px;
-            font-weight: 600;
-            color: rgba(255, 255, 255, 0.9);
-            background: rgba(0, 0, 0, 0.3);
-            padding: 6px 12px;
-            border-radius: 8px;
-            backdrop-filter: blur(4px);
+            font-family: 'Inter', -apple-system, sans-serif;
+            font-size: 18px;
+            font-weight: 700;
+            color: rgba(255, 255, 255, 0.95);
+            background: linear-gradient(135deg, rgba(155, 93, 229, 0.4), rgba(241, 91, 181, 0.4));
+            padding: 8px 16px;
+            border-radius: 12px;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             z-index: 10;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         `;
         this.scoreDisplay.textContent = 'Score: 0';
         this.container.style.position = 'relative';
@@ -368,36 +506,47 @@ export class SnakeGame extends ThreeBaseGame {
     private spawnFood(): void {
         if (this.foods.filter(f => !f.collected).length >= this.MAX_FOOD) return;
 
-        const padding = 0.5;
+        const padding = 0.6;
         const x = (Math.random() - 0.5) * (this.aspect * this.viewSize * 2 - padding * 2);
         const y = (Math.random() - 0.5) * (this.viewSize * 2 - padding * 2);
         const position = new THREE.Vector2(x, y);
 
         // Check if too close to snake
         for (const segment of this.snake) {
-            if (position.distanceTo(segment.position) < 0.8) {
+            if (position.distanceTo(segment.position) < 1.0) {
                 return; // Skip spawning
             }
         }
 
         const color = this.foodColors[Math.floor(Math.random() * this.foodColors.length)];
 
-        // Create food with glow effect
+        // Create food with beautiful glow effect
         const foodGroup = new THREE.Group();
 
-        // Outer glow
-        const glowGeometry = new THREE.CircleGeometry(this.FOOD_SIZE * 2, 32);
-        const glowMaterial = new THREE.MeshBasicMaterial({
+        // Outer glow (large, soft)
+        const outerGlowGeometry = new THREE.CircleGeometry(this.FOOD_SIZE * 2.5, 32);
+        const outerGlowMaterial = new THREE.MeshBasicMaterial({
             color: color,
             transparent: true,
-            opacity: 0.2,
+            opacity: 0.1,
         });
-        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-        glow.position.z = -0.01;
-        foodGroup.add(glow);
+        const outerGlow = new THREE.Mesh(outerGlowGeometry, outerGlowMaterial);
+        outerGlow.position.z = -0.02;
+        foodGroup.add(outerGlow);
 
-        // Inner ring
-        const ringGeometry = new THREE.RingGeometry(this.FOOD_SIZE * 0.7, this.FOOD_SIZE, 32);
+        // Inner glow
+        const innerGlowGeometry = new THREE.CircleGeometry(this.FOOD_SIZE * 1.5, 32);
+        const innerGlowMaterial = new THREE.MeshBasicMaterial({
+            color: color,
+            transparent: true,
+            opacity: 0.25,
+        });
+        const innerGlow = new THREE.Mesh(innerGlowGeometry, innerGlowMaterial);
+        innerGlow.position.z = -0.01;
+        foodGroup.add(innerGlow);
+
+        // Decorative ring
+        const ringGeometry = new THREE.RingGeometry(this.FOOD_SIZE * 0.8, this.FOOD_SIZE * 1.1, 32);
         const ringMaterial = new THREE.MeshBasicMaterial({
             color: color,
             transparent: true,
@@ -405,23 +554,36 @@ export class SnakeGame extends ThreeBaseGame {
             side: THREE.DoubleSide,
         });
         const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+        ring.position.z = 0.01;
         foodGroup.add(ring);
 
         // Core
-        const coreGeometry = new THREE.CircleGeometry(this.FOOD_SIZE * 0.6, 32);
+        const coreGeometry = new THREE.CircleGeometry(this.FOOD_SIZE * 0.7, 32);
         const coreMaterial = new THREE.MeshBasicMaterial({
             color: color,
             transparent: true,
-            opacity: 0.9,
+            opacity: 0.95,
         });
         const core = new THREE.Mesh(coreGeometry, coreMaterial);
-        core.position.z = 0.01;
+        core.position.z = 0.02;
         foodGroup.add(core);
 
+        // Highlight
+        const highlightGeometry = new THREE.CircleGeometry(this.FOOD_SIZE * 0.3, 24);
+        const highlightMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.35,
+        });
+        const highlight = new THREE.Mesh(highlightGeometry, highlightMaterial);
+        highlight.position.set(-0.03, 0.03, 0.03);
+        foodGroup.add(highlight);
+
         foodGroup.position.set(x, y, 0.3);
+        foodGroup.scale.setScalar(0);
 
         this.foods.push({
-            mesh: foodGroup as unknown as THREE.Mesh,
+            mesh: foodGroup,
             position: position,
             spawnTime: Date.now(),
             collected: false,
@@ -446,36 +608,63 @@ export class SnakeGame extends ThreeBaseGame {
 
     protected update(delta: number): void {
         const now = Date.now();
+        this.frameCounter++;
 
-        // Update snake head position - follow mouse
+        // Smooth mouse position (reduces jitter)
+        this.smoothMousePos.lerp(this.mousePos, this.MOUSE_SMOOTHING);
+
+        // Update snake head position with smooth following
         if (this.snake.length > 0) {
             const head = this.snake[0];
             const direction = new THREE.Vector2()
-                .subVectors(this.mousePos, head.position);
+                .subVectors(this.smoothMousePos, head.position);
             const distance = direction.length();
 
-            if (distance > 0.1) {
+            if (distance > 0.05) {
                 direction.normalize();
-                const moveSpeed = Math.min(this.SNAKE_SPEED * delta, distance);
-                head.position.add(direction.multiplyScalar(moveSpeed));
 
-                // Rotate head to face movement direction
-                const angle = Math.atan2(direction.y, direction.x) - Math.PI / 2;
-                head.mesh.rotation.z = angle;
+                // Smooth velocity-based movement
+                const targetVelocity = direction.multiplyScalar(
+                    Math.min(this.SNAKE_SPEED * delta, distance)
+                );
+                head.velocity.lerp(targetVelocity, this.MOVEMENT_SMOOTHING);
+                head.position.add(head.velocity);
+
+                // Smooth rotation
+                const targetAngle = Math.atan2(head.velocity.y, head.velocity.x) - Math.PI / 2;
+                const currentRotation = head.mesh.rotation.z;
+                let angleDiff = targetAngle - currentRotation;
+
+                // Normalize angle difference
+                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+                head.mesh.rotation.z += angleDiff * 0.15;
             }
 
             head.mesh.position.set(head.position.x, head.position.y, 1);
 
-            // Update trail
-            this.trailIndex = (this.trailIndex + 1) % 100;
-            this.trailPositions[this.trailIndex * 3] = head.position.x;
-            this.trailPositions[this.trailIndex * 3 + 1] = head.position.y;
-            this.trailPositions[this.trailIndex * 3 + 2] = 0;
-            if (this.trailPoints) {
-                this.trailPoints.geometry.attributes.position.needsUpdate = true;
+            // Add pulsing glow to head
+            const headGlow = head.mesh.children[0] as THREE.Mesh;
+            if (headGlow) {
+                const pulse = Math.sin(now * 0.004) * 0.05 + 1;
+                headGlow.scale.setScalar(pulse);
             }
 
-            // Update body segments - follow the segment in front
+            // Update trail (every 2 frames for performance)
+            this.trailUpdateCounter++;
+            if (this.trailUpdateCounter >= 2) {
+                this.trailUpdateCounter = 0;
+                this.trailIndex = (this.trailIndex + 1) % 50;
+                this.trailPositions[this.trailIndex * 3] = head.position.x;
+                this.trailPositions[this.trailIndex * 3 + 1] = head.position.y;
+                this.trailPositions[this.trailIndex * 3 + 2] = 0;
+                if (this.trailPoints) {
+                    this.trailPoints.geometry.attributes.position.needsUpdate = true;
+                }
+            }
+
+            // Update body segments with smooth following
             for (let i = 1; i < this.snake.length; i++) {
                 const segment = this.snake[i];
                 const leader = this.snake[i - 1];
@@ -486,9 +675,14 @@ export class SnakeGame extends ThreeBaseGame {
 
                 if (dist > this.SEGMENT_SPACING) {
                     dir.normalize();
-                    const moveAmount = (dist - this.SEGMENT_SPACING) * 0.5;
-                    segment.position.add(dir.multiplyScalar(moveAmount));
+                    const moveAmount = (dist - this.SEGMENT_SPACING) * 0.35;
+                    segment.velocity.lerp(dir.multiplyScalar(moveAmount), 0.2);
+                    segment.position.add(segment.velocity);
                 }
+
+                // Animate scale (for spawn animation)
+                segment.scale += (segment.targetScale - segment.scale) * 0.12;
+                segment.mesh.scale.setScalar(segment.scale);
 
                 segment.mesh.position.set(
                     segment.position.x,
@@ -508,13 +702,15 @@ export class SnakeGame extends ThreeBaseGame {
             }
         }
 
-        // Animate foods - pulsing effect
+        // Animate foods with smooth pulsing
         for (const food of this.foods) {
             if (food.collected) continue;
 
-            const pulse = Math.sin(now * 0.005 + food.pulsePhase) * 0.1 + 1;
-            food.mesh.scale.setScalar(pulse);
-            food.mesh.rotation.z += delta * 0.5;
+            const age = (now - food.spawnTime) / 1000;
+            const spawnScale = Math.min(age * 3, 1); // Pop-in animation
+            const pulse = Math.sin(now * 0.004 + food.pulsePhase) * 0.08 + 1;
+            food.mesh.scale.setScalar(spawnScale * pulse);
+            food.mesh.rotation.z += delta * 0.3;
         }
 
         // Spawn food periodically
@@ -526,6 +722,14 @@ export class SnakeGame extends ThreeBaseGame {
 
         // Update particle effects
         this.updateParticles(delta);
+
+        // Animate background stars
+        if (this.backgroundStars && this.starPositions) {
+            for (let i = 0; i < this.starPositions.length / 3; i++) {
+                const twinkle = Math.sin(now * 0.002 + i * 0.5) * 0.3 + 0.7;
+                (this.backgroundStars.material as THREE.PointsMaterial).opacity = twinkle * 0.8;
+            }
+        }
 
         // Clamp snake to bounds
         if (this.snake.length > 0) {
@@ -544,95 +748,104 @@ export class SnakeGame extends ThreeBaseGame {
 
         if (this.scoreDisplay) {
             this.scoreDisplay.textContent = `Score: ${this.score}`;
+            // Flash animation
+            this.scoreDisplay.style.transform = 'scale(1.1)';
+            setTimeout(() => {
+                if (this.scoreDisplay) {
+                    this.scoreDisplay.style.transform = 'scale(1)';
+                }
+            }, 100);
         }
 
         // Get color from food
-        const foodColor = (food.mesh.children[2] as THREE.Mesh)?.material;
-        const color = foodColor && 'color' in foodColor
-            ? (foodColor as THREE.MeshBasicMaterial).color
+        const foodCore = food.mesh.children[3] as THREE.Mesh;
+        const color = foodCore?.material && 'color' in foodCore.material
+            ? (foodCore.material as THREE.MeshBasicMaterial).color
             : this.foodColors[0];
 
-        // Create particle burst
+        // Create satisfying particle burst
         this.createParticleBurst(food.position.clone(), color);
 
-        // Add new segment to snake
+        // Add new segment to snake with pop-in animation
         const lastSegment = this.snake[this.snake.length - 1];
-        this.addBodySegment(lastSegment.position.clone());
+        this.addBodySegment(lastSegment.position.clone(), 0);
 
-        // Remove food from scene
+        // Remove food from scene with fade
         this.scene.remove(food.mesh);
         const idx = this.gameObjects.indexOf(food.mesh);
         if (idx > -1) this.gameObjects.splice(idx, 1);
     }
 
     private createParticleBurst(position: THREE.Vector2, color: THREE.Color): void {
-        const particleCount = 15;
-        const positions = new Float32Array(particleCount * 3);
-        const colors = new Float32Array(particleCount * 3);
-        const velocities: THREE.Vector3[] = [];
+        const particleCount = 20;
 
         for (let i = 0; i < particleCount; i++) {
-            positions[i * 3] = position.x;
-            positions[i * 3 + 1] = position.y;
-            positions[i * 3 + 2] = 0.5;
+            const particle = this.particlePool.find(p => p.life <= 0);
+            if (!particle) continue;
 
-            colors[i * 3] = color.r;
-            colors[i * 3 + 1] = color.g;
-            colors[i * 3 + 2] = color.b;
+            const angle = (i / particleCount) * Math.PI * 2 + Math.random() * 0.5;
+            const speed = 2.5 + Math.random() * 3;
 
-            const angle = (i / particleCount) * Math.PI * 2;
-            const speed = 2 + Math.random() * 2;
-            velocities.push(new THREE.Vector3(
+            particle.position.set(position.x, position.y, 0.5);
+            particle.velocity.set(
                 Math.cos(angle) * speed,
                 Math.sin(angle) * speed,
-                Math.random() * 2
-            ));
+                Math.random() * 1.5
+            );
+            particle.life = 1;
+            particle.color.copy(color);
+            particle.size = 0.08 + Math.random() * 0.08;
+
+            this.activeParticles.push(particle);
         }
-
-        const geometry = new THREE.BufferGeometry();
-        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-        const material = new THREE.PointsMaterial({
-            size: 0.15,
-            transparent: true,
-            opacity: 1,
-            blending: THREE.AdditiveBlending,
-            vertexColors: true,
-        });
-
-        const particles = new THREE.Points(geometry, material);
-        (particles as any).velocities = velocities;
-        (particles as any).life = 1;
-
-        this.scene.add(particles);
-        this.particles.push(particles);
     }
 
     private updateParticles(delta: number): void {
-        for (let i = this.particles.length - 1; i >= 0; i--) {
-            const p = this.particles[i];
-            const velocities = (p as any).velocities as THREE.Vector3[];
-            const positions = p.geometry.attributes.position.array as Float32Array;
+        if (!this.particleMesh) return;
 
-            (p as any).life -= delta * 2;
+        const positions = this.particleMesh.geometry.attributes.position.array as Float32Array;
+        const colors = this.particleMesh.geometry.attributes.color.array as Float32Array;
+        const sizes = this.particleMesh.geometry.attributes.size?.array as Float32Array;
 
-            for (let j = 0; j < velocities.length; j++) {
-                positions[j * 3] += velocities[j].x * delta;
-                positions[j * 3 + 1] += velocities[j].y * delta;
-                positions[j * 3 + 2] += velocities[j].z * delta;
-                velocities[j].multiplyScalar(0.95);
+        for (let i = this.activeParticles.length - 1; i >= 0; i--) {
+            const p = this.activeParticles[i];
+
+            p.life -= delta * 2.5;
+
+            if (p.life <= 0) {
+                this.activeParticles.splice(i, 1);
+                continue;
             }
 
-            p.geometry.attributes.position.needsUpdate = true;
-            (p.material as THREE.PointsMaterial).opacity = (p as any).life;
+            // Update position
+            p.position.add(p.velocity.clone().multiplyScalar(delta));
+            p.velocity.multiplyScalar(0.96);
 
-            if ((p as any).life <= 0) {
-                this.scene.remove(p);
-                p.geometry.dispose();
-                (p.material as THREE.Material).dispose();
-                this.particles.splice(i, 1);
+            // Update buffer
+            positions[i * 3] = p.position.x;
+            positions[i * 3 + 1] = p.position.y;
+            positions[i * 3 + 2] = p.position.z;
+
+            colors[i * 3] = p.color.r * p.life;
+            colors[i * 3 + 1] = p.color.g * p.life;
+            colors[i * 3 + 2] = p.color.b * p.life;
+
+            if (sizes) {
+                sizes[i] = p.size * p.life;
             }
+        }
+
+        // Clear unused particle slots
+        for (let i = this.activeParticles.length; i < this.MAX_PARTICLES; i++) {
+            positions[i * 3] = 0;
+            positions[i * 3 + 1] = 0;
+            positions[i * 3 + 2] = -100; // Move off-screen
+        }
+
+        this.particleMesh.geometry.attributes.position.needsUpdate = true;
+        this.particleMesh.geometry.attributes.color.needsUpdate = true;
+        if (sizes) {
+            (this.particleMesh.geometry.attributes.size as THREE.BufferAttribute).needsUpdate = true;
         }
     }
 
@@ -641,6 +854,7 @@ export class SnakeGame extends ThreeBaseGame {
 
         // Initialize mouse position to center
         this.mousePos.set(0, 0);
+        this.smoothMousePos.set(0, 0);
     }
 
     destroy(): void {
@@ -650,19 +864,16 @@ export class SnakeGame extends ThreeBaseGame {
         }
         this.scoreDisplay = null;
 
-        // Clean up particles
-        this.particles.forEach(p => {
-            this.scene.remove(p);
-            p.geometry.dispose();
-            (p.material as THREE.Material).dispose();
-        });
-        this.particles = [];
+        // Clean up particle mesh
+        if (this.particleMesh) {
+            this.scene.remove(this.particleMesh);
+            this.particleMesh.geometry.dispose();
+            (this.particleMesh.material as THREE.Material).dispose();
+        }
 
         // Clean up snake
         this.snake.forEach(segment => {
             this.scene.remove(segment.mesh);
-            segment.mesh.geometry.dispose();
-            (segment.mesh.material as THREE.Material).dispose();
         });
         this.snake = [];
 
@@ -671,6 +882,10 @@ export class SnakeGame extends ThreeBaseGame {
             this.scene.remove(food.mesh);
         });
         this.foods = [];
+
+        // Clear caches on final cleanup
+        this.particlePool = [];
+        this.activeParticles = [];
 
         super.destroy();
     }

@@ -41,6 +41,7 @@ export class ThreeEngine {
         this.renderer = new THREE.WebGLRenderer({
             antialias: config.antialias ?? true,
             alpha: true,
+            powerPreference: 'high-performance',
         });
         this.renderer.setSize(width, height);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));

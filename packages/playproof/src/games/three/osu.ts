@@ -1,6 +1,7 @@
 /**
- * Osu! Rhythm Game
- * Click circles and follow sliders with approach circle timing
+ * Osu! Rhythm Game (Revamped)
+ * Beautiful, smooth hit circles and sliders running at 60fps
+ * Features: Scale-based animations, pooled particles, enhanced feedback
  */
 
 import * as THREE from 'three';
@@ -35,6 +36,29 @@ interface HitResult {
 }
 
 // ============================================================================
+// Pre-cached Geometries and Materials
+// ============================================================================
+
+const circleGeometryCache: Map<string, THREE.CircleGeometry> = new Map();
+const ringGeometryCache: Map<string, THREE.RingGeometry> = new Map();
+
+function getCachedCircleGeometry(radius: number, segments: number = 32): THREE.CircleGeometry {
+    const key = `${radius.toFixed(3)}_${segments}`;
+    if (!circleGeometryCache.has(key)) {
+        circleGeometryCache.set(key, new THREE.CircleGeometry(radius, segments));
+    }
+    return circleGeometryCache.get(key)!;
+}
+
+function getCachedRingGeometry(inner: number, outer: number, segments: number = 48): THREE.RingGeometry {
+    const key = `${inner.toFixed(3)}_${outer.toFixed(3)}_${segments}`;
+    if (!ringGeometryCache.has(key)) {
+        ringGeometryCache.set(key, new THREE.RingGeometry(inner, outer, segments));
+    }
+    return ringGeometryCache.get(key)!;
+}
+
+// ============================================================================
 // Base Hit Object
 // ============================================================================
 
@@ -47,6 +71,8 @@ abstract class HitObject {
     protected isActive: boolean = true;
     protected isHit: boolean = false;
     protected group: THREE.Group;
+    protected hitScale: number = 1;
+    protected hitAnimating: boolean = false;
 
     constructor(
         scene: THREE.Scene,
@@ -67,7 +93,7 @@ abstract class HitObject {
 
     abstract update(currentTime: number, delta: number): void;
     abstract checkHit(clickPos: THREE.Vector2, currentTime: number): HitResult | null;
-    
+
     getPosition(): THREE.Vector2 {
         return this.position.clone();
     }
@@ -84,11 +110,15 @@ abstract class HitObject {
         return this.spawnTime + this.approachDuration;
     }
 
+    getColor(): THREE.Color {
+        return new THREE.Color(0x6366f1);
+    }
+
     destroy(): void {
         this.scene.remove(this.group);
         this.group.traverse((obj: THREE.Object3D) => {
             if (obj instanceof THREE.Mesh) {
-                obj.geometry.dispose();
+                // Don't dispose cached geometries
                 if (Array.isArray(obj.material)) {
                     obj.material.forEach((m: THREE.Material) => m.dispose());
                 } else {
@@ -96,7 +126,6 @@ abstract class HitObject {
                 }
             }
             if (obj instanceof THREE.Line) {
-                obj.geometry.dispose();
                 if (Array.isArray(obj.material)) {
                     obj.material.forEach((m: THREE.Material) => m.dispose());
                 } else {
@@ -108,15 +137,19 @@ abstract class HitObject {
 }
 
 // ============================================================================
-// Hit Circle
+// Hit Circle - Optimized with scale-based approach animation
 // ============================================================================
 
 class HitCircle extends HitObject {
     private circleMesh: THREE.Mesh;
     private approachCircle: THREE.Mesh;
     private innerGlow: THREE.Mesh;
+    private outerGlow: THREE.Mesh;
     private timingWindows: TimingWindow;
     private color: THREE.Color;
+    private baseApproachScale: number = 2.5;
+    private hitPopScale: number = 1;
+    private opacity: number = 0;
 
     constructor(
         scene: THREE.Scene,
@@ -131,51 +164,67 @@ class HitCircle extends HitObject {
         this.color = color;
         this.timingWindows = timingWindows;
 
+        // Outer glow
+        const outerGlowGeometry = new THREE.CircleGeometry(size * 1.8, 32);
+        const outerGlowMaterial = new THREE.MeshBasicMaterial({
+            color: color,
+            transparent: true,
+            opacity: 0,
+        });
+        this.outerGlow = new THREE.Mesh(outerGlowGeometry, outerGlowMaterial);
+        this.outerGlow.position.z = 0.02;
+        this.group.add(this.outerGlow);
+
         // Main circle
         const circleGeometry = new THREE.CircleGeometry(size, 32);
         const circleMaterial = new THREE.MeshBasicMaterial({
             color: color,
             transparent: true,
-            opacity: 0.9,
+            opacity: 0,
         });
         this.circleMesh = new THREE.Mesh(circleGeometry, circleMaterial);
         this.circleMesh.position.z = 0.1;
         this.group.add(this.circleMesh);
 
-        // Inner glow
-        const glowGeometry = new THREE.CircleGeometry(size * 0.6, 32);
-        const glowMaterial = new THREE.MeshBasicMaterial({
+        // Inner glow/highlight
+        const innerGlowGeometry = new THREE.CircleGeometry(size * 0.5, 32);
+        const innerGlowMaterial = new THREE.MeshBasicMaterial({
             color: 0xffffff,
             transparent: true,
-            opacity: 0.3,
+            opacity: 0,
         });
-        this.innerGlow = new THREE.Mesh(glowGeometry, glowMaterial);
+        this.innerGlow = new THREE.Mesh(innerGlowGeometry, innerGlowMaterial);
         this.innerGlow.position.z = 0.2;
         this.group.add(this.innerGlow);
 
-        // Approach circle (ring)
-        const approachGeometry = new THREE.RingGeometry(size * 2 - 0.05, size * 2, 64);
-        const approachMaterial = new THREE.MeshBasicMaterial({
-            color: color,
-            transparent: true,
-            opacity: 0.8,
-            side: THREE.DoubleSide,
-        });
-        this.approachCircle = new THREE.Mesh(approachGeometry, approachMaterial);
-        this.approachCircle.position.z = 0.05;
-        this.group.add(this.approachCircle);
-
-        // Border ring on main circle
-        const borderGeometry = new THREE.RingGeometry(size - 0.03, size, 64);
+        // White border ring using a single ring geometry
+        const borderGeometry = getCachedRingGeometry(size - 0.04, size, 48);
         const borderMaterial = new THREE.MeshBasicMaterial({
             color: 0xffffff,
             transparent: true,
-            opacity: 0.9,
+            opacity: 0,
             side: THREE.DoubleSide,
         });
         const border = new THREE.Mesh(borderGeometry, borderMaterial);
         border.position.z = 0.15;
         this.group.add(border);
+
+        // Approach circle - use scale-based animation instead of recreating geometry
+        const approachGeometry = getCachedRingGeometry(size - 0.04, size, 48);
+        const approachMaterial = new THREE.MeshBasicMaterial({
+            color: color,
+            transparent: true,
+            opacity: 0,
+            side: THREE.DoubleSide,
+        });
+        this.approachCircle = new THREE.Mesh(approachGeometry, approachMaterial);
+        this.approachCircle.position.z = 0.05;
+        this.approachCircle.scale.setScalar(this.baseApproachScale);
+        this.group.add(this.approachCircle);
+    }
+
+    override getColor(): THREE.Color {
+        return this.color;
     }
 
     update(currentTime: number, _delta: number): void {
@@ -184,22 +233,32 @@ class HitCircle extends HitObject {
         const elapsed = currentTime - this.spawnTime;
         const progress = Math.min(elapsed / this.approachDuration, 1);
 
-        // Shrink approach circle from 2x to 1x
-        const scale = 2 - progress;
-        this.approachCircle.scale.set(scale, scale, 1);
+        // Smooth eased fade in
+        const fadeProgress = Math.min(elapsed / 150, 1);
+        const easedFade = this.easeOutQuad(fadeProgress);
+        this.opacity = 0.95 * easedFade;
 
-        // Update approach circle geometry to maintain ring thickness
-        const currentRadius = this.size * scale;
-        this.approachCircle.geometry.dispose();
-        this.approachCircle.geometry = new THREE.RingGeometry(
-            currentRadius - 0.05,
-            currentRadius,
-            64
-        );
+        // Update all material opacities
+        (this.circleMesh.material as THREE.MeshBasicMaterial).opacity = this.opacity;
+        (this.outerGlow.material as THREE.MeshBasicMaterial).opacity = this.opacity * 0.2;
+        (this.innerGlow.material as THREE.MeshBasicMaterial).opacity = this.opacity * 0.35;
+        (this.group.children[3].material as THREE.MeshBasicMaterial).opacity = this.opacity;
+        (this.approachCircle.material as THREE.MeshBasicMaterial).opacity = this.opacity * 0.85;
 
-        // Fade in the circle
-        const fadeIn = Math.min(elapsed / 200, 1);
-        (this.circleMesh.material as THREE.MeshBasicMaterial).opacity = 0.9 * fadeIn;
+        // Scale-based approach circle animation (no geometry recreation!)
+        const approachScale = this.baseApproachScale - (this.baseApproachScale - 1) * this.easeOutQuad(progress);
+        this.approachCircle.scale.setScalar(approachScale);
+
+        // Hit pop animation
+        if (this.hitAnimating) {
+            this.hitPopScale += (1.4 - this.hitPopScale) * 0.3;
+            this.opacity *= 0.85;
+            this.group.scale.setScalar(this.hitPopScale);
+
+            if (this.opacity < 0.1) {
+                this.isActive = false;
+            }
+        }
 
         // Check if missed (beyond timing window)
         const targetTime = this.getTargetTime();
@@ -208,11 +267,15 @@ class HitCircle extends HitObject {
         }
     }
 
+    private easeOutQuad(t: number): number {
+        return 1 - (1 - t) * (1 - t);
+    }
+
     checkHit(clickPos: THREE.Vector2, currentTime: number): HitResult | null {
         if (!this.isActive || this.isHit) return null;
 
         const distance = clickPos.distanceTo(this.position);
-        if (distance > this.size * 1.2) return null; // Not clicking on this circle
+        if (distance > this.size * 1.3) return null;
 
         const targetTime = this.getTargetTime();
         const timeDelta = Math.abs(currentTime - targetTime);
@@ -227,21 +290,21 @@ class HitCircle extends HitObject {
         } else if (timeDelta <= this.timingWindows.miss) {
             timing = 'miss';
         } else {
-            return null; // Too early or too late
+            return null;
         }
 
         this.isHit = true;
-        this.isActive = false;
+        this.hitAnimating = true;
         return { timing, timeDelta };
     }
 }
 
 // ============================================================================
-// Slider
+// Slider - Optimized
 // ============================================================================
 
 class Slider extends HitObject {
-    private path: any; // THREE.CurvePath
+    private path: any;
     private sliderBody: THREE.Mesh;
     private sliderBall: THREE.Mesh;
     private startCircle: THREE.Mesh;
@@ -256,6 +319,8 @@ class Slider extends HitObject {
     private followAccuracy: number = 1;
     private sliderStarted: boolean = false;
     private pathPoints3D: THREE.Vector3[];
+    private baseApproachScale: number = 2.5;
+    private opacity: number = 0;
 
     constructor(
         scene: THREE.Scene,
@@ -265,7 +330,7 @@ class Slider extends HitObject {
         approachDuration: number,
         color: THREE.Color,
         timingWindows: TimingWindow,
-        path: any, // THREE.CurvePath
+        path: any,
         duration: number,
         curveType: CurveType
     ) {
@@ -276,20 +341,29 @@ class Slider extends HitObject {
         this.color = color;
         this.timingWindows = timingWindows;
 
-        // Convert 2D path to 3D points for rendering
         const points2D = path.getPoints(50);
         this.pathPoints3D = points2D.map((p: THREE.Vector2) => new THREE.Vector3(p.x, p.y, 0));
 
-        // Create slider body (thick line)
+        // Create slider body
         this.sliderBody = this.createSliderBody();
         this.group.add(this.sliderBody);
 
-        // Start circle
+        // Start circle with glow
+        const startGlowGeometry = new THREE.CircleGeometry(size * 1.5, 32);
+        const startGlowMaterial = new THREE.MeshBasicMaterial({
+            color: color,
+            transparent: true,
+            opacity: 0,
+        });
+        const startGlow = new THREE.Mesh(startGlowGeometry, startGlowMaterial);
+        startGlow.position.z = 0.05;
+        this.group.add(startGlow);
+
         const startGeometry = new THREE.CircleGeometry(size, 32);
         const startMaterial = new THREE.MeshBasicMaterial({
             color: color,
             transparent: true,
-            opacity: 0.9,
+            opacity: 0,
         });
         this.startCircle = new THREE.Mesh(startGeometry, startMaterial);
         this.startCircle.position.z = 0.1;
@@ -297,18 +371,18 @@ class Slider extends HitObject {
 
         // End circle
         const endPoint = points2D[points2D.length - 1];
-        const endGeometry = new THREE.CircleGeometry(size * 0.8, 32);
+        const endGeometry = new THREE.CircleGeometry(size * 0.75, 32);
         const endMaterial = new THREE.MeshBasicMaterial({
             color: color,
             transparent: true,
-            opacity: 0.7,
+            opacity: 0,
         });
         this.endCircle = new THREE.Mesh(endGeometry, endMaterial);
         this.endCircle.position.set(endPoint.x - position.x, endPoint.y - position.y, 0.1);
         this.group.add(this.endCircle);
 
-        // Slider ball (follows the path)
-        const ballGeometry = new THREE.CircleGeometry(size * 0.5, 32);
+        // Slider ball
+        const ballGeometry = new THREE.CircleGeometry(size * 0.45, 32);
         const ballMaterial = new THREE.MeshBasicMaterial({
             color: 0xffffff,
             transparent: true,
@@ -318,24 +392,25 @@ class Slider extends HitObject {
         this.sliderBall.position.z = 0.3;
         this.group.add(this.sliderBall);
 
-        // Approach circle
-        const approachGeometry = new THREE.RingGeometry(size * 2 - 0.05, size * 2, 64);
+        // Approach circle - scale-based
+        const approachGeometry = getCachedRingGeometry(size - 0.04, size, 48);
         const approachMaterial = new THREE.MeshBasicMaterial({
             color: color,
             transparent: true,
-            opacity: 0.8,
+            opacity: 0,
             side: THREE.DoubleSide,
         });
         this.approachCircle = new THREE.Mesh(approachGeometry, approachMaterial);
         this.approachCircle.position.z = 0.05;
+        this.approachCircle.scale.setScalar(this.baseApproachScale);
         this.group.add(this.approachCircle);
 
-        // Border on start circle
-        const borderGeometry = new THREE.RingGeometry(size - 0.03, size, 64);
+        // White border on start circle
+        const borderGeometry = getCachedRingGeometry(size - 0.04, size, 48);
         const borderMaterial = new THREE.MeshBasicMaterial({
             color: 0xffffff,
             transparent: true,
-            opacity: 0.9,
+            opacity: 0,
             side: THREE.DoubleSide,
         });
         const border = new THREE.Mesh(borderGeometry, borderMaterial);
@@ -343,68 +418,66 @@ class Slider extends HitObject {
         this.group.add(border);
     }
 
-    private createSliderBody(): THREE.Mesh {
-        // Create a tube-like shape along the path
-        const shape = new THREE.Shape();
-        const radius = this.size * 0.8;
+    override getColor(): THREE.Color {
+        return this.color;
+    }
 
-        // Get path points relative to group position
+    private createSliderBody(): THREE.Mesh {
+        const shape = new THREE.Shape();
+        const radius = this.size * 0.75;
+
         const points = this.path.getPoints(50);
-        const relativePoints = points.map((p: THREE.Vector2) => 
+        const relativePoints = points.map((p: THREE.Vector2) =>
             new THREE.Vector2(p.x - this.position.x, p.y - this.position.y)
         );
 
         if (relativePoints.length < 2) {
-            // Fallback to simple circle
             shape.absarc(0, 0, radius, 0, Math.PI * 2, false);
             const geometry = new THREE.ShapeGeometry(shape);
-            return new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: this.color }));
+            return new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
+                color: this.color,
+                transparent: true,
+                opacity: 0,
+            }));
         }
 
-        // Build a rounded rectangle path following the curve
         const geometry = this.buildSliderGeometry(relativePoints, radius);
         const material = new THREE.MeshBasicMaterial({
             color: this.color,
             transparent: true,
-            opacity: 0.6,
+            opacity: 0,
         });
 
         return new THREE.Mesh(geometry, material);
     }
 
     private buildSliderGeometry(points: THREE.Vector2[], radius: number): THREE.BufferGeometry {
-        // Create a simple extruded path
         const vertices: number[] = [];
         const indices: number[] = [];
 
         for (let i = 0; i < points.length - 1; i++) {
             const p1 = points[i];
             const p2 = points[i + 1];
-            
-            // Direction vector
+
             const dir = new THREE.Vector2().subVectors(p2, p1).normalize();
-            // Perpendicular vector
             const perp = new THREE.Vector2(-dir.y, dir.x).multiplyScalar(radius);
 
             const baseIndex = vertices.length / 3;
 
-            // Add 4 vertices for this segment
             vertices.push(p1.x + perp.x, p1.y + perp.y, 0);
             vertices.push(p1.x - perp.x, p1.y - perp.y, 0);
             vertices.push(p2.x + perp.x, p2.y + perp.y, 0);
             vertices.push(p2.x - perp.x, p2.y - perp.y, 0);
 
-            // Two triangles for the quad
             indices.push(baseIndex, baseIndex + 1, baseIndex + 2);
             indices.push(baseIndex + 1, baseIndex + 3, baseIndex + 2);
         }
 
-        // Add end caps (circles)
+        // End caps
         const segments = 16;
         const firstPoint = points[0];
         const lastPoint = points[points.length - 1];
 
-        // Start cap
         const startCenterIndex = vertices.length / 3;
         vertices.push(firstPoint.x, firstPoint.y, 0);
         for (let i = 0; i <= segments; i++) {
@@ -419,7 +492,6 @@ class Slider extends HitObject {
             }
         }
 
-        // End cap
         const endCenterIndex = vertices.length / 3;
         vertices.push(lastPoint.x, lastPoint.y, 0);
         for (let i = 0; i <= segments; i++) {
@@ -442,49 +514,63 @@ class Slider extends HitObject {
         return geometry;
     }
 
+    private easeOutQuad(t: number): number {
+        return 1 - (1 - t) * (1 - t);
+    }
+
     update(currentTime: number, _delta: number): void {
         if (!this.isActive) return;
 
         const elapsed = currentTime - this.spawnTime;
         const approachProgress = Math.min(elapsed / this.approachDuration, 1);
 
-        // Shrink approach circle
-        const scale = 2 - approachProgress;
-        this.approachCircle.scale.set(scale, scale, 1);
-        this.approachCircle.geometry.dispose();
-        this.approachCircle.geometry = new THREE.RingGeometry(
-            this.size * scale - 0.05,
-            this.size * scale,
-            64
-        );
+        // Smooth fade in
+        const fadeProgress = Math.min(elapsed / 150, 1);
+        this.opacity = 0.95 * this.easeOutQuad(fadeProgress);
 
-        // Fade in
-        const fadeIn = Math.min(elapsed / 200, 1);
-        (this.sliderBody.material as THREE.MeshBasicMaterial).opacity = 0.6 * fadeIn;
+        // Update opacities
+        (this.sliderBody.material as THREE.MeshBasicMaterial).opacity = this.opacity * 0.5;
+        (this.startCircle.material as THREE.MeshBasicMaterial).opacity = this.opacity;
+        (this.endCircle.material as THREE.MeshBasicMaterial).opacity = this.opacity * 0.7;
+        (this.approachCircle.material as THREE.MeshBasicMaterial).opacity = this.opacity * 0.85;
 
-        // After approach, handle slider ball movement
+        // Start glow
+        if (this.group.children[1]) {
+            (this.group.children[1].material as THREE.MeshBasicMaterial).opacity = this.opacity * 0.2;
+        }
+        // Border
+        if (this.group.children[7]) {
+            (this.group.children[7].material as THREE.MeshBasicMaterial).opacity = this.opacity;
+        }
+
+        // Scale-based approach circle animation
+        const approachScale = this.baseApproachScale - (this.baseApproachScale - 1) * this.easeOutQuad(approachProgress);
+        this.approachCircle.scale.setScalar(approachScale);
+
+        // Handle slider ball movement after approach
         const targetTime = this.getTargetTime();
         if (currentTime >= targetTime && this.sliderStarted) {
             const sliderElapsed = currentTime - targetTime;
             this.followProgress = Math.min(sliderElapsed / this.duration, 1);
 
-            // Update slider ball position
             const pathPoint = this.path.getPoint(this.followProgress);
             this.sliderBall.position.set(
                 pathPoint.x - this.position.x,
                 pathPoint.y - this.position.y,
                 0.3
             );
-            (this.sliderBall.material as THREE.MeshBasicMaterial).opacity = 0.9;
+            (this.sliderBall.material as THREE.MeshBasicMaterial).opacity = 0.95;
 
-            // Check if slider is complete
+            // Pulsing ball
+            const pulse = Math.sin(currentTime * 0.01) * 0.1 + 1;
+            this.sliderBall.scale.setScalar(pulse);
+
             if (this.followProgress >= 1) {
                 this.isActive = false;
                 this.isHit = true;
             }
         }
 
-        // Check if missed start (beyond timing window)
         if (!this.sliderStarted && currentTime > targetTime + this.timingWindows.miss) {
             this.isActive = false;
         }
@@ -494,7 +580,7 @@ class Slider extends HitObject {
         if (!this.isActive || this.sliderStarted) return null;
 
         const distance = clickPos.distanceTo(this.position);
-        if (distance > this.size * 1.2) return null;
+        if (distance > this.size * 1.3) return null;
 
         const targetTime = this.getTargetTime();
         const timeDelta = Math.abs(currentTime - targetTime);
@@ -522,19 +608,18 @@ class Slider extends HitObject {
 
         if (!isHolding) {
             this.isFollowing = false;
-            this.followAccuracy *= 0.8; // Penalty for releasing
+            this.followAccuracy *= 0.8;
             return;
         }
 
-        // Check if mouse is close to slider ball
         const ballWorldPos = new THREE.Vector2(
             this.sliderBall.position.x + this.position.x,
             this.sliderBall.position.y + this.position.y
         );
         const distance = mousePos.distanceTo(ballWorldPos);
-        
-        if (distance > this.size * 2) {
-            this.followAccuracy *= 0.95; // Gradual penalty for being off track
+
+        if (distance > this.size * 2.5) {
+            this.followAccuracy *= 0.95;
         }
     }
 
@@ -568,7 +653,6 @@ class PathGenerator {
     }
 
     private simpleNoise(x: number): number {
-        // Simple pseudo-random noise function
         const sin = Math.sin(x * 12.9898 + this.noiseOffset) * 43758.5453;
         return sin - Math.floor(sin);
     }
@@ -576,15 +660,11 @@ class PathGenerator {
     generateNextPosition(minDist: number, maxDist: number): THREE.Vector2 {
         this.noiseOffset += 0.1;
 
-        // Random distance
         const distance = minDist + this.simpleNoise(this.noiseOffset) * (maxDist - minDist);
-
-        // Random angle change with momentum
         const angleNoise = (this.simpleNoise(this.noiseOffset + 100) - 0.5) * Math.PI * 1.2;
         const currentAngle = Math.atan2(this.momentum.y, this.momentum.x);
         const newAngle = currentAngle + angleNoise;
 
-        // Calculate new position
         const offset = new THREE.Vector2(
             Math.cos(newAngle) * distance,
             Math.sin(newAngle) * distance
@@ -592,12 +672,10 @@ class PathGenerator {
 
         let newPos = this.lastPosition.clone().add(offset);
 
-        // Clamp to bounds with padding
-        const padding = 0.5;
+        const padding = 0.6;
         newPos.x = Math.max(this.bounds.minX + padding, Math.min(this.bounds.maxX - padding, newPos.x));
         newPos.y = Math.max(this.bounds.minY + padding, Math.min(this.bounds.maxY - padding, newPos.y));
 
-        // If we hit a boundary, bounce the momentum
         if (newPos.x <= this.bounds.minX + padding || newPos.x >= this.bounds.maxX - padding) {
             this.momentum.x *= -1;
         }
@@ -605,7 +683,6 @@ class PathGenerator {
             this.momentum.y *= -1;
         }
 
-        // Update momentum towards new direction
         const newDir = new THREE.Vector2().subVectors(newPos, this.lastPosition).normalize();
         this.momentum.lerp(newDir, 0.3);
 
@@ -621,7 +698,6 @@ class PathGenerator {
     ): any {
         const path = new THREE.CurvePath();
 
-        // Direction based on momentum with some randomness
         const baseAngle = Math.atan2(this.momentum.y, this.momentum.x);
         const angleOffset = (this.simpleNoise(this.noiseOffset + 200) - 0.5) * Math.PI * 0.5;
         const direction = baseAngle + angleOffset;
@@ -631,42 +707,39 @@ class PathGenerator {
             startPos.y + Math.sin(direction) * length
         );
 
-        // Clamp end position to bounds
-        const padding = 0.5;
+        const padding = 0.6;
         endPos.x = Math.max(this.bounds.minX + padding, Math.min(this.bounds.maxX - padding, endPos.x));
         endPos.y = Math.max(this.bounds.minY + padding, Math.min(this.bounds.maxY - padding, endPos.y));
 
         if (curveType === 'linear') {
             path.add(new THREE.LineCurve(startPos, endPos));
         } else if (curveType === 'bezier') {
-            // Quadratic bezier with control point
             const midPoint = new THREE.Vector2().addVectors(startPos, endPos).multiplyScalar(0.5);
             const perpendicular = new THREE.Vector2(
                 -(endPos.y - startPos.y),
                 endPos.x - startPos.x
             ).normalize();
-            
+
             const controlOffset = (this.simpleNoise(this.noiseOffset + 300) - 0.5) * 2 * curveIntensity * length;
             const controlPoint = midPoint.clone().add(perpendicular.multiplyScalar(controlOffset));
 
             path.add(new THREE.QuadraticBezierCurve(startPos, controlPoint, endPos));
         } else if (curveType === 'catmull') {
-            // Catmull-Rom through multiple points
             const numPoints = 3 + Math.floor(this.simpleNoise(this.noiseOffset + 400) * 2);
             const points: THREE.Vector2[] = [startPos];
 
             for (let i = 1; i < numPoints - 1; i++) {
                 const t = i / (numPoints - 1);
                 const basePoint = new THREE.Vector2().lerpVectors(startPos, endPos, t);
-                
+
                 const perpendicular = new THREE.Vector2(
                     -(endPos.y - startPos.y),
                     endPos.x - startPos.x
                 ).normalize();
-                
+
                 const offset = (this.simpleNoise(this.noiseOffset + 500 + i * 100) - 0.5) * 2 * curveIntensity * length * 0.5;
                 basePoint.add(perpendicular.multiplyScalar(offset));
-                
+
                 points.push(basePoint);
             }
             points.push(endPos);
@@ -674,7 +747,6 @@ class PathGenerator {
             path.add(new THREE.SplineCurve(points));
         }
 
-        // Update last position for next object
         this.lastPosition = endPos;
 
         return path;
@@ -686,12 +758,125 @@ class PathGenerator {
 }
 
 // ============================================================================
+// Pooled Particle System
+// ============================================================================
+
+interface OsuParticle {
+    position: THREE.Vector3;
+    velocity: THREE.Vector3;
+    life: number;
+    color: THREE.Color;
+}
+
+class ParticlePool {
+    private pool: OsuParticle[] = [];
+    private active: OsuParticle[] = [];
+    private mesh: THREE.Points;
+    private maxParticles: number;
+    private positions: Float32Array;
+    private colors: Float32Array;
+
+    constructor(scene: THREE.Scene, maxParticles: number = 300) {
+        this.maxParticles = maxParticles;
+        this.positions = new Float32Array(maxParticles * 3);
+        this.colors = new Float32Array(maxParticles * 3);
+
+        for (let i = 0; i < maxParticles; i++) {
+            this.pool.push({
+                position: new THREE.Vector3(),
+                velocity: new THREE.Vector3(),
+                life: 0,
+                color: new THREE.Color(),
+            });
+        }
+
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 3));
+
+        const material = new THREE.PointsMaterial({
+            size: 0.14,
+            transparent: true,
+            opacity: 1,
+            vertexColors: true,
+            blending: THREE.AdditiveBlending,
+            sizeAttenuation: true,
+        });
+
+        this.mesh = new THREE.Points(geometry, material);
+        this.mesh.frustumCulled = false;
+        scene.add(this.mesh);
+    }
+
+    emit(position: THREE.Vector2, color: THREE.Color, count: number = 20): void {
+        for (let i = 0; i < count; i++) {
+            const particle = this.pool.find(p => p.life <= 0);
+            if (!particle) continue;
+
+            const angle = (i / count) * Math.PI * 2 + Math.random() * 0.3;
+            const speed = 3 + Math.random() * 4;
+
+            particle.position.set(position.x, position.y, 0.6);
+            particle.velocity.set(
+                Math.cos(angle) * speed,
+                Math.sin(angle) * speed,
+                Math.random() * 2
+            );
+            particle.life = 1;
+            particle.color.copy(color);
+
+            this.active.push(particle);
+        }
+    }
+
+    update(delta: number): void {
+        for (let i = this.active.length - 1; i >= 0; i--) {
+            const p = this.active[i];
+
+            p.life -= delta * 2.8;
+            if (p.life <= 0) {
+                this.active.splice(i, 1);
+                continue;
+            }
+
+            p.position.add(p.velocity.clone().multiplyScalar(delta));
+            p.velocity.multiplyScalar(0.94);
+        }
+
+        // Update buffers
+        for (let i = 0; i < this.maxParticles; i++) {
+            if (i < this.active.length) {
+                const p = this.active[i];
+                this.positions[i * 3] = p.position.x;
+                this.positions[i * 3 + 1] = p.position.y;
+                this.positions[i * 3 + 2] = p.position.z;
+
+                this.colors[i * 3] = p.color.r * p.life;
+                this.colors[i * 3 + 1] = p.color.g * p.life;
+                this.colors[i * 3 + 2] = p.color.b * p.life;
+            } else {
+                this.positions[i * 3 + 2] = -100; // Hide unused particles
+            }
+        }
+
+        this.mesh.geometry.attributes.position.needsUpdate = true;
+        this.mesh.geometry.attributes.color.needsUpdate = true;
+    }
+
+    destroy(): void {
+        this.mesh.geometry.dispose();
+        (this.mesh.material as THREE.Material).dispose();
+    }
+}
+
+// ============================================================================
 // Main Osu Game Class
 // ============================================================================
 
 export class OsuGame extends ThreeBaseGame {
     private hitObjects: HitObject[] = [];
     private pathGenerator!: PathGenerator;
+    private particlePool!: ParticlePool;
     private spawnTimer: number = 0;
     private gameTime: number = 0;
     private isHolding: boolean = false;
@@ -709,16 +894,15 @@ export class OsuGame extends ThreeBaseGame {
 
     private comboDisplay: HTMLDivElement | null = null;
     private scoreDisplay: HTMLDivElement | null = null;
+    private feedbackDisplay: HTMLDivElement | null = null;
 
-    private particles: THREE.Points[] = [];
-
+    // Modern vibrant colors
     private readonly COLORS = [
-        new THREE.Color(0x6366f1), // Indigo
-        new THREE.Color(0x8b5cf6), // Purple
-        new THREE.Color(0x22d3ee), // Cyan
-        new THREE.Color(0xf472b6), // Pink
-        new THREE.Color(0x34d399), // Emerald
-        new THREE.Color(0xfbbf24), // Amber
+        new THREE.Color(0x00f5d4), // Cyan
+        new THREE.Color(0x9b5de5), // Purple
+        new THREE.Color(0xf15bb5), // Pink
+        new THREE.Color(0xfee440), // Yellow
+        new THREE.Color(0x00bbf9), // Blue
     ];
 
     private readonly TIMING_WINDOWS: TimingWindow = {
@@ -729,12 +913,12 @@ export class OsuGame extends ThreeBaseGame {
     };
 
     private readonly DIFFICULTY: DifficultySettings = {
-        approachRate: { min: 800, max: 1500 },
-        circleSize: { min: 0.4, max: 0.8 },
-        sliderSpeed: { min: 0.8, max: 1.5 },
-        objectDensity: { min: 1200, max: 2000 },
-        sliderChance: 0.35,
-        curvedSliderChance: 0.7,
+        approachRate: { min: 900, max: 1400 },
+        circleSize: { min: 0.45, max: 0.75 },
+        sliderSpeed: { min: 0.9, max: 1.4 },
+        objectDensity: { min: 1400, max: 2200 },
+        sliderChance: 0.3,
+        curvedSliderChance: 0.65,
     };
 
     private viewSize: number = 5;
@@ -745,7 +929,6 @@ export class OsuGame extends ThreeBaseGame {
     }
 
     protected async setupGame(): Promise<void> {
-        // Setup orthographic camera for 2D rendering
         const width = this.container.clientWidth || 400;
         const height = this.container.clientHeight || 280;
         this.aspect = width / height;
@@ -761,10 +944,8 @@ export class OsuGame extends ThreeBaseGame {
         );
         this.orthoCamera.position.z = 10;
 
-        // Replace perspective camera with orthographic
         (this as any).camera = this.orthoCamera;
 
-        // Initialize path generator with bounds
         const bounds = {
             minX: -this.aspect * this.viewSize + 1,
             maxX: this.aspect * this.viewSize - 1,
@@ -773,37 +954,35 @@ export class OsuGame extends ThreeBaseGame {
         };
         this.pathGenerator = new PathGenerator(bounds);
 
-        // Set initial position near center
         this.pathGenerator.setPosition(new THREE.Vector2(
             (Math.random() - 0.5) * 2,
             (Math.random() - 0.5) * 2
         ));
 
-        // Create background
-        this.createBackground();
+        // Initialize particle pool
+        this.particlePool = new ParticlePool(this.scene, 300);
 
-        // Create UI overlays
+        this.createBackground();
         this.createUI();
     }
 
     private createBackground(): void {
-        // Gradient background plane
         const bgGeometry = new THREE.PlaneGeometry(
             this.aspect * this.viewSize * 3,
             this.viewSize * 3
         );
-        
-        // Create gradient texture
+
         const canvas = document.createElement('canvas');
         canvas.width = 2;
-        canvas.height = 256;
+        canvas.height = 512;
         const ctx = canvas.getContext('2d')!;
-        const gradient = ctx.createLinearGradient(0, 0, 0, 256);
-        gradient.addColorStop(0, '#1a1a2e');
-        gradient.addColorStop(0.5, '#16213e');
-        gradient.addColorStop(1, '#0f3460');
+        const gradient = ctx.createLinearGradient(0, 0, 0, 512);
+        gradient.addColorStop(0, '#0d0221');
+        gradient.addColorStop(0.3, '#150a2e');
+        gradient.addColorStop(0.6, '#1a0a3a');
+        gradient.addColorStop(1, '#0d0221');
         ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, 2, 256);
+        ctx.fillRect(0, 0, 2, 512);
 
         const texture = new THREE.CanvasTexture(canvas);
         const bgMaterial = new THREE.MeshBasicMaterial({
@@ -815,11 +994,11 @@ export class OsuGame extends ThreeBaseGame {
         background.position.z = -5;
         this.scene.add(background);
 
-        // Add subtle grid lines
+        // Subtle grid
         const gridMaterial = new THREE.LineBasicMaterial({
-            color: 0x3f3f5a,
+            color: 0x3a1a5a,
             transparent: true,
-            opacity: 0.2,
+            opacity: 0.15,
         });
 
         for (let x = -10; x <= 10; x += 1) {
@@ -851,12 +1030,13 @@ export class OsuGame extends ThreeBaseGame {
             bottom: 20px;
             left: 20px;
             color: white;
-            font-size: 24px;
-            font-weight: 700;
-            font-family: 'Inter', sans-serif;
-            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            font-size: 32px;
+            font-weight: 800;
+            font-family: 'Inter', -apple-system, sans-serif;
+            text-shadow: 0 4px 20px rgba(155, 93, 229, 0.6);
             opacity: 0;
-            transition: opacity 0.2s;
+            transition: all 0.15s ease-out;
+            transform: scale(1);
         `;
         this.container.appendChild(this.comboDisplay);
 
@@ -867,30 +1047,80 @@ export class OsuGame extends ThreeBaseGame {
             top: 10px;
             right: 10px;
             color: white;
-            font-size: 14px;
-            font-weight: 600;
-            background: rgba(0,0,0,0.5);
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-family: 'Inter', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            background: linear-gradient(135deg, rgba(155, 93, 229, 0.4), rgba(241, 91, 181, 0.4));
+            padding: 10px 16px;
+            border-radius: 12px;
+            font-family: 'Inter', -apple-system, sans-serif;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         `;
         this.container.appendChild(this.scoreDisplay);
+
+        // Hit feedback display
+        this.feedbackDisplay = document.createElement('div');
+        this.feedbackDisplay.style.cssText = `
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            color: white;
+            font-size: 28px;
+            font-weight: 800;
+            font-family: 'Inter', -apple-system, sans-serif;
+            text-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+            transition: all 0.2s ease-out;
+            opacity: 0;
+        `;
+        this.container.appendChild(this.feedbackDisplay);
+
         this.updateUI();
     }
 
     private updateUI(): void {
         if (this.comboDisplay) {
-            if (this.combo > 0) {
+            if (this.combo > 1) {
                 this.comboDisplay.textContent = `${this.combo}x`;
                 this.comboDisplay.style.opacity = '1';
+                this.comboDisplay.style.transform = 'scale(1.15)';
+                setTimeout(() => {
+                    if (this.comboDisplay) {
+                        this.comboDisplay.style.transform = 'scale(1)';
+                    }
+                }, 100);
             } else {
                 this.comboDisplay.style.opacity = '0';
             }
         }
 
         if (this.scoreDisplay) {
-            this.scoreDisplay.textContent = `Score: ${this.score}`;
+            this.scoreDisplay.textContent = `Score: ${Math.floor(this.score)}`;
         }
+    }
+
+    private showFeedback(timing: string, color: string): void {
+        if (!this.feedbackDisplay) return;
+
+        const labels: Record<string, string> = {
+            perfect: '★ PERFECT',
+            good: 'GOOD',
+            ok: 'OK',
+            miss: 'MISS',
+        };
+
+        this.feedbackDisplay.textContent = labels[timing] || timing;
+        this.feedbackDisplay.style.color = color;
+        this.feedbackDisplay.style.opacity = '1';
+        this.feedbackDisplay.style.transform = 'translate(-50%, -50%) scale(1.2)';
+
+        setTimeout(() => {
+            if (this.feedbackDisplay) {
+                this.feedbackDisplay.style.opacity = '0';
+                this.feedbackDisplay.style.transform = 'translate(-50%, -50%) scale(0.8)';
+            }
+        }, 300);
     }
 
     private random(min: number, max: number): number {
@@ -905,17 +1135,16 @@ export class OsuGame extends ThreeBaseGame {
             this.DIFFICULTY.approachRate.max
         );
         const color = this.COLORS[Math.floor(Math.random() * this.COLORS.length)];
-        const position = this.pathGenerator.generateNextPosition(0.5, 3.0);
+        const position = this.pathGenerator.generateNextPosition(0.6, 3.5);
 
         if (isSlider) {
-            // Determine curve type
             let curveType: CurveType = 'linear';
             if (Math.random() < this.DIFFICULTY.curvedSliderChance) {
                 curveType = Math.random() < 0.5 ? 'bezier' : 'catmull';
             }
 
-            const sliderLength = this.random(1.5, 4.0);
-            const curveIntensity = this.random(0.2, 0.8);
+            const sliderLength = this.random(1.5, 3.5);
+            const curveIntensity = this.random(0.2, 0.7);
             const path = this.pathGenerator.generateSliderPath(
                 position,
                 curveType,
@@ -979,12 +1208,10 @@ export class OsuGame extends ThreeBaseGame {
             const obj = this.hitObjects[i];
             obj.update(this.gameTime, deltaMs);
 
-            // Update slider following
             if (obj instanceof Slider && obj.isSliderActive()) {
                 obj.updateFollow(this.mousePos, this.isHolding);
             }
 
-            // Check for missed objects
             if (!obj.isStillActive()) {
                 if (!obj.wasHit()) {
                     this.onMiss();
@@ -995,70 +1222,9 @@ export class OsuGame extends ThreeBaseGame {
         }
 
         // Update particles
-        this.updateParticles(delta);
+        this.particlePool.update(delta);
 
-        // Render with orthographic camera
         this.renderer.render(this.scene, this.orthoCamera);
-    }
-
-    private updateParticles(delta: number): void {
-        for (let i = this.particles.length - 1; i >= 0; i--) {
-            const p = this.particles[i];
-            const positions = p.geometry.attributes.position.array as Float32Array;
-
-            // Expand outward
-            for (let j = 0; j < positions.length; j += 3) {
-                const dx = positions[j];
-                const dy = positions[j + 1];
-                const dist = Math.sqrt(dx * dx + dy * dy) || 0.1;
-                positions[j] += (dx / dist) * delta * 3;
-                positions[j + 1] += (dy / dist) * delta * 3;
-            }
-            p.geometry.attributes.position.needsUpdate = true;
-
-            (p.material as THREE.PointsMaterial).opacity -= delta * 3;
-            if ((p.material as THREE.PointsMaterial).opacity <= 0) {
-                this.scene.remove(p);
-                p.geometry.dispose();
-                (p.material as THREE.Material).dispose();
-                this.particles.splice(i, 1);
-            }
-        }
-    }
-
-    private createHitParticles(position: THREE.Vector2, color: THREE.Color): void {
-        const particleCount = 15;
-        const positions = new Float32Array(particleCount * 3);
-        const colors = new Float32Array(particleCount * 3);
-
-        for (let i = 0; i < particleCount; i++) {
-            const angle = (i / particleCount) * Math.PI * 2;
-            const dist = 0.1;
-            positions[i * 3] = Math.cos(angle) * dist;
-            positions[i * 3 + 1] = Math.sin(angle) * dist;
-            positions[i * 3 + 2] = 0.5;
-
-            colors[i * 3] = color.r;
-            colors[i * 3 + 1] = color.g;
-            colors[i * 3 + 2] = color.b;
-        }
-
-        const geometry = new THREE.BufferGeometry();
-        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-        const material = new THREE.PointsMaterial({
-            size: 0.15,
-            transparent: true,
-            opacity: 1,
-            vertexColors: true,
-            blending: THREE.AdditiveBlending,
-        });
-
-        const particles = new THREE.Points(geometry, material);
-        particles.position.set(position.x, position.y, 0);
-        this.scene.add(particles);
-        this.particles.push(particles);
     }
 
     private onHit(result: HitResult, position: THREE.Vector2, color: THREE.Color): void {
@@ -1066,20 +1232,24 @@ export class OsuGame extends ThreeBaseGame {
         this.maxCombo = Math.max(this.maxCombo, this.combo);
         this.behaviorData.hits++;
 
-        // Score based on timing
         let points = 0;
+        let feedbackColor = '#ffffff';
+
         switch (result.timing) {
             case 'perfect':
                 points = 300;
                 this.perfectHits++;
+                feedbackColor = '#00f5d4';
                 break;
             case 'good':
                 points = 100;
                 this.goodHits++;
+                feedbackColor = '#fee440';
                 break;
             case 'ok':
                 points = 50;
                 this.okHits++;
+                feedbackColor = '#ff9f1c';
                 break;
             case 'miss':
                 points = 0;
@@ -1087,8 +1257,9 @@ export class OsuGame extends ThreeBaseGame {
                 return;
         }
 
-        this.score += points * (1 + this.combo * 0.1);
-        this.createHitParticles(position, color);
+        this.score += points * (1 + this.combo * 0.08);
+        this.particlePool.emit(position, color, 25);
+        this.showFeedback(result.timing, feedbackColor);
         this.updateUI();
     }
 
@@ -1096,11 +1267,11 @@ export class OsuGame extends ThreeBaseGame {
         this.combo = 0;
         this.missCount++;
         this.behaviorData.misses++;
+        this.showFeedback('miss', '#ff6b6b');
         this.updateUI();
     }
 
     protected onClick(x: number, y: number): void {
-        // Convert screen coordinates to world coordinates
         const rect = this.renderer.domElement.getBoundingClientRect();
         const ndcX = ((x / rect.width) * 2 - 1) * this.aspect * this.viewSize;
         const ndcY = (-(y / rect.height) * 2 + 1) * this.viewSize;
@@ -1108,7 +1279,6 @@ export class OsuGame extends ThreeBaseGame {
 
         this.isHolding = true;
 
-        // Find the hit object closest to its target time that can be hit
         let bestObject: HitObject | null = null;
         let bestResult: HitResult | null = null;
 
@@ -1123,7 +1293,7 @@ export class OsuGame extends ThreeBaseGame {
         }
 
         if (bestObject && bestResult) {
-            const color = this.COLORS[Math.floor(Math.random() * this.COLORS.length)];
+            const color = bestObject.getColor();
             this.onHit(bestResult, bestObject.getPosition(), color);
 
             if (bestObject instanceof Slider) {
@@ -1133,7 +1303,6 @@ export class OsuGame extends ThreeBaseGame {
     }
 
     protected onMouseMove(x: number, y: number): void {
-        // Convert to world coordinates
         const rect = this.renderer.domElement.getBoundingClientRect();
         const ndcX = ((x / rect.width) * 2 - 1) * this.aspect * this.viewSize;
         const ndcY = (-(y / rect.height) * 2 + 1) * this.viewSize;
@@ -1182,14 +1351,11 @@ export class OsuGame extends ThreeBaseGame {
     }
 
     start(onComplete: (data: any) => void): void {
-        // Spawn initial object
         this.spawnHitObject();
-        
         super.start(onComplete);
     }
 
     protected endGame(): void {
-        // Calculate final accuracy for behavior data
         const totalHits = this.perfectHits + this.goodHits + this.okHits;
         const total = totalHits + this.missCount;
         this.behaviorData.clickAccuracy = total > 0 ? totalHits / total : 0;
@@ -1203,11 +1369,14 @@ export class OsuGame extends ThreeBaseGame {
         canvas.removeEventListener('mouseup', this.handleMouseUp);
 
         // Clean up UI
-        if (this.comboDisplay && this.comboDisplay.parentNode) {
+        if (this.comboDisplay?.parentNode) {
             this.comboDisplay.parentNode.removeChild(this.comboDisplay);
         }
-        if (this.scoreDisplay && this.scoreDisplay.parentNode) {
+        if (this.scoreDisplay?.parentNode) {
             this.scoreDisplay.parentNode.removeChild(this.scoreDisplay);
+        }
+        if (this.feedbackDisplay?.parentNode) {
+            this.feedbackDisplay.parentNode.removeChild(this.feedbackDisplay);
         }
 
         // Clean up hit objects
@@ -1217,12 +1386,7 @@ export class OsuGame extends ThreeBaseGame {
         this.hitObjects = [];
 
         // Clean up particles
-        for (const p of this.particles) {
-            this.scene.remove(p);
-            p.geometry.dispose();
-            (p.material as THREE.Material).dispose();
-        }
-        this.particles = [];
+        this.particlePool.destroy();
 
         super.destroy();
     }
