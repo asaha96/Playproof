@@ -6,6 +6,7 @@ const brandingFields = {
   // Core colors
   primaryColor: v.optional(v.string()),
   secondaryColor: v.optional(v.string()),
+  tertiaryColor: v.optional(v.string()),
   backgroundColor: v.optional(v.string()),
   surfaceColor: v.optional(v.string()),
   // Text colors
