@@ -21,9 +21,7 @@
     ],
     "paths": {
       "@/convex/*": ["../../convex/*"],
-      "@/*": ["./*"],
-      "playproof": ["../../packages/playproof/dist/index.d.ts"],
-      "playproof/react": ["../../packages/playproof/dist/react/index.d.ts"]
+      "@/*": ["./*"]
     }
   },
   "include": [
