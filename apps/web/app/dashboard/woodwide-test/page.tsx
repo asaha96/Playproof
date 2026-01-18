@@ -311,12 +311,6 @@ export default function WoodwideTestPage() {
                   onFailure={(result) => {
                     console.log("Game failed:", result);
                   }}
-                  onSuccess={(result) => {
-                    console.log("Game completed:", result);
-                  }}
-                  onFailure={(result) => {
-                    console.log("Game failed:", result);
-                  }}
                 />
               </div>
 
