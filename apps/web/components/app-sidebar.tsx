@@ -11,7 +11,7 @@ import {
   UserButton,
   useUser,
 } from "@clerk/nextjs"
-import { BarChart3, Code, Eye, Rocket, ShieldCheck } from "lucide-react"
+import { BarChart3, Code, Eye, Rocket, ShieldCheck, TestTube } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -49,6 +49,11 @@ const navItems = [
     title: "Developer",
     href: "/dashboard/developer",
     icon: Code,
+  },
+  {
+    title: "Woodwide Test",
+    href: "/dashboard/woodwide-test",
+    icon: TestTube,
   },
 ]
 
