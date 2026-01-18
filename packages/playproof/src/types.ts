@@ -117,8 +117,15 @@ export interface PlayproofConfig {
     confidenceThreshold: number;
     gameDuration: number | null;
     gameId: GameId;
-    // API credentials for fetching deployment branding
+    /**
+     * User API key for authentication.
+     * Get this from the Developer page in your PlayProof dashboard.
+     */
     apiKey: string | null;
+    /**
+     * Deployment ID (actual Convex _id) for loading deployment-specific branding.
+     * Copy this from the ID column in the Deployments table.
+     */
     deploymentId: string | null;
     onSuccess: ((result: VerificationResult) => void) | null;
     onFailure: ((result: VerificationResult) => void) | null;

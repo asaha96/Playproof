@@ -185,6 +185,11 @@ export default function DeveloperPage() {
                         </div>
                         <p className="text-muted-foreground">
                             Add the <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">Playproof</code> component wherever you need human verification.
+                            Pass the <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono">deploymentId</code> to load your deployment&apos;s branding.
+                        </p>
+                        <p className="text-muted-foreground text-sm">
+                            You can find the Deployment ID in the{" "}
+                            <a href="/dashboard/deployments" className="text-primary hover:underline">Deployments</a> table (click the copy button next to the ID).
                         </p>
                         <CodeBlock filename="components/verification.tsx">
                             <SyntaxHighlightedComponent />
@@ -276,6 +281,11 @@ function SyntaxHighlightedComponent() {
             {"\n    "}
             <span className="text-blue-600 dark:text-blue-400">{"<"}</span>
             <span className="text-yellow-600 dark:text-yellow-400">Playproof</span>
+            {"\n      "}
+            <span className="text-cyan-600 dark:text-cyan-400">deploymentId</span>
+            <span className="text-foreground">=</span>
+            <span className="text-green-600 dark:text-green-400">&quot;k1234567890abcdef&quot;</span>
+            <span className="text-muted-foreground"> {"// From Deployments table"}</span>
             {"\n      "}
             <span className="text-cyan-600 dark:text-cyan-400">onSuccess</span>
             <span className="text-foreground">={"{"}(</span>

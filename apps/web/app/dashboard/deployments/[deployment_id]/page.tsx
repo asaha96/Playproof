@@ -16,9 +16,6 @@ import {
   XCircle,
   Settings2,
   Loader2,
-  Copy,
-  Key,
-  Check,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -82,64 +79,6 @@ function ColorField({ id, label, value, onChange }: ColorFieldProps) {
   );
 }
 
-type CopyableFieldProps = {
-  label: string;
-  value: string;
-  masked?: boolean;
-};
-
-function CopyableField({ label, value, masked }: CopyableFieldProps) {
-  const [copied, setCopied] = React.useState(false);
-  const [isRevealed, setIsRevealed] = React.useState(false);
-
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const displayValue = masked && !isRevealed
-    ? `${value.substring(0, 8)}${"•".repeat(24)}`
-    : value;
-
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs font-medium">{label}</Label>
-      <div className="flex gap-2">
-        <div className="flex-1 flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-2">
-          <code className="text-xs font-mono flex-1 truncate">
-            {displayValue}
-          </code>
-          {masked && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2 text-xs"
-              onClick={() => setIsRevealed(!isRevealed)}
-            >
-              {isRevealed ? "Hide" : "Reveal"}
-            </Button>
-          )}
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="shrink-0 size-9"
-          onClick={handleCopy}
-        >
-          {copied ? (
-            <Check className="size-3.5 text-green-500" />
-          ) : (
-            <Copy className="size-3.5" />
-          )}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 export default function EditDeploymentPage() {
   const router = useRouter();
   const params = useParams();
@@ -148,27 +87,8 @@ export default function EditDeploymentPage() {
   const deployment = useQuery(api.deployments.get, { id: deploymentId });
   const updateDeployment = useMutation(api.deployments.update);
   const themeColors = useThemeColors();
-  const backfillCredentials = useMutation(api.deployments.backfillCredentials);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isInitialized, setIsInitialized] = React.useState(false);
-  const [isBackfilling, setIsBackfilling] = React.useState(false);
-
-  // Automatically backfill missing credentials
-  React.useEffect(() => {
-    if (deployment && !isBackfilling && (!deployment.apiKey || !deployment.deploymentId)) {
-      setIsBackfilling(true);
-      backfillCredentials({ id: deploymentId })
-        .then(() => {
-          console.log("[Playproof] Credentials backfilled for deployment");
-        })
-        .catch((error) => {
-          console.error("[Playproof] Failed to backfill credentials:", error);
-        })
-        .finally(() => {
-          setIsBackfilling(false);
-        });
-    }
-  }, [deployment, deploymentId, backfillCredentials, isBackfilling]);
 
   // Form state - start with light theme defaults (Inter as default font)
   const [formState, setFormState] = React.useState({
@@ -379,51 +299,6 @@ export default function EditDeploymentPage() {
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* API Credentials */}
-        <Card className="overflow-visible ring-0 border-dashed">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Key className="size-4" />
-              SDK Integration
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-xs text-muted-foreground">
-              Use these credentials to connect the Playproof SDK to this deployment.
-            </p>
-            {isBackfilling ? (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="size-3 animate-spin" />
-                Generating credentials...
-              </div>
-            ) : (
-              <>
-                {deployment.apiKey ? (
-                  <CopyableField
-                    label="API Key"
-                    value={deployment.apiKey}
-                    masked
-                  />
-                ) : (
-                  <div className="text-xs text-muted-foreground italic">
-                    API Key not available for this deployment.
-                  </div>
-                )}
-                {deployment.deploymentId ? (
-                  <CopyableField
-                    label="Deployment ID"
-                    value={deployment.deploymentId}
-                  />
-                ) : (
-                  <div className="text-xs text-muted-foreground italic">
-                    Deployment ID not available.
-                  </div>
-                )}
-              </>
-            )}
           </CardContent>
         </Card>
 

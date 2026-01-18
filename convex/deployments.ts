@@ -2,30 +2,6 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { resolveBranding } from "./branding";
 
-/**
- * Generate a random API key with the format: pp_<32 alphanumeric chars>
- */
-function generateApiKey(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let key = "pp_";
-  for (let i = 0; i < 32; i++) {
-    key += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return key;
-}
-
-/**
- * Generate a deployment ID slug from the name (lowercase, no spaces)
- */
-function generateDeploymentId(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
 // Branding input aligned with SDK PlayproofTheme interface
 const brandingInput = v.object({
   // Core colors
@@ -91,25 +67,9 @@ export const create = mutation({
     const branding = resolveBranding(args.branding);
     const now = Date.now();
 
-    // Generate API key and deployment ID slug
-    const apiKey = generateApiKey();
-    const deploymentId = generateDeploymentId(args.name);
-
-    // Ensure deploymentId is unique
-    const existing = await ctx.db
-      .query("deployments")
-      .withIndex("by_deploymentId", (q) => q.eq("deploymentId", deploymentId))
-      .first();
-
-    if (existing) {
-      throw new Error(`Deployment ID "${deploymentId}" already exists. Please use a different name.`);
-    }
-
     return await ctx.db.insert("deployments", {
       name: args.name,
       type: args.type,
-      deploymentId,
-      apiKey,
       createdAt: now,
       updatedAt: now,
       isActive: args.isActive ?? false,
@@ -193,86 +153,31 @@ export const remove = mutation({
 });
 
 /**
- * Backfill missing API credentials for deployments created before these fields were added.
- * This mutation generates apiKey and deploymentId if they don't exist.
- */
-export const backfillCredentials = mutation({
-  args: {
-    id: v.id("deployments"),
-  },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Called backfillCredentials without authentication");
-    }
-
-    const deployment = await ctx.db.get(args.id);
-    if (!deployment) {
-      throw new Error("Deployment not found");
-    }
-
-    const updates: { apiKey?: string; deploymentId?: string; updatedAt: number } = {
-      updatedAt: Date.now(),
-    };
-
-    // Generate API key if missing
-    if (!deployment.apiKey) {
-      updates.apiKey = generateApiKey();
-    }
-
-    // Generate deployment ID if missing
-    if (!deployment.deploymentId) {
-      const deploymentId = generateDeploymentId(deployment.name);
-
-      // Ensure deploymentId is unique
-      const existing = await ctx.db
-        .query("deployments")
-        .withIndex("by_deploymentId", (q) => q.eq("deploymentId", deploymentId))
-        .first();
-
-      if (existing && existing._id !== args.id) {
-        // Add a random suffix to make it unique
-        updates.deploymentId = `${deploymentId}-${Math.random().toString(36).substring(2, 8)}`;
-      } else {
-        updates.deploymentId = deploymentId;
-      }
-    }
-
-    // Only update if there are missing fields
-    if (updates.apiKey || updates.deploymentId) {
-      await ctx.db.patch(args.id, updates);
-    }
-
-    return {
-      apiKey: updates.apiKey || deployment.apiKey,
-      deploymentId: updates.deploymentId || deployment.deploymentId,
-    };
-  },
-});
-
-/**
- * Public query for SDK to fetch deployment branding by API key and deployment ID.
- * This does not require authentication - credentials are validated via apiKey match.
+ * Public query for SDK to fetch deployment branding by user API key and deployment ID.
+ * The API key is validated against the users table.
+ * The deploymentId is the actual Convex _id of the deployment.
  */
 export const getBrandingByCredentials = query({
   args: {
     apiKey: v.string(),
-    deploymentId: v.string(),
+    deploymentId: v.id("deployments"),
   },
   handler: async (ctx, args) => {
-    // Find deployment by deploymentId
-    const deployment = await ctx.db
-      .query("deployments")
-      .withIndex("by_deploymentId", (q) => q.eq("deploymentId", args.deploymentId))
+    // Validate API key against users table
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_apiKey", (q) => q.eq("apiKey", args.apiKey))
       .first();
+
+    if (!user) {
+      return { error: "Invalid API key" };
+    }
+
+    // Get deployment by its actual Convex _id
+    const deployment = await ctx.db.get(args.deploymentId);
 
     if (!deployment) {
       return { error: "Deployment not found" };
-    }
-
-    // Validate API key
-    if (deployment.apiKey !== args.apiKey) {
-      return { error: "Invalid API key" };
     }
 
     // Return branding settings mapped to SDK theme format

@@ -135,7 +135,9 @@ export class Playproof {
   }
 
   /**
-   * Fetch branding settings from backend using API credentials
+   * Fetch branding settings from backend using user API key and deployment ID.
+   * - apiKey: The user's API key from the Developer page
+   * - deploymentId: The actual Convex _id of the deployment (from Deployments table)
    */
   private async fetchBranding(): Promise<void> {
     const { apiKey, deploymentId } = this.config;

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { formatDistanceToNowStrict } from "date-fns";
-import { Plus, Layers3, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Plus, Layers3, MoreHorizontal, Pencil, Trash2, Copy, Check } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 
 import {
@@ -72,6 +72,13 @@ export default function DeploymentsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedDeployment, setSelectedDeployment] =
     useState<Deployment | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyId = async (id: string) => {
+    await navigator.clipboard.writeText(id);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   const deployments = useMemo(
     () =>
@@ -174,7 +181,8 @@ export default function DeploymentsPage() {
             </div>
 
             <div className="rounded-lg border">
-              <div className="hidden grid-cols-[1.6fr_0.9fr_1fr_0.8fr_auto] items-center gap-3 border-b bg-muted/50 px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground sm:grid">
+              <div className="hidden grid-cols-[minmax(140px,0.8fr)_1.4fr_0.8fr_0.8fr_0.7fr_auto] items-center gap-3 border-b bg-muted/50 px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground sm:grid">
+                <span>ID</span>
                 <span>Name</span>
                 <span>Type</span>
                 <span>Branding</span>
@@ -184,8 +192,26 @@ export default function DeploymentsPage() {
               {deployments.map((deployment) => (
                 <div
                   key={deployment.id}
-                  className="grid gap-3 border-b px-4 py-3 last:border-b-0 sm:grid-cols-[1.6fr_0.9fr_1fr_0.8fr_auto] sm:items-center"
+                  className="grid gap-3 border-b px-4 py-3 last:border-b-0 sm:grid-cols-[minmax(140px,0.8fr)_1.4fr_0.8fr_0.8fr_0.7fr_auto] sm:items-center"
                 >
+                  <div className="flex items-center gap-1.5">
+                    <code className="text-xs font-mono text-muted-foreground truncate max-w-[100px]">
+                      {deployment.id}
+                    </code>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-6 shrink-0"
+                      onClick={() => handleCopyId(deployment.id)}
+                    >
+                      {copiedId === deployment.id ? (
+                        <Check className="size-3 text-green-500" />
+                      ) : (
+                        <Copy className="size-3" />
+                      )}
+                      <span className="sr-only">Copy ID</span>
+                    </Button>
+                  </div>
                   <div className="flex items-start gap-3">
                     <span
                       className={`mt-1 size-2 rounded-full ${
