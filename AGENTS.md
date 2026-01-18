@@ -71,6 +71,24 @@ Playproof/
 
 ## Agent Operating Rules
 
+### Process Management
+
+**CRITICAL: Do not leave processes running.**
+
+- **Do NOT start dev servers** (`npm run dev`, `uvicorn`, etc.) unless explicitly testing functionality
+- If you start a process for testing, you **MUST terminate it** before ending your session
+- Never leave background processes running - the user's machine is not a server
+- Use `curl` or one-off commands for quick API tests when possible instead of starting long-running servers
+
+**Kill commands (use before ending session):**
+```bash
+pkill -f "next-server"
+pkill -f "node.*fastify"
+pkill -f "tsx.*server"
+pkill -f "npm.*dev"
+pkill -f "uvicorn"
+```
+
 ### When to Update AGENTS.md
 
 Update this file **immediately** after any of these changes:
