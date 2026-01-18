@@ -121,16 +121,11 @@ export const stats = query({
  * Get time series data for the analytics component (24 hours, hourly granularity)
  */
 export const timeSeries = query({
-  args: { 
-    days: v.optional(v.float64()),
-    hours: v.optional(v.float64()), // Backwards compatibility
-  },
+  args: { hours: v.optional(v.float64()) },
   handler: async (ctx, args) => {
-    // Accept either days or hours (hours takes precedence if both provided)
-    const days = args.hours ? args.hours / 24 : (args.days ?? 1);
+    const hours = args.hours ?? 24;
     const now = Date.now();
     const msPerHour = 60 * 60 * 1000;
-    const hours = Math.round(days * 24);
     const startTime = now - hours * msPerHour;
 
     const sessions = await ctx.db

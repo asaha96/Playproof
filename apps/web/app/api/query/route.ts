@@ -1,8 +1,8 @@
 /**
  * POST /api/query
  *
- * Proxies Convex queries for SDK clients.
- * This allows the SDK to call Convex queries (like getBrandingByCredentials)
+ * Proxies Convex queries and mutations for SDK clients.
+ * This allows the SDK to call Convex functions (like getBrandingByCredentials, createWithApiKey)
  * without exposing Convex URL/credentials directly to the client.
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -15,7 +15,7 @@ const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { path, args } = body;
+    const { path, args, type } = body;
 
     // Validate required fields
     if (!path || typeof path !== "string") {
@@ -31,6 +31,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Determine operation type (default to "query" for backward compatibility)
+    const operationType = type === "mutation" ? "mutation" : "query";
 
     // Parse the path (e.g., "deployments:getBrandingByCredentials")
     const [module, functionName] = path.split(":");
@@ -59,8 +62,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Call Convex query
-    const result = await convex.query(apiFunction, args);
+    // Call Convex query or mutation based on type
+    const result =
+      operationType === "mutation"
+        ? await convex.mutation(apiFunction, args)
+        : await convex.query(apiFunction, args);
 
     // Return result
     return NextResponse.json(result);

@@ -7,54 +7,60 @@
     font-family: var(--playproof-font-family);
     background: var(--playproof-background);
     border: 1px solid var(--playproof-border);
-    border-radius: var(--playproof-border-radius);
-    padding: 10px;
+    border-radius: 12px;
+    padding: 12px;
     max-width: 400px;
     width: 100%;
     box-sizing: border-box;
     overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    backdrop-filter: blur(8px);
 }
 
 .playproof-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
+    padding: 0 4px;
 }
 
 .playproof-title {
     color: var(--playproof-text);
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
     margin: 0;
     display: flex;
     align-items: center;
     gap: 8px;
+    letter-spacing: -0.01em;
 }
 
 .playproof-logo {
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
     background: linear-gradient(135deg, var(--playproof-primary), var(--playproof-secondary));
-    border-radius: 5px;
+    border-radius: 6px;
     display: flex;
     align-items: center;
     justify-content: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .playproof-logo svg {
-    width: 12px;
-    height: 12px;
+    width: 14px;
+    height: 14px;
     fill: white;
 }
 
 .playproof-timer {
     color: var(--playproof-text-muted);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
     background: var(--playproof-surface);
     padding: 4px 8px;
-    border-radius: 4px;
+    border-radius: 6px;
+    border: 1px solid var(--playproof-border);
 }
 
 .playproof-game-area {
@@ -65,6 +71,8 @@
     overflow: hidden;
     cursor: crosshair;
     user-select: none;
+    box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--playproof-border);
 }
 
 .playproof-instructions {
@@ -77,18 +85,20 @@
     padding: 24px;
     width: 85%;
     max-width: 300px;
+    z-index: 10;
 }
 
 .playproof-instructions-icon {
-    width: 56px;
-    height: 56px;
-    margin: 0 auto 16px;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15));
-    border-radius: 16px;
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 20px;
+    background: linear-gradient(135deg, rgba(var(--playproof-primary-rgb), 0.1), rgba(var(--playproof-secondary-rgb), 0.1));
+    border-radius: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
     animation: iconFloat 3s ease-in-out infinite;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.05);
 }
 
 @keyframes iconFloat {
@@ -99,46 +109,45 @@
     }
 
     50% {
-        transform: translateY(-6px);
+        transform: translateY(-8px);
     }
 }
 
 .playproof-instructions-icon svg {
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
+    stroke: var(--playproof-primary);
 }
 
 .playproof-instructions h3 {
-    font-size: 18px;
+    font-size: 20px;
     margin: 0 0 8px 0;
     font-weight: 700;
-    background: linear-gradient(135deg, var(--playproof-text), var(--playproof-accent));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: var(--playproof-text);
     letter-spacing: -0.02em;
 }
 
 .playproof-instructions p {
-    font-size: 13px;
+    font-size: 14px;
     color: var(--playproof-text-muted);
-    margin: 0 0 20px 0;
-    line-height: 1.5;
+    margin: 0 0 24px 0;
+    line-height: 1.6;
 }
 
 .playproof-start-btn {
     background: linear-gradient(135deg, var(--playproof-primary), var(--playproof-secondary));
     color: white;
     border: none;
-    padding: 12px 32px;
-    border-radius: 10px;
-    font-size: 14px;
+    padding: 12px 36px;
+    border-radius: 12px;
+    font-size: 15px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 12px rgba(var(--playproof-primary-rgb), 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
     position: relative;
     overflow: hidden;
+    letter-spacing: 0.01em;
 }
 
 .playproof-start-btn::before {
@@ -154,7 +163,7 @@
 
 .playproof-start-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 20px rgba(var(--playproof-primary-rgb), 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .playproof-start-btn:hover::before {
@@ -163,22 +172,25 @@
 
 .playproof-start-btn:active {
     transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(var(--playproof-primary-rgb), 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .playproof-progress {
-    margin-top: 8px;
+    margin-top: 12px;
+    padding: 0 4px;
 }
 
 .playproof-progress-bar {
-    height: 3px;
+    height: 4px;
     background: var(--playproof-surface);
     border-radius: 2px;
     overflow: hidden;
+    border: 1px solid var(--playproof-border);
 }
 
 .playproof-progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, var(--playproof-primary), var(--playproof-accent));
+    background: linear-gradient(90deg, var(--playproof-primary), var(--playproof-secondary));
     border-radius: 2px;
     transition: width 0.1s linear;
     width: 0%;
@@ -188,45 +200,62 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-top: 8px;
-    padding-top: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
     border-top: 1px solid var(--playproof-border);
+    padding-left: 4px;
+    padding-right: 4px;
 }
 
 .playproof-branding {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--playproof-text-muted);
-    opacity: 0.8;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+}
+
+.playproof-branding:hover {
+    opacity: 1;
 }
 
 .playproof-branding a {
-    color: var(--playproof-accent);
+    color: var(--playproof-text);
     text-decoration: none;
+    font-weight: 500;
 }
 
 .playproof-branding a:hover {
     text-decoration: underline;
+    color: var(--playproof-primary);
 }
 
 .playproof-status {
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
     display: flex;
     align-items: center;
     gap: 6px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: var(--playproof-surface);
+    border: 1px solid var(--playproof-border);
 }
 
 .playproof-status.success {
     color: var(--playproof-success);
+    background: rgba(var(--playproof-success-rgb), 0.1);
+    border-color: rgba(var(--playproof-success-rgb), 0.2);
 }
 
 .playproof-status.error {
     color: var(--playproof-error);
+    background: rgba(var(--playproof-error-rgb), 0.1);
+    border-color: rgba(var(--playproof-error-rgb), 0.2);
 }
 
 .playproof-status-icon {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
 }
 
 /* Result overlay */
@@ -240,8 +269,16 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: var(--playproof-surface);
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(4px);
     animation: fadeIn 0.3s ease;
+    z-index: 20;
+}
+
+@media (prefers-color-scheme: dark) {
+    .playproof-result {
+        background: rgba(0, 0, 0, 0.6);
+    }
 }
 
 @keyframes fadeIn {
@@ -255,36 +292,76 @@
 }
 
 .playproof-result-icon {
-    width: 52px;
-    height: 52px;
+    width: 64px;
+    height: 64px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
+    position: relative;
+}
+
+.playproof-result-icon::after {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    right: -4px;
+    bottom: -4px;
+    border-radius: 50%;
+    opacity: 0.3;
 }
 
 .playproof-result-icon.success {
-    background: rgba(16, 185, 129, 0.15);
-    color: var(--playproof-success);
-    box-shadow: 0 0 24px rgba(16, 185, 129, 0.2);
+    background: var(--playproof-success);
+    color: white;
+    box-shadow: 0 0 32px rgba(var(--playproof-success-rgb), 0.4);
+}
+
+.playproof-result-icon.success::after {
+    background: var(--playproof-success);
+    animation: pulse 2s infinite;
 }
 
 .playproof-result-icon.error {
-    background: rgba(239, 68, 68, 0.15);
-    color: var(--playproof-error);
-    box-shadow: 0 0 24px rgba(239, 68, 68, 0.2);
+    background: var(--playproof-error);
+    color: white;
+    box-shadow: 0 0 32px rgba(var(--playproof-error-rgb), 0.4);
+}
+
+.playproof-result-icon.error::after {
+    background: var(--playproof-error);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        opacity: 0.3;
+    }
+    
+    50% {
+        transform: scale(1.1);
+        opacity: 0.1;
+    }
+    
+    100% {
+        transform: scale(1);
+        opacity: 0.3;
+    }
 }
 
 .playproof-result-icon svg {
-    width: 26px;
-    height: 26px;
+    width: 32px;
+    height: 32px;
 }
 
 .playproof-result-text {
     color: var(--playproof-text);
-    font-size: 15px;
-    font-weight: 600;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
 }
 
 /* Bubble game specific styles */
@@ -292,12 +369,14 @@
     position: absolute;
     border-radius: 50%;
     cursor: pointer;
-    animation: bubbleAppear 0.3s ease;
+    animation: bubbleAppear 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     transition: transform 0.1s ease;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1), inset 0 -4px 4px rgba(0, 0, 0, 0.1), inset 0 2px 4px rgba(255, 255, 255, 0.3);
 }
 
 .playproof-bubble:hover {
     transform: scale(1.1);
+    filter: brightness(1.1);
 }
 
 @keyframes bubbleAppear {
@@ -319,7 +398,8 @@
     }
 
     50% {
-        transform: scale(1.3);
+        transform: scale(1.4);
+        opacity: 0.5;
     }
 
     100% {
@@ -329,6 +409,6 @@
 }
 
 .playproof-bubble.popping {
-    animation: bubblePop 0.2s ease forwards;
+    animation: bubblePop 0.25s ease-out forwards;
     pointer-events: none;
 }
