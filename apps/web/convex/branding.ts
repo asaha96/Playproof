@@ -1,33 +1,31 @@
-export const DEFAULT_BRANDING = {
-  primaryColor: "#6366f1",
-  secondaryColor: "#8b5cf6",
-  tertiaryColor: "#22d3ee",
-  typography: "Inter",
-  brandingType: "default",
+export type BrandingConfig = {
+  primaryColor?: string;
+  secondaryColor?: string;
+  tertiaryColor?: string;
+  typography?: string;
 };
 
+export const DEFAULT_BRANDING: Required<BrandingConfig> = {
+  primaryColor: "#5B8CFF",
+  secondaryColor: "#22D3EE",
+  tertiaryColor: "#E2E8F0",
+  typography: "Nunito Sans",
+};
+
+/**
+ * Resolves the branding configuration by merging the user's custom settings
+ * with the default configuration.
+ */
 export function resolveBranding(
-  override?: {
-    primaryColor?: string;
-    secondaryColor?: string;
-    tertiaryColor?: string;
-    typography?: string;
-    brandingType?: string;
-  },
-  fallback?: {
-    primaryColor?: string;
-    secondaryColor?: string;
-    tertiaryColor?: string;
-    typography?: string;
-    brandingType?: string;
-  }
-) {
-  const base = fallback ?? DEFAULT_BRANDING;
+  overrides?: BrandingConfig
+): Required<BrandingConfig> {
   return {
-    primaryColor: override?.primaryColor ?? base.primaryColor,
-    secondaryColor: override?.secondaryColor ?? base.secondaryColor,
-    tertiaryColor: override?.tertiaryColor ?? base.tertiaryColor,
-    typography: override?.typography ?? base.typography,
-    brandingType: override?.brandingType ?? base.brandingType,
+    primaryColor:
+      overrides?.primaryColor ?? DEFAULT_BRANDING.primaryColor,
+    secondaryColor:
+      overrides?.secondaryColor ?? DEFAULT_BRANDING.secondaryColor,
+    tertiaryColor:
+      overrides?.tertiaryColor ?? DEFAULT_BRANDING.tertiaryColor,
+    typography: overrides?.typography ?? DEFAULT_BRANDING.typography,
   };
 }

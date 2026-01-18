@@ -6,6 +6,7 @@ const brandingFields = {
   secondaryColor: v.optional(v.string()),
   tertiaryColor: v.optional(v.string()),
   typography: v.optional(v.string()),
+  brandingType: v.optional(v.string()),
 };
 
 const deploymentType = v.union(
@@ -18,18 +19,22 @@ const deploymentType = v.union(
 export default defineSchema({
   // Users table - stores authenticated users from Clerk
   users: defineTable({
-    // Clerk subject ID (unique identifier from Clerk)
-    clerkSubject: v.string(),
+    // Clerk identifiers (support both for migration compatibility)
+    clerkId: v.optional(v.string()),
+    clerkSubject: v.optional(v.string()),
     // User email
-    email: v.string(),
+    email: v.optional(v.string()),
     // Display name
     name: v.optional(v.string()),
     // Profile image URL (from Clerk or custom)
     imageUrl: v.optional(v.string()),
     // Timestamps
-    createdAt: v.number(),
-    updatedAt: v.number(),
+    createdAt: v.optional(v.number()),
+    updatedAt: v.optional(v.number()),
+    // Branding fields (user-level customization)
+    ...brandingFields,
   })
+    .index("by_clerkId", ["clerkId"])
     .index("by_clerkSubject", ["clerkSubject"])
     .index("by_email", ["email"]),
   // Deployments table - stores PlayProof deployment configs
