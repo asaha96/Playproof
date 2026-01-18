@@ -5,7 +5,8 @@
 
 import * as THREE from 'three';
 import { ThreeEngine, EngineConfig } from './engine';
-import type { BehaviorData, PlayproofConfig, SDKHooks, BaseGame } from '../../types';
+import { PointerTelemetryTracker } from '../../telemetry/pointer-tracker';
+import type { BehaviorData, PlayproofConfig, SDKHooks, BaseGame, PointerTelemetryEvent } from '../../types';
 
 export interface MouseMovement {
     x: number;
@@ -24,6 +25,10 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
     protected mouse: THREE.Vector2;
     protected gameObjects: THREE.Object3D[] = [];
 
+    // Pointer telemetry tracking (works on top of any game)
+    protected pointerTracker: PointerTelemetryTracker;
+    protected allTelemetryEvents: PointerTelemetryEvent[] = [];
+
     constructor(gameArea: HTMLElement, config: PlayproofConfig, hooks: SDKHooks = {} as SDKHooks) {
         const engineConfig: EngineConfig = {
             container: gameArea,
@@ -38,6 +43,13 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
         this.currentTrajectory = [];
         this.behaviorData = this.createEmptyBehaviorData();
 
+        // Initialize pointer telemetry tracker
+        this.pointerTracker = new PointerTelemetryTracker({
+            moveThrottleMs: 50,
+            logEvents: config.logTelemetry ?? false,
+            onBatch: (batch) => this.handleTelemetryBatch(batch),
+        });
+
         this.bindEvents();
     }
 
@@ -50,6 +62,27 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
             misses: 0,
             clickAccuracy: 0,
         };
+    }
+
+    /**
+     * Handle batched telemetry events from the pointer tracker.
+     * This is called automatically by the tracker and fires the SDK hook.
+     */
+    protected handleTelemetryBatch(batch: PointerTelemetryEvent[]): void {
+        // Store all events for final result
+        this.allTelemetryEvents.push(...batch);
+
+        // Fire the hook so consumers can receive telemetry in real-time
+        if (this.hooks.onTelemetryBatch) {
+            this.hooks.onTelemetryBatch(batch);
+        }
+    }
+
+    /**
+     * Get all captured telemetry events (for inclusion in verification result)
+     */
+    public getTelemetryEvents(): PointerTelemetryEvent[] {
+        return [...this.allTelemetryEvents];
     }
 
     protected bindEvents(): void {
@@ -140,6 +173,11 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
 
     async init(): Promise<void> {
         this.mount();
+        
+        // Attach pointer telemetry tracker to the canvas
+        // This works on top of any game - completely game-agnostic
+        this.pointerTracker.attach(this.renderer.domElement);
+        
         await this.setupGame();
     }
 
@@ -148,8 +186,12 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
     start(onComplete: (data: BehaviorData) => void): void {
         this.onComplete = onComplete;
         this.behaviorData = this.createEmptyBehaviorData();
+        this.allTelemetryEvents = []; // Clear previous telemetry
         this.startTime = Date.now();
         this.startEngine();
+
+        // Start pointer telemetry tracking
+        this.pointerTracker.start();
 
         // End after duration
         const duration = this.config.gameDuration || 10000;
@@ -158,6 +200,9 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
 
     protected endGame(): void {
         this.stop();
+
+        // Stop pointer telemetry tracking (flushes remaining events)
+        this.pointerTracker.stop();
 
         // Calculate accuracy
         const totalClicks = this.behaviorData.hits + this.behaviorData.misses;
@@ -171,6 +216,9 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
     }
 
     destroy(): void {
+        // Clean up pointer telemetry tracker
+        this.pointerTracker.destroy();
+
         const canvas = this.renderer.domElement;
         canvas.removeEventListener('mousemove', this.handleMouseMove);
         canvas.removeEventListener('click', this.handleClick);

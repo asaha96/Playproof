@@ -35,6 +35,7 @@ export const DEFAULT_CONFIG: PlayproofConfig = {
   confidenceThreshold: 0.7,
   gameDuration: null, // null = use game default, or specify ms
   gameId: 'bubble-pop', // 'bubble-pop', 'mini-golf', 'basketball', 'archery', or 'random'
+  logTelemetry: false, // Set to true to console.log telemetry events (verbose)
   // API credentials for fetching deployment branding
   apiKey: null,
   deploymentId: null,

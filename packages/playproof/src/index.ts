@@ -15,10 +15,16 @@ export type {
   VerificationResult,
   BehaviorData,
   GameId,
-  PlayproofFontFamily
+  PlayproofFontFamily,
+  SDKHooks,
+  PointerTelemetryEvent,
 } from './types';
 
 export { PLAYPROOF_FONTS } from './types';
+
+// Export telemetry utilities for advanced consumers
+export { PointerTelemetryTracker } from './telemetry/pointer-tracker';
+export type { PointerTrackerConfig } from './telemetry/pointer-tracker';
 
 // Expose globally for script tag usage
 declare global {

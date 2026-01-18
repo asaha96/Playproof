@@ -52,6 +52,21 @@ export interface MouseMovement {
     timestamp: number;
 }
 
+// Pointer telemetry event - captured for all games
+export interface PointerTelemetryEvent {
+    timestampMs: number;      // Absolute timestamp (Date.now())
+    tMs: number;              // Relative time since tracking started (high-res)
+    x: number;                // X position relative to game area
+    y: number;                // Y position relative to game area
+    clientX: number;          // Absolute X position
+    clientY: number;          // Absolute Y position
+    isDown: boolean;          // Whether pointer is pressed
+    eventType: 'move' | 'down' | 'up' | 'enter' | 'leave';
+    pointerType: string;      // 'mouse', 'touch', 'pen'
+    pointerId: number;        // Unique pointer ID
+    isTrusted: boolean;       // Whether event was user-generated
+}
+
 // Extended telemetry for future SDK
 export interface ExtendedTelemetry {
     coalescedCount: number;
@@ -117,10 +132,8 @@ export interface PlayproofConfig {
     confidenceThreshold: number;
     gameDuration: number | null;
     gameId: GameId;
-    /**
-     * User API key for authentication.
-     * Get this from the Developer page in your PlayProof dashboard.
-     */
+    logTelemetry: boolean;    // Whether to console.log telemetry events (default: false)
+    // API credentials for fetching deployment branding
     apiKey: string | null;
     /**
      * Deployment ID (actual Convex _id) for loading deployment-specific branding.
@@ -135,7 +148,7 @@ export interface PlayproofConfig {
 }
 
 export interface SDKHooks {
-    onTelemetryBatch: ((batch: unknown) => void) | null;
+    onTelemetryBatch: ((batch: PointerTelemetryEvent[]) => void) | null;
     onAttemptEnd: ((attempt: AttemptData) => void) | null;
     regenerate: (() => void) | null;
 }
