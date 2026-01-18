@@ -5,15 +5,15 @@
  * Run with: npx tsx train-model.ts
  */
 
-import { extractFeatures, featuresToCsv } from "./src/lib/features.js";
-import { WoodwideClient } from "./src/services/woodwide.js";
-import type { SessionTelemetry } from "@playproof/shared";
+import { extractFeatures, featuresToCsv } from "../../server/lib/features";
+import { WoodwideClient } from "../../server/services/woodwide";
+import type { SessionTelemetry, TelemetryClick } from "@playproof/shared";
 import { config } from "dotenv";
 import { writeFileSync } from "fs";
 import { join } from "path";
 
 // Load environment variables
-config({ path: "../../.env.local" });
+config({ path: "../../../../.env.local" });
 
 const API_URL = process.env.WOODWIDE_BASE_URL || "https://api.woodwide.ai";
 const API_KEY = process.env.WOODWIDE_API_KEY || "";
@@ -32,8 +32,8 @@ function generateHumanMovement(
   durationMs: number = 10000,
   startX: number = 100,
   startY: number = 100
-): Array<{ x: number; y: number; timestamp: number }> {
-  const movements: Array<{ x: number; y: number; timestamp: number }> = [];
+): Array<{ x: number; y: number; timestamp: number; isTrusted: boolean }> {
+  const movements: Array<{ x: number; y: number; timestamp: number; isTrusted: boolean }> = [];
   let x = startX;
   let y = startY;
   let timestamp = 0;
@@ -73,7 +73,7 @@ function generateHumanMovement(
     const timingVariation = (Math.random() - 0.5) * 5;
     timestamp += baseInterval + timingVariation + pause;
 
-    movements.push({ x, y, timestamp });
+    movements.push({ x, y, timestamp, isTrusted: true });
   }
 
   return movements;
@@ -91,7 +91,7 @@ function generateTrainingSession(
   const movements = generateHumanMovement(durationMs);
 
   // Generate clicks with some misses
-  const clicks = [];
+  const clicks: TelemetryClick[] = [];
   const numClicks = 3 + Math.floor(Math.random() * 7);
   let hits = 0;
   let misses = 0;
@@ -264,7 +264,7 @@ async function trainModel() {
       process.exit(1);
     } else {
       console.warn("⚠️  Training still in progress. Check status later:");
-      console.warn(`   curl http://localhost:3002/api/v1/training/${trainingResult.modelId}`);
+      console.warn(`   curl http://localhost:3000/api/v1/training/${trainingResult.modelId}`);
     }
   } catch (error) {
     console.error("\n❌ Error:", error);

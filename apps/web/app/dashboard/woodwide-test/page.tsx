@@ -18,7 +18,8 @@ import {
 import { Loader2, CheckCircle2, XCircle, AlertCircle, Play, Database, BarChart3, Gamepad2, Terminal } from "lucide-react";
 import { Playproof, type VerificationResult, type PointerTelemetryEvent } from "playproof/react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
+const apiUrl = (path: string) => `${API_BASE}${path}`;
 
 interface ScoringResult {
   sessionId: string;
@@ -140,7 +141,7 @@ export default function WoodwideTestPage() {
 
     try {
       const telemetry = generateTestTelemetry(type);
-      const response = await fetch(`${API_URL}/api/v1/score`, {
+      const response = await fetch(apiUrl("/api/v1/score"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -164,7 +165,7 @@ export default function WoodwideTestPage() {
 
   const fetchBatchStats = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/v1/batch/stats`);
+      const response = await fetch(apiUrl("/api/v1/batch/stats"));
       if (response.ok) {
         const data = await response.json();
         setBatchStats(data);
@@ -178,7 +179,7 @@ export default function WoodwideTestPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_URL}/api/v1/batch/process`, {
+      const response = await fetch(apiUrl("/api/v1/batch/process"), {
         method: "POST",
       });
       if (!response.ok) {
@@ -312,7 +313,7 @@ export default function WoodwideTestPage() {
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/v1/score`, {
+      const response = await fetch(apiUrl("/api/v1/score"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -642,7 +643,7 @@ export default function WoodwideTestPage() {
                       accumulatedTelemetryRef.current = null;
 
                       try {
-                        const response = await fetch(`${API_URL}/api/v1/score`, {
+                        const response = await fetch(apiUrl("/api/v1/score"), {
                           method: "POST",
                           headers: {
                             "Content-Type": "application/json",

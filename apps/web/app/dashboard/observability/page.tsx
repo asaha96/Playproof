@@ -18,7 +18,8 @@ import type { PointerTelemetryEvent } from "playproof";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const MAX_EVENTS = 1000; // Cap to prevent memory issues
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
+const apiUrl = (path: string) => `${API_BASE}${path}`;
 
 interface WoodwideResult {
   sessionId: string;
@@ -222,7 +223,7 @@ export default function ObservabilityPage() {
                     };
 
                     // Call Woodwide scoring API
-                    const response = await fetch(`${API_URL}/api/v1/score`, {
+                    const response = await fetch(apiUrl("/api/v1/score"), {
                       method: "POST",
                       headers: {
                         "Content-Type": "application/json",

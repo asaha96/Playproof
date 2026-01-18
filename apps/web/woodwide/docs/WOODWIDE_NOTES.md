@@ -45,7 +45,7 @@ The system gracefully falls back to heuristic scoring when Woodwide inference is
 
 ## Current Implementation
 
-The scoring service (`apps/api/src/services/scoring.ts`) automatically:
+The scoring service (`apps/web/server/services/scoring.ts`) automatically:
 - Tries Woodwide inference first
 - Falls back to heuristics if Woodwide fails
 - Logs warnings (not errors) for graceful degradation

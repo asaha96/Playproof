@@ -12,7 +12,9 @@ fi
 
 DATASET_NAME="${1:-movement_human_train}"
 MODEL_NAME="${2:-movement_anomaly_v1}"
-CSV_FILE="${3:-movement_human_train_1768705085769.csv}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DEFAULT_CSV="${SCRIPT_DIR}/../data/movement_human_train_1768705085769.csv"
+CSV_FILE="${3:-$DEFAULT_CSV}"
 
 if [ ! -f "$CSV_FILE" ]; then
   echo "❌ CSV file not found: $CSV_FILE"
