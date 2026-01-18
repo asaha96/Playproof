@@ -1,32 +1,31 @@
-/**
- * Default branding configuration.
- */
-export const DEFAULT_BRANDING = {
-    primaryColor: "#000000",
-    secondaryColor: "#ffffff",
-    tertiaryColor: "#f3f4f6", // gray-100
-    typography: "Inter",
-    brandingType: "minimal",
+export type BrandingConfig = {
+  primaryColor?: string;
+  secondaryColor?: string;
+  tertiaryColor?: string;
+  typography?: string;
 };
 
-export type BrandingConfig = typeof DEFAULT_BRANDING;
+export const DEFAULT_BRANDING: Required<BrandingConfig> = {
+  primaryColor: "#5B8CFF",
+  secondaryColor: "#22D3EE",
+  tertiaryColor: "#E2E8F0",
+  typography: "Nunito Sans",
+};
 
 /**
  * Resolves the branding configuration by merging the user's custom settings
  * with the default configuration.
  */
 export function resolveBranding(
-    custom?: Partial<BrandingConfig> | null
-): BrandingConfig {
-    if (!custom) {
-        return DEFAULT_BRANDING;
-    }
-
-    return {
-        primaryColor: custom.primaryColor ?? DEFAULT_BRANDING.primaryColor,
-        secondaryColor: custom.secondaryColor ?? DEFAULT_BRANDING.secondaryColor,
-        tertiaryColor: custom.tertiaryColor ?? DEFAULT_BRANDING.tertiaryColor,
-        typography: custom.typography ?? DEFAULT_BRANDING.typography,
-        brandingType: custom.brandingType ?? DEFAULT_BRANDING.brandingType,
-    };
+  overrides?: BrandingConfig
+): Required<BrandingConfig> {
+  return {
+    primaryColor:
+      overrides?.primaryColor ?? DEFAULT_BRANDING.primaryColor,
+    secondaryColor:
+      overrides?.secondaryColor ?? DEFAULT_BRANDING.secondaryColor,
+    tertiaryColor:
+      overrides?.tertiaryColor ?? DEFAULT_BRANDING.tertiaryColor,
+    typography: overrides?.typography ?? DEFAULT_BRANDING.typography,
+  };
 }
