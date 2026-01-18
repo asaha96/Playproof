@@ -438,9 +438,16 @@ export class Playproof {
   private async evaluateResult(behaviorData: BehaviorData): Promise<void> {
     const agentDecision = this.getAgentDecision();
     const wasAgentControlled = this.wasAgentControlled();
-    // If agent control was active but no decision came back, we fall back to local verification
-    // instead of failing the user. This ensures resilience against network issues or agent downtime.
-    const effectiveAgentDecision = agentDecision;
+    const fallbackDecision: SessionEndResult | null = wasAgentControlled
+      ? {
+          type: "session_end",
+          decision: "bot",
+          confidence: 0.5,
+          reason: "No agent decision received before session end",
+          timestamp: Date.now(),
+        }
+      : null;
+    const effectiveAgentDecision = agentDecision ?? fallbackDecision;
 
     // Note: Telemetry is now sent via the TelemetrySink abstraction in base-game.ts
     // The hook is called in real-time during the game via TelemetrySink.
