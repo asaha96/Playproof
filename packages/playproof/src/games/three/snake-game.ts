@@ -36,20 +36,20 @@ interface Particle {
 const geometryCache: Map<string, THREE.BufferGeometry> = new Map();
 const materialCache: Map<string, THREE.Material> = new Map();
 
-function getCircleGeometry(radius: number, segments: number = 32): THREE.CircleGeometry {
+function getCircleGeometry(radius: number, segments: number = 32): InstanceType<typeof THREE.CircleGeometry> {
     const key = `circle_${radius}_${segments}`;
     if (!geometryCache.has(key)) {
         geometryCache.set(key, new THREE.CircleGeometry(radius, segments));
     }
-    return geometryCache.get(key) as THREE.CircleGeometry;
+    return geometryCache.get(key) as InstanceType<typeof THREE.CircleGeometry>;
 }
 
-function getRingGeometry(inner: number, outer: number, segments: number = 32): THREE.RingGeometry {
+function getRingGeometry(inner: number, outer: number, segments: number = 32): InstanceType<typeof THREE.RingGeometry> {
     const key = `ring_${inner}_${outer}_${segments}`;
     if (!geometryCache.has(key)) {
         geometryCache.set(key, new THREE.RingGeometry(inner, outer, segments));
     }
-    return geometryCache.get(key) as THREE.RingGeometry;
+    return geometryCache.get(key) as InstanceType<typeof THREE.RingGeometry>;
 }
 
 export class SnakeGame extends ThreeBaseGame {
@@ -845,7 +845,7 @@ export class SnakeGame extends ThreeBaseGame {
         this.particleMesh.geometry.attributes.position.needsUpdate = true;
         this.particleMesh.geometry.attributes.color.needsUpdate = true;
         if (sizes) {
-            (this.particleMesh.geometry.attributes.size as THREE.BufferAttribute).needsUpdate = true;
+            (this.particleMesh.geometry.attributes.size as { needsUpdate: boolean }).needsUpdate = true;
         }
     }
 
