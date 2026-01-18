@@ -184,7 +184,7 @@ export default function DeploymentsPage() {
                 <span>ID</span>
                 <span>Name</span>
                 <span>Type</span>
-                <span>Branding</span>
+                <span>Colors</span>
                 <span>Updated</span>
                 <span className="sr-only">Actions</span>
               </div>
