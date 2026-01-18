@@ -16,7 +16,7 @@ import {
   MINI_GOLF_LEVELS
 } from '@playproof/shared';
 
-import { generateLevel, retryWithFeedback } from '../services/llm.js';
+import { generateLevel, retryWithFeedback, getAvailableModels, AVAILABLE_MODELS } from '../services/llm.js';
 import { simulateMiniGolfLevel, quickSolvabilityCheck } from '../services/simulation.js';
 import { signLevel } from '../services/signing.js';
 import { getCacheKey, getCached, setCache } from '../services/cache.js';
@@ -28,9 +28,28 @@ interface PcgLevelBody {
   gameId: string;
   difficulty?: GridLevelDifficulty;
   seed?: string | number;
+  model?: string;
   rulesOverrides?: Record<string, unknown>;
   skipSimulation?: boolean;
   skipCache?: boolean;
+}
+
+interface BenchmarkBody {
+  difficulty?: GridLevelDifficulty;
+  runsPerModel?: number;
+}
+
+interface BenchmarkResult {
+  model: string;
+  modelId: string;
+  runs: number;
+  successes: number;
+  failures: number;
+  successRate: number;
+  avgLatencyMs: number;
+  minLatencyMs: number;
+  maxLatencyMs: number;
+  errors: string[];
 }
 
 export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
@@ -49,6 +68,7 @@ export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
             gameId: { type: 'string' },
             difficulty: { type: 'string', enum: ['easy', 'medium', 'hard'] },
             seed: { anyOf: [{ type: 'string' }, { type: 'number' }] },
+            model: { type: 'string' },
             rulesOverrides: { type: 'object' },
             skipSimulation: { type: 'boolean' },
             skipCache: { type: 'boolean' }
@@ -57,7 +77,7 @@ export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
       }
     },
     async (request: FastifyRequest<{ Body: PcgLevelBody }>, reply: FastifyReply) => {
-      const { gameId, difficulty = 'medium', seed, skipSimulation = false, skipCache = false } = request.body;
+      const { gameId, difficulty = 'medium', seed, model, skipSimulation = false, skipCache = false } = request.body;
 
       // Only mini-golf supported for now
       if (gameId !== 'mini-golf') {
@@ -81,38 +101,58 @@ export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
       let level: GridLevel | null = null;
       let lastRawResponse = '';
       let attempts = 0;
+      let totalLatencyMs = 0;
+      let usedModel = '';
+      let validationResult: ReturnType<typeof validateMiniGolfGridLevel> | null = null;
+      let lastError = '';
 
       for (let retry = 0; retry < MAX_RETRIES; retry++) {
         attempts++;
-        fastify.log.info({ retry, difficulty, seed }, 'Attempting LLM generation');
+        fastify.log.info({ retry, difficulty, seed, model }, 'Attempting LLM generation');
 
-        const result = retry === 0
-          ? await generateLevel(difficulty, seed?.toString())
-          : await retryWithFeedback(
-              [...validationResult!.errors, ...validationResult!.warnings],
+        // Use retry with feedback if we have previous validation errors, otherwise generate fresh
+        const result = (retry > 0 && validationResult && !validationResult.valid)
+          ? await retryWithFeedback(
+              [...validationResult.errors, ...validationResult.warnings],
               lastRawResponse,
-              difficulty
-            );
+              difficulty,
+              model
+            )
+          : await generateLevel(difficulty, seed?.toString(), model);
+
+        totalLatencyMs += result.latencyMs || 0;
+        usedModel = result.model || '';
 
         if (result.error) {
-          fastify.log.warn({ error: result.error, retry }, 'LLM generation error');
+          lastError = result.error;
+          fastify.log.warn({ error: result.error, retry, latencyMs: result.latencyMs }, 'LLM generation error');
           continue;
         }
 
         if (!result.level) {
-          fastify.log.warn({ retry }, 'Failed to parse level from LLM response');
+          lastError = 'Failed to parse level from LLM response';
+          fastify.log.warn({ retry, latencyMs: result.latencyMs }, 'Failed to parse level from LLM response');
+          lastRawResponse = result.rawResponse;
+          continue;
+        }
+
+        // Defensive check: ensure level has valid grid structure before validation
+        if (!result.level.grid || !Array.isArray(result.level.grid.tiles) || result.level.grid.tiles.length === 0) {
+          lastError = 'Level missing valid grid.tiles array';
+          fastify.log.warn({ retry, latencyMs: result.latencyMs }, 'Level has invalid grid structure');
           lastRawResponse = result.rawResponse;
           continue;
         }
 
         lastRawResponse = result.rawResponse;
-        var validationResult = validateMiniGolfGridLevel(result.level);
+        validationResult = validateMiniGolfGridLevel(result.level);
 
         if (!validationResult.valid) {
           fastify.log.info(
             { 
               errors: validationResult.errors.length, 
               retry,
+              latencyMs: result.latencyMs,
               firstErrors: validationResult.errors.slice(0, 3).map(e => e.message)
             },
             'Level failed validation, retrying'
@@ -124,8 +164,7 @@ export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
         if (!skipSimulation) {
           const solvable = quickSolvabilityCheck(result.level);
           if (!solvable) {
-            fastify.log.info({ retry }, 'Level not solvable, retrying');
-            // Add unsolvable as an error for retry prompt
+            fastify.log.info({ retry, latencyMs: result.latencyMs }, 'Level not solvable, retrying');
             validationResult.errors.push({
               stage: 'simulation',
               code: 'simulation.unsolvable',
@@ -137,14 +176,14 @@ export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
         }
 
         level = result.level;
+        fastify.log.info({ retry, latencyMs: result.latencyMs, model: usedModel }, 'Level generated successfully');
         break;
       }
 
       // Fallback to golden level if all retries failed
       if (!level) {
-        fastify.log.warn({ attempts }, 'All retries failed, using fallback level');
+        fastify.log.warn({ attempts, totalLatencyMs }, 'All retries failed, using fallback level');
         
-        // Pick a golden level based on difficulty
         const fallbackLevels = MINI_GOLF_LEVELS.filter(
           l => l.rules?.difficulty === difficulty
         );
@@ -163,7 +202,7 @@ export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
       // Sign the level
       const signature = signLevel(level);
 
-      const response: PcgLevelResponse = {
+      const response: PcgLevelResponse & { meta?: { model: string; latencyMs: number; attempts: number } } = {
         gridLevel: level,
         validationReport: validation,
         lintReport: lint,
@@ -172,6 +211,15 @@ export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
         signature
       };
 
+      // Add metadata
+      if (usedModel) {
+        (response as any).meta = {
+          model: usedModel,
+          latencyMs: totalLatencyMs,
+          attempts
+        };
+      }
+
       // Cache the result
       if (!skipCache && seed) {
         const cacheKey = getCacheKey(gameId, difficulty, seed);
@@ -179,6 +227,118 @@ export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       return reply.send(response);
+    }
+  );
+
+  /**
+   * GET /pcg/models
+   * List available LLM models
+   */
+  fastify.get('/pcg/models', async (_request: FastifyRequest, reply: FastifyReply) => {
+    return reply.send({
+      models: getAvailableModels(),
+      default: 'gpt-5-mini'
+    });
+  });
+
+  /**
+   * POST /pcg/benchmark
+   * Benchmark all models for level generation
+   */
+  fastify.post<{ Body: BenchmarkBody }>(
+    '/pcg/benchmark',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          properties: {
+            difficulty: { type: 'string', enum: ['easy', 'medium', 'hard'] },
+            runsPerModel: { type: 'number', minimum: 1, maximum: 10 }
+          }
+        }
+      }
+    },
+    async (request: FastifyRequest<{ Body: BenchmarkBody }>, reply: FastifyReply) => {
+      const { difficulty = 'easy', runsPerModel = 3 } = request.body;
+      
+      const results: BenchmarkResult[] = [];
+      const modelIds = Object.keys(AVAILABLE_MODELS);
+
+      for (const modelId of modelIds) {
+        const modelConfig = AVAILABLE_MODELS[modelId];
+        fastify.log.info({ modelId, modelName: modelConfig.name }, 'Benchmarking model');
+
+        const latencies: number[] = [];
+        const errors: string[] = [];
+        let successes = 0;
+        let failures = 0;
+
+        for (let run = 0; run < runsPerModel; run++) {
+          const result = await generateLevel(difficulty, undefined, modelId);
+          
+          if (result.latencyMs) {
+            latencies.push(result.latencyMs);
+          }
+
+          if (result.error) {
+            failures++;
+            if (!errors.includes(result.error.slice(0, 100))) {
+              errors.push(result.error.slice(0, 100));
+            }
+            continue;
+          }
+
+          if (!result.level) {
+            failures++;
+            errors.push('Failed to parse level');
+            continue;
+          }
+
+          const validation = validateMiniGolfGridLevel(result.level);
+          if (validation.valid) {
+            successes++;
+          } else {
+            failures++;
+            const firstError = validation.errors[0]?.message || 'Unknown validation error';
+            if (!errors.includes(firstError)) {
+              errors.push(firstError);
+            }
+          }
+        }
+
+        const avgLatency = latencies.length > 0 
+          ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length)
+          : 0;
+
+        results.push({
+          model: modelConfig.name,
+          modelId,
+          runs: runsPerModel,
+          successes,
+          failures,
+          successRate: Math.round((successes / runsPerModel) * 100),
+          avgLatencyMs: avgLatency,
+          minLatencyMs: latencies.length > 0 ? Math.min(...latencies) : 0,
+          maxLatencyMs: latencies.length > 0 ? Math.max(...latencies) : 0,
+          errors: errors.slice(0, 3)
+        });
+      }
+
+      // Sort by success rate (desc), then by avg latency (asc)
+      results.sort((a, b) => {
+        if (b.successRate !== a.successRate) return b.successRate - a.successRate;
+        return a.avgLatencyMs - b.avgLatencyMs;
+      });
+
+      return reply.send({
+        benchmark: {
+          difficulty,
+          runsPerModel,
+          timestamp: new Date().toISOString()
+        },
+        results,
+        recommendation: results[0]?.modelId || 'gpt-5-mini'
+      });
     }
   );
 

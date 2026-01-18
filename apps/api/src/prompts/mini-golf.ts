@@ -1,8 +1,140 @@
 /**
  * LLM Prompt Pack for Mini-Golf GridLevel Generation
+ * Includes JSON schema for structured outputs
  */
 
 import type { GridLevel, GridLevelDifficulty, GridLevelIssue } from '@playproof/shared';
+
+/**
+ * JSON Schema for GridLevel - used for structured outputs
+ * This ensures the LLM always returns valid JSON that matches our schema
+ */
+export const GRID_LEVEL_JSON_SCHEMA = {
+  name: "grid_level",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      schema: {
+        type: "string",
+        enum: ["playproof.gridlevel.v1"],
+        description: "Schema identifier"
+      },
+      gameId: {
+        type: "string", 
+        enum: ["mini-golf"],
+        description: "Game identifier"
+      },
+      version: {
+        type: "integer",
+        description: "Level version number"
+      },
+      grid: {
+        type: "object",
+        properties: {
+          cols: {
+            type: "integer",
+            enum: [20],
+            description: "Number of columns (always 20)"
+          },
+          rows: {
+            type: "integer",
+            enum: [14],
+            description: "Number of rows (always 14)"
+          },
+          tiles: {
+            type: "array",
+            items: {
+              type: "string",
+              minLength: 20,
+              maxLength: 20,
+              description: "Row of 20 tile characters"
+            },
+            minItems: 14,
+            maxItems: 14,
+            description: "Array of exactly 14 tile rows, each exactly 20 characters"
+          }
+        },
+        required: ["cols", "rows", "tiles"],
+        additionalProperties: false
+      },
+      entities: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            type: { type: "string" },
+            id: { type: "string" },
+            gridPos: {
+              type: "object",
+              properties: {
+                col: { type: "integer" },
+                row: { type: "integer" }
+              },
+              required: ["col", "row"],
+              additionalProperties: false
+            },
+            config: { 
+              type: "object",
+              properties: {},
+              additionalProperties: false,
+              description: "Optional configuration (empty for now)"
+            }
+          },
+          required: ["type", "id", "gridPos", "config"],
+          additionalProperties: false
+        },
+        description: "Optional entities like portals or moving blocks"
+      },
+      rules: {
+        type: "object",
+        properties: {
+          difficulty: {
+            type: "string",
+            enum: ["easy", "medium", "hard"],
+            description: "Level difficulty"
+          },
+          maxStrokes: {
+            type: "integer",
+            description: "Max strokes for par"
+          },
+          timeLimit: {
+            type: "integer", 
+            description: "Time limit in seconds"
+          }
+        },
+        required: ["difficulty", "maxStrokes", "timeLimit"],
+        additionalProperties: false
+      },
+      design: {
+        type: "object",
+        properties: {
+          intent: {
+            type: "string",
+            description: "Design philosophy description"
+          },
+          playerHint: {
+            type: "string",
+            description: "Hint for the player"
+          },
+          solutionSketch: {
+            type: "array",
+            items: { type: "string" },
+            description: "1-3 sentences describing solution approach"
+          },
+          aestheticNotes: {
+            type: "string",
+            description: "Visual design notes"
+          }
+        },
+        required: ["intent", "playerHint", "solutionSketch", "aestheticNotes"],
+        additionalProperties: false
+      }
+    },
+    required: ["schema", "gameId", "version", "grid", "entities", "rules", "design"],
+    additionalProperties: false
+  }
+} as const;
 
 export const TILE_LEGEND = `
 Tile Legend:
