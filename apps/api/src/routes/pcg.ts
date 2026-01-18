@@ -1,6 +1,10 @@
 /**
  * PCG Routes
- * POST /pcg/level - Generate a new level
+ * POST /pcg/level - Generate a new level using 2-stage pipeline
+ * 
+ * 2-stage pipeline:
+ * 1. Generate intent (design brief) - higher temperature for creativity
+ * 2. Generate level based on intent - controlled temperature
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
@@ -16,10 +20,12 @@ import {
   MINI_GOLF_LEVELS
 } from '@playproof/shared';
 
-import { generateLevel, retryWithFeedback, getAvailableModels, AVAILABLE_MODELS, setLogger } from '../services/llm.js';
+import { generateLevel, retryWithFeedback, generateLevelIntent, getAvailableModels, AVAILABLE_MODELS, setLogger } from '../services/llm.js';
+import type { LevelIntent } from '../prompts/mini-golf.js';
 import { simulateMiniGolfLevel, quickSolvabilityCheck } from '../services/simulation.js';
 import { signLevel } from '../services/signing.js';
 import { getCacheKey, getCached, setCache } from '../services/cache.js';
+import { sanitizeGridLevel } from '../services/sanitizer.js';
 
 const MAX_RETRIES = 5;
 const RULESET_VERSION = 1;
@@ -52,13 +58,24 @@ interface BenchmarkResult {
   errors: string[];
 }
 
+// Extended debug info for 2-stage pipeline
+interface DebugInfo {
+  fellBack: boolean;
+  reason: string;
+  lastValidationErrors: string[];
+  intent?: LevelIntent | null;
+  intentLatencyMs?: number;
+  intentTemperature?: number;
+  generationTemperatures?: number[];
+}
+
 export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
   // Inject logger into LLM service
   setLogger(fastify.log);
   
   /**
    * POST /pcg/level
-   * Generate a procedurally generated level
+   * Generate a procedurally generated level using 2-stage pipeline
    */
   fastify.post<{ Body: PcgLevelBody }>(
     '/pcg/level',
@@ -80,7 +97,8 @@ export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
       }
     },
     async (request: FastifyRequest<{ Body: PcgLevelBody }>, reply: FastifyReply) => {
-      const { gameId, difficulty = 'medium', seed, model, skipSimulation = false, skipCache = false } = request.body;
+      const { gameId, difficulty = 'medium', model, skipSimulation = false, skipCache = false } = request.body;
+      // NOTE: seed is intentionally ignored - we always generate fresh, random levels
 
       // Only mini-golf supported for now
       if (gameId !== 'mini-golf') {
@@ -90,28 +108,51 @@ export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
         });
       }
 
-      // Check cache first
-      if (!skipCache) {
-        const cacheKey = getCacheKey(gameId, difficulty, seed);
-        const cached = getCached(cacheKey);
-        if (cached) {
-          fastify.log.info({ cacheKey }, 'Cache hit');
-          return reply.send(cached);
-        }
+      // NOTE: Cache is disabled for now since we want every request to be unique
+      // If caching is needed in the future, use a hash of intent + difficulty
+
+      // ========================================================================
+      // STAGE 1: Generate Intent (design brief)
+      // ========================================================================
+      fastify.log.info({ difficulty, model }, 'Stage 1: Generating level intent');
+      
+      const intentResult = await generateLevelIntent(difficulty, model);
+      const intent: LevelIntent | null = intentResult.intent;
+      
+      const debugInfo: DebugInfo = {
+        fellBack: false,
+        reason: '',
+        lastValidationErrors: [],
+        intent: intent,
+        intentLatencyMs: intentResult.latencyMs,
+        intentTemperature: intentResult.temperature,
+        generationTemperatures: []
+      };
+      
+      if (!intent) {
+        fastify.log.warn({ error: intentResult.error }, 'Failed to generate intent, proceeding without intent');
+      } else {
+        fastify.log.info({ 
+          intent: intent.intent,
+          layoutDirective: intent.layoutDirective,
+          temperature: intentResult.temperature
+        }, 'Intent generated successfully');
       }
 
-      // Try LLM generation with retry loop
+      // ========================================================================
+      // STAGE 2: Generate Level based on Intent
+      // ========================================================================
       let level: GridLevel | null = null;
       let lastRawResponse = '';
       let attempts = 0;
-      let totalLatencyMs = 0;
-      let usedModel = '';
+      let totalLatencyMs = intentResult.latencyMs || 0;
+      let usedModel = intentResult.model || '';
       let validationResult: ReturnType<typeof validateMiniGolfGridLevel> | null = null;
       let lastError = '';
 
       for (let retry = 0; retry < MAX_RETRIES; retry++) {
         attempts++;
-        fastify.log.info({ retry, difficulty, seed, model }, 'Attempting LLM generation');
+        fastify.log.info({ retry, difficulty, model, hasIntent: !!intent }, 'Stage 2: Attempting level generation');
 
         // Use retry with feedback if we have previous validation errors, otherwise generate fresh
         const result = (retry > 0 && validationResult && !validationResult.valid)
@@ -119,9 +160,15 @@ export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
               [...validationResult.errors, ...validationResult.warnings],
               lastRawResponse,
               difficulty,
+              intent,  // Pass intent to maintain consistency across retries
               model
             )
-          : await generateLevel(difficulty, seed?.toString(), model);
+          : await generateLevel(difficulty, intent, model);
+
+        // Track temperatures used
+        if (result.temperature) {
+          debugInfo.generationTemperatures!.push(result.temperature);
+        }
 
         totalLatencyMs += result.latencyMs || 0;
         usedModel = result.model || '';
@@ -148,15 +195,48 @@ export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
         }
 
         lastRawResponse = result.rawResponse;
-        validationResult = validateMiniGolfGridLevel(result.level);
+        
+        // Log the full grid for debugging (one row per line for readability)
+        if (result.level?.grid?.tiles) {
+          const tiles = result.level.grid.tiles;
+          const allTiles = tiles.join('');
+          const ballMatch = allTiles.indexOf('B');
+          const holeMatch = allTiles.indexOf('H');
+          const ballPos = ballMatch >= 0 ? { col: ballMatch % 20, row: Math.floor(ballMatch / 20) } : null;
+          const holePos = holeMatch >= 0 ? { col: holeMatch % 20, row: Math.floor(holeMatch / 20) } : null;
+          
+          // Log grid as separate lines for readability
+          fastify.log.info({ retry, model: usedModel, ballPos, holePos, temperature: result.temperature }, 'LLM generated grid:');
+          tiles.forEach((row, i) => {
+            fastify.log.info(`  row ${i.toString().padStart(2, '0')}: ${row}`);
+          });
+        }
+        
+        // Apply sanitizer to fix common LLM mistakes before validation
+        const sanitized = sanitizeGridLevel(result.level);
+        if (sanitized.fixes.length > 0) {
+          fastify.log.info({ fixes: sanitized.fixes }, 'Sanitizer applied fixes');
+        }
+        
+        validationResult = validateMiniGolfGridLevel(sanitized.level);
 
         if (!validationResult.valid) {
+          // Capture validation errors for debug.reason
+          lastError = validationResult.errors.slice(0, 3).map(e => `${e.code}: ${e.message}`).join('; ');
+          
+          // Enhanced logging for validation failures
+          const errorDetails = validationResult.errors.map(e => ({
+            code: e.code,
+            message: e.message,
+            data: e.data
+          }));
+          
           fastify.log.info(
             { 
               errors: validationResult.errors.length, 
               retry,
               latencyMs: result.latencyMs,
-              firstErrors: validationResult.errors.slice(0, 3).map(e => e.message)
+              errorDetails
             },
             'Level failed validation, retrying'
           );
@@ -165,7 +245,7 @@ export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
 
         // Quick solvability check (optional)
         if (!skipSimulation) {
-          const solvable = quickSolvabilityCheck(result.level);
+          const solvable = quickSolvabilityCheck(sanitized.level);
           if (!solvable) {
             fastify.log.info({ retry, latencyMs: result.latencyMs }, 'Level not solvable, retrying');
             validationResult.errors.push({
@@ -174,17 +254,17 @@ export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
               message: 'Level could not be solved in simulation. Make the path to the hole more accessible.',
               severity: 'error'
             });
+            lastError = 'simulation.unsolvable: Level could not be solved';
             continue;
           }
         }
 
-        level = result.level;
-        fastify.log.info({ retry, latencyMs: result.latencyMs, model: usedModel }, 'Level generated successfully');
+        level = sanitized.level;
+        fastify.log.info({ retry, latencyMs: result.latencyMs, model: usedModel, temperature: result.temperature }, 'Level generated successfully');
         break;
       }
 
       // Fallback to golden level if all retries failed
-      let debugInfo: { fellBack: boolean; reason: string; lastValidationErrors: string[] } | undefined;
       if (!level) {
         fastify.log.warn({ attempts, totalLatencyMs, lastError }, 'All retries failed, using fallback level');
         
@@ -193,12 +273,10 @@ export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
         );
         level = fallbackLevels[0] || MINI_GOLF_LEVELS[0];
         
-        // Add debug info about why we fell back
-        debugInfo = {
-          fellBack: true,
-          reason: lastError,
-          lastValidationErrors: validationResult?.errors?.slice(0, 5).map(e => e.message) || []
-        };
+        // Update debug info for fallback
+        debugInfo.fellBack = true;
+        debugInfo.reason = lastError;
+        debugInfo.lastValidationErrors = validationResult?.errors?.slice(0, 5).map(e => e.message) || [];
       }
 
       // Final validation and lint
@@ -213,7 +291,15 @@ export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
       // Sign the level
       const signature = signLevel(level);
 
-      const response: PcgLevelResponse & { meta?: { model: string; latencyMs: number; attempts: number }; debug?: typeof debugInfo } = {
+      const response: PcgLevelResponse & { 
+        meta?: { 
+          model: string; 
+          latencyMs: number; 
+          attempts: number;
+          intentLatencyMs?: number;
+        }; 
+        debug?: DebugInfo 
+      } = {
         gridLevel: level,
         validationReport: validation,
         lintReport: lint,
@@ -227,20 +313,13 @@ export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
         (response as any).meta = {
           model: usedModel,
           latencyMs: totalLatencyMs,
-          attempts
+          attempts,
+          intentLatencyMs: intentResult.latencyMs
         };
       }
       
-      // Add debug info if we fell back
-      if (debugInfo) {
-        (response as any).debug = debugInfo;
-      }
-
-      // Cache the result
-      if (!skipCache && seed) {
-        const cacheKey = getCacheKey(gameId, difficulty, seed);
-        setCache(cacheKey, response);
-      }
+      // Always add debug info for observability (includes intent, temperatures)
+      (response as any).debug = debugInfo;
 
       return reply.send(response);
     }
@@ -290,7 +369,8 @@ export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
         let failures = 0;
 
         for (let run = 0; run < runsPerModel; run++) {
-          const result = await generateLevel(difficulty, undefined, modelId);
+          // Benchmark uses single-stage generation for speed
+          const result = await generateLevel(difficulty, null, modelId);
           
           if (result.latencyMs) {
             latencies.push(result.latencyMs);
