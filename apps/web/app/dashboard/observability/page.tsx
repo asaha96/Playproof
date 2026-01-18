@@ -16,6 +16,14 @@ import { Badge } from "@/components/ui/badge";
 import { Eye, Pause, Play, Trash2, ArrowUp, RotateCcw, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 import type { PointerTelemetryEvent } from "playproof";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { GameId } from "playproof";
 
 const MAX_EVENTS = 1000; // Cap to prevent memory issues
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
@@ -52,6 +60,7 @@ export default function ObservabilityPage() {
   const [autoScroll, setAutoScroll] = useState(true);
   const [isLoaded, setIsLoaded] = useState(false);
   const [resetKey, setResetKey] = useState(0);
+  const [selectedGame, setSelectedGame] = useState<GameId>("bubble-pop");
   
   // Stats - track raw counts to avoid capping issues
   const [stats, setStats] = useState({
@@ -157,7 +166,7 @@ export default function ObservabilityPage() {
         const instance = new Playproof({
           containerId,
           confidenceThreshold: 0.7,
-          gameId: "bubble-pop",
+          gameId: selectedGame,
           gameDuration: 30000, // 30 seconds for observability testing
           logTelemetry: false, // Set to true for console debugging
           theme: {
@@ -346,7 +355,7 @@ export default function ObservabilityPage() {
       mounted = false;
       cleanup();
     };
-  }, [containerId, handleTelemetryBatch, cleanup, resetKey]);
+  }, [containerId, handleTelemetryBatch, cleanup, resetKey, selectedGame]);
 
   // Auto-scroll effect (scroll to top for newest events)
   useEffect(() => {
@@ -374,7 +383,14 @@ export default function ObservabilityPage() {
   // Reset the entire SDK
   const handleReset = () => {
     handleClear();
+    setWoodwideResult(null);
     setResetKey(prev => prev + 1);
+  };
+
+  // Handle game selection change
+  const handleGameChange = (gameId: GameId) => {
+    setSelectedGame(gameId);
+    handleReset(); // Reset SDK when game changes
   };
 
   // Format timestamp for display
@@ -414,6 +430,17 @@ export default function ObservabilityPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Select value={selectedGame} onValueChange={handleGameChange}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Select game" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bubble-pop">Bubble Pop</SelectItem>
+                <SelectItem value="osu">OSU</SelectItem>
+                <SelectItem value="snake">Snake</SelectItem>
+                <SelectItem value="random">Random</SelectItem>
+              </SelectContent>
+            </Select>
             <Button
               variant={autoScroll ? "default" : "outline"}
               size="sm"
