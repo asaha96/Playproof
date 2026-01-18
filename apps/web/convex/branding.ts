@@ -16,6 +16,9 @@ export type BrandingConfig = {
   successColor?: string;
   errorColor?: string;
   borderColor?: string;
+  // Layout
+  borderRadius?: number;
+  spacing?: number;
   // Typography
   typography?: string;
 };
@@ -37,8 +40,11 @@ export const DEFAULT_BRANDING: Required<BrandingConfig> = {
   successColor: "#10b981",
   errorColor: "#ef4444",
   borderColor: "#3f3f5a",
+  // Layout
+  borderRadius: 0,
+  spacing: 20,
   // Typography
-  typography: "Nunito Sans",
+  typography: "Inter",
 };
 
 /**
@@ -59,6 +65,8 @@ export function resolveBranding(
     successColor: overrides?.successColor ?? DEFAULT_BRANDING.successColor,
     errorColor: overrides?.errorColor ?? DEFAULT_BRANDING.errorColor,
     borderColor: overrides?.borderColor ?? DEFAULT_BRANDING.borderColor,
+    borderRadius: overrides?.borderRadius ?? DEFAULT_BRANDING.borderRadius,
+    spacing: overrides?.spacing ?? DEFAULT_BRANDING.spacing,
     typography: overrides?.typography ?? DEFAULT_BRANDING.typography,
   };
 }

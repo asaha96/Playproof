@@ -2,6 +2,22 @@
  * PlayProof SDK Type Definitions
  */
 
+// Available font families in the SDK
+export const PLAYPROOF_FONTS = [
+    'Inter',
+    'Nunito Sans',
+    'Poppins',
+    'Roboto',
+    'Open Sans',
+    'Lato',
+    'Montserrat',
+    'Source Sans 3',
+    'Raleway',
+    'Work Sans',
+] as const;
+
+export type PlayproofFontFamily = typeof PLAYPROOF_FONTS[number];
+
 // Theme configuration
 export interface PlayproofTheme {
     primary?: string;
@@ -14,6 +30,10 @@ export interface PlayproofTheme {
     success?: string;
     error?: string;
     border?: string;
+    // Layout
+    borderRadius?: number;
+    spacing?: number;
+    fontFamily?: PlayproofFontFamily;
 }
 
 // Behavior data collected during verification

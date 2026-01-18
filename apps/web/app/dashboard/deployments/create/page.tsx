@@ -36,7 +36,7 @@ import {
   type PlayproofCaptchaResult,
 } from "@/components/playproof-captcha";
 import { api } from "@/convex/_generated/api";
-import { DEFAULT_BRANDING } from "@/convex/branding";
+import { useThemeColors, LIGHT_THEME_COLORS, PLAYPROOF_FONTS, type PlayproofFontFamily } from "@/hooks/useThemeColors";
 
 type DeploymentType = "bubble-pop" | "golf" | "basketball" | "archery";
 
@@ -45,14 +45,6 @@ const deploymentTypes: Array<{ value: DeploymentType; label: string }> = [
   { value: "golf", label: "Golf" },
   { value: "basketball", label: "Basketball" },
   { value: "archery", label: "Archery" },
-];
-
-const typefaces: Array<{ value: string; label: string }> = [
-  { value: "Nunito Sans", label: "Nunito Sans" },
-  { value: "Space Grotesk", label: "Space Grotesk" },
-  { value: "Sora", label: "Sora" },
-  { value: "DM Sans", label: "DM Sans" },
-  { value: "IBM Plex Sans", label: "IBM Plex Sans" },
 ];
 
 type ColorFieldProps = {
@@ -88,26 +80,28 @@ function ColorField({ id, label, value, onChange }: ColorFieldProps) {
 export default function CreateDeploymentPage() {
   const router = useRouter();
   const createDeployment = useMutation(api.deployments.create);
+  const themeColors = useThemeColors();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isReady, setIsReady] = React.useState(false);
 
-  // Form state
+  // Form state - start with light theme defaults (Inter as default font)
   const [formState, setFormState] = React.useState({
     name: "",
     type: "bubble-pop" as DeploymentType,
     isActive: true,
-    typography: DEFAULT_BRANDING.typography,
-    // All 10 SDK theme colors
-    primaryColor: DEFAULT_BRANDING.primaryColor,
-    secondaryColor: DEFAULT_BRANDING.secondaryColor,
-    backgroundColor: DEFAULT_BRANDING.backgroundColor,
-    surfaceColor: DEFAULT_BRANDING.surfaceColor,
-    textColor: DEFAULT_BRANDING.textColor,
-    textMutedColor: DEFAULT_BRANDING.textMutedColor,
-    accentColor: DEFAULT_BRANDING.accentColor,
-    successColor: DEFAULT_BRANDING.successColor,
-    errorColor: DEFAULT_BRANDING.errorColor,
-    borderColor: DEFAULT_BRANDING.borderColor,
+    ...LIGHT_THEME_COLORS,
   });
+
+  // Update form with actual theme colors once loaded
+  React.useEffect(() => {
+    if (themeColors && !isReady) {
+      setFormState((prev) => ({
+        ...prev,
+        ...themeColors,
+      }));
+      setIsReady(true);
+    }
+  }, [themeColors, isReady]);
 
   // Preview state
   const [resetKey, setResetKey] = React.useState(0);
@@ -150,7 +144,9 @@ export default function CreateDeploymentPage() {
           successColor: formState.successColor,
           errorColor: formState.errorColor,
           borderColor: formState.borderColor,
-          typography: formState.typography,
+          borderRadius: formState.borderRadius,
+          spacing: formState.spacing,
+          typography: formState.fontFamily,
         },
       });
       router.push("/dashboard/deployments");
@@ -256,34 +252,74 @@ export default function CreateDeploymentPage() {
           </CardContent>
         </Card>
 
-        {/* Typography */}
+        {/* Layout & Typography */}
         <Card className="overflow-visible ring-0">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Type className="size-4" />
-              Typography
+              Layout & Typography
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-xs font-medium">Typeface</Label>
+              <Label className="text-xs font-medium">Font Family</Label>
               <Select
-                value={formState.typography}
+                value={formState.fontFamily}
                 onValueChange={(v) =>
-                  v && setFormState((prev) => ({ ...prev, typography: v }))
+                  v && setFormState((prev) => ({ ...prev, fontFamily: v as PlayproofFontFamily }))
                 }
               >
                 <SelectTrigger className="h-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {typefaces.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
+                  {PLAYPROOF_FONTS.map((font) => (
+                    <SelectItem key={font} value={font}>
+                      {font}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-xs font-medium">Border Radius</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={32}
+                    className="h-9"
+                    value={formState.borderRadius}
+                    onChange={(e) =>
+                      setFormState((prev) => ({
+                        ...prev,
+                        borderRadius: parseInt(e.target.value) || 0,
+                      }))
+                    }
+                  />
+                  <span className="text-xs text-muted-foreground">px</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-medium">Spacing</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={32}
+                    className="h-9"
+                    value={formState.spacing}
+                    onChange={(e) =>
+                      setFormState((prev) => ({
+                        ...prev,
+                        spacing: parseInt(e.target.value) || 0,
+                      }))
+                    }
+                  />
+                  <span className="text-xs text-muted-foreground">px</span>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -501,6 +537,9 @@ export default function CreateDeploymentPage() {
                 key={`desktop-${resetKey}`}
                 resetKey={resetKey}
                 gameType={getGameType(formState.type)}
+                borderRadius={formState.borderRadius}
+                spacing={formState.spacing}
+                fontFamily={formState.fontFamily}
                 primaryColor={formState.primaryColor}
                 secondaryColor={formState.secondaryColor}
                 backgroundColor={formState.backgroundColor}
@@ -524,6 +563,9 @@ export default function CreateDeploymentPage() {
                 key={`mobile-${resetKey}`}
                 resetKey={resetKey}
                 gameType={getGameType(formState.type)}
+                borderRadius={formState.borderRadius}
+                spacing={formState.spacing}
+                fontFamily={formState.fontFamily}
                 primaryColor={formState.primaryColor}
                 secondaryColor={formState.secondaryColor}
                 backgroundColor={formState.backgroundColor}

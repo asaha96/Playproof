@@ -8,14 +8,17 @@ import { Playproof } from './playproof';
 export { Playproof };
 export default Playproof;
 
-// Re-export types for consumers
+// Re-export types and constants for consumers
 export type {
   PlayproofTheme,
   PlayproofConfig,
   VerificationResult,
   BehaviorData,
-  GameId
+  GameId,
+  PlayproofFontFamily
 } from './types';
+
+export { PLAYPROOF_FONTS } from './types';
 
 // Expose globally for script tag usage
 declare global {

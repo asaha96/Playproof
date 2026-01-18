@@ -15,6 +15,22 @@ export interface PlayproofCaptchaResult {
     }
 }
 
+// Available font families
+export const PLAYPROOF_FONTS = [
+    'Inter',
+    'Nunito Sans',
+    'Poppins',
+    'Roboto',
+    'Open Sans',
+    'Lato',
+    'Montserrat',
+    'Source Sans 3',
+    'Raleway',
+    'Work Sans',
+] as const
+
+export type PlayproofFontFamily = typeof PLAYPROOF_FONTS[number]
+
 export interface PlayproofCaptchaProps {
     /** Threshold for verification success (0-1) */
     confidenceThreshold?: number
@@ -26,6 +42,10 @@ export interface PlayproofCaptchaProps {
     timer?: number
     /** Border radius in pixels */
     borderRadius?: number
+    /** Spacing in pixels */
+    spacing?: number
+    /** Font family */
+    fontFamily?: PlayproofFontFamily
     // Core colors
     /** Primary theme color */
     primaryColor?: string
@@ -69,6 +89,8 @@ export function PlayproofCaptcha({
     difficulty = "normal",
     timer,
     borderRadius = 12,
+    spacing = 16,
+    fontFamily = "Inter",
     // Core colors
     primaryColor = "#6366f1",
     secondaryColor = "#8b5cf6",
@@ -146,6 +168,9 @@ export function PlayproofCaptcha({
                         success: successColor,
                         error: errorColor,
                         border: borderColor,
+                        borderRadius,
+                        spacing,
+                        fontFamily,
                     },
                     onSuccess: (result: PlayproofCaptchaResult) => {
                         onSuccess?.(result)
@@ -183,6 +208,9 @@ export function PlayproofCaptcha({
         confidenceThreshold,
         gameType,
         gameDuration,
+        borderRadius,
+        spacing,
+        fontFamily,
         primaryColor,
         secondaryColor,
         backgroundColor,
@@ -199,9 +227,11 @@ export function PlayproofCaptcha({
         cleanup,
     ])
 
-    // Apply custom border radius via style
+    // Apply custom layout properties via style
     const containerStyle: React.CSSProperties = {
         "--playproof-border-radius": `${borderRadius}px`,
+        "--playproof-spacing": `${spacing}px`,
+        "--playproof-font-family": `'${fontFamily}', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`,
     } as React.CSSProperties
 
     return (

@@ -16,6 +16,9 @@ const brandingFields = {
   successColor: v.optional(v.string()),
   errorColor: v.optional(v.string()),
   borderColor: v.optional(v.string()),
+  // Layout
+  borderRadius: v.optional(v.number()),
+  spacing: v.optional(v.number()),
   // Typography
   typography: v.optional(v.string()),
 };
