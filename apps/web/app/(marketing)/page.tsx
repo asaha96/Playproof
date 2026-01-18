@@ -134,7 +134,7 @@ export default async function LandingPage() {
   return (
     <div className="flex flex-col">
       {/* Hero Section */}
-      <section className="relative flex flex-col items-center justify-center px-6 py-24 md:py-32 lg:py-40">
+      <section className="relative flex flex-col items-center justify-center px-6 py-12 md:py-16 lg:py-20">
         {/* Background gradient */}
         <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
           <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2">
@@ -144,6 +144,13 @@ export default async function LandingPage() {
             <div className="h-[400px] w-[400px] rounded-full bg-chart-2/10 blur-3xl" />
           </div>
         </div>
+
+        <h1 
+          className="mb-6 text-center font-sans text-white"
+          style={{ fontSize: 'clamp(2.5rem, 8vw, 5rem)', fontWeight: 900, letterSpacing: '-0.03em', lineHeight: 1 }}
+        >
+          PlayProof
+        </h1>
 
         <Badge variant="secondary" className="mb-6">
           <span className="mr-1.5 inline-block size-1.5 rounded-full bg-primary animate-pulse" />
@@ -196,7 +203,7 @@ export default async function LandingPage() {
           </div>
           <Separator orientation="vertical" className="hidden h-12 md:block" />
           <div className="text-center">
-            <div className="text-3xl font-bold text-primary">&lt;500ms</div>
+            <div className="text-3xl font-bold text-primary">&lt;5000ms</div>
             <div className="text-sm text-muted-foreground">Avg. Verification Time</div>
           </div>
           <Separator orientation="vertical" className="hidden h-12 md:block" />
@@ -208,7 +215,7 @@ export default async function LandingPage() {
       </section>
 
       {/* Features Section */}
-      <section className="border-t bg-muted/30 px-6 py-24">
+      <section className="border-t bg-muted/30 px-6 py-8">
         <div className="mx-auto max-w-6xl">
           <div className="text-center">
             <Badge variant="outline" className="mb-4">Features</Badge>
