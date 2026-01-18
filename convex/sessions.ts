@@ -1,6 +1,16 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
+// Threshold for human classification - used as fallback for legacy sessions without `passed` field
+// suspectScore represents human probability (0.0 = likely bot, 1.0 = likely human)
+const BOT_THRESHOLD = 0.6;
+
+// Helper to determine if a session passed (human) or not (bot)
+// Uses the stored `passed` field if available, otherwise falls back to threshold
+function sessionPassed(session: { passed?: boolean; suspectScore: number }): boolean {
+  return session.passed !== undefined ? session.passed : session.suspectScore >= BOT_THRESHOLD;
+}
+
 const clientInfoInput = v.object({
   deviceType: v.optional(v.string()),
   deviceVendor: v.optional(v.string()),
@@ -30,8 +40,6 @@ const clientInfoInput = v.object({
   ),
 });
 
-const sessionResultInput = v.union(v.literal("human"), v.literal("bot"));
-
 export const recent = query({
   args: {
     limit: v.optional(v.number()),
@@ -50,11 +58,14 @@ export const recent = query({
         return {
           _id: session._id,
           deploymentId: session.deploymentId,
-          deploymentName: session.deploymentName ?? deployment?.name ?? "Unknown deployment",
+          deploymentName: deployment?.name ?? "Unknown deployment",
+          suspectScore: session.suspectScore,
+          scorePercent: Math.round(session.suspectScore * 100),
           startAt: session.startAt,
           endAt: session.endAt,
           durationMs: session.durationMs,
-          result: session.result,
+          passed: sessionPassed(session),
+          result: sessionPassed(session) ? "Human" : "Bot",
         };
       })
     );
@@ -72,8 +83,8 @@ export const stats = query({
     const sessions = await ctx.db.query("sessions").collect();
 
     const totalSessions = sessions.length;
-    const humanSessions = sessions.filter((s) => s.result === "human").length;
-    const botDetections = sessions.filter((s) => s.result === "bot").length;
+    const humanSessions = sessions.filter((s) => sessionPassed(s)).length;
+    const botDetections = sessions.filter((s) => !sessionPassed(s)).length;
 
     const humanPassRate = totalSessions > 0 ? humanSessions / totalSessions : 0;
     const avgSessionMs =
@@ -92,7 +103,7 @@ export const stats = query({
         byDeployment[deploymentId] = { count: 0, passCount: 0 };
       }
       byDeployment[deploymentId].count++;
-      if (s.result === "human") {
+      if (sessionPassed(s)) {
         byDeployment[deploymentId].passCount++;
       }
     }
@@ -151,7 +162,7 @@ export const timeSeries = query({
 
       const entry = hoursMap.get(hourStr)!;
       entry.total++;
-      if (s.result === "human") {
+      if (sessionPassed(s)) {
         entry.humans++;
       } else {
         entry.bots++;
@@ -176,7 +187,7 @@ export const create = mutation({
     startAt: v.number(),
     endAt: v.number(),
     durationMs: v.number(),
-    result: sessionResultInput,
+    suspectScore: v.number(),
     clientInfo: v.optional(clientInfoInput),
   },
   handler: async (ctx, args) => {
@@ -187,11 +198,10 @@ export const create = mutation({
 
     const sessionId = await ctx.db.insert("sessions", {
       deploymentId: args.deploymentId,
-      deploymentName: deployment.name,
       startAt: args.startAt,
       endAt: args.endAt,
       durationMs: args.durationMs,
-      result: args.result,
+      suspectScore: args.suspectScore,
       clientInfo: args.clientInfo,
     });
 
@@ -216,7 +226,8 @@ export const createWithApiKey = mutation({
     startAt: v.number(),
     endAt: v.number(),
     durationMs: v.number(),
-    result: sessionResultInput,
+    suspectScore: v.number(),
+    passed: v.optional(v.boolean()), // LLM's actual human/bot decision
   },
   handler: async (ctx, args) => {
     // Validate API key against users table
@@ -243,11 +254,11 @@ export const createWithApiKey = mutation({
     // Create the session
     const sessionId = await ctx.db.insert("sessions", {
       deploymentId: args.deploymentId,
-      deploymentName: deployment.name,
       startAt: args.startAt,
       endAt: args.endAt,
       durationMs: args.durationMs,
-      result: args.result,
+      suspectScore: args.suspectScore,
+      passed: args.passed,
     });
 
     // Update deployment's session list
@@ -260,3 +271,4 @@ export const createWithApiKey = mutation({
     return { success: true, sessionId };
   },
 });
+
