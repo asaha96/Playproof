@@ -45,18 +45,45 @@ export interface BehaviorData {
   clickAccuracy?: number;
 }
 
+/** Mini-golf runtime spec derived from GridLevel */
+export interface MiniGolfLevelSpec {
+  version: number;
+  world: { width: number; height: number; friction: number };
+  ball: { x: number; y: number; radius: number };
+  hole: { x: number; y: number; radius: number };
+  walls: { x: number; y: number; w: number; h: number }[];
+  sand?: { x: number; y: number; w: number; h: number }[];
+  water?: { x: number; y: number; w: number; h: number }[];
+  currents?: { x: number; y: number; w: number; h: number; direction: 'up' | 'down' | 'left' | 'right' }[];
+  portals?: {
+    id: string;
+    entrance: { x: number; y: number };
+    exit: { x: number; y: number };
+    cooldownMs?: number;
+    exitVelocityMultiplier?: number;
+  }[];
+  movingBlocks?: {
+    id: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    motion: { axis: 'x' | 'y'; range: number; speed: number; mode: 'pingpong' | 'loop'; phase?: number };
+  }[];
+}
+
 /** Theme configuration for the SDK */
 export interface PlayproofTheme {
-  primary: string;
-  secondary: string;
-  background: string;
-  surface: string;
-  text: string;
-  textMuted: string;
-  accent: string;
-  success: string;
-  error: string;
-  border: string;
+  primary?: string;
+  secondary?: string;
+  background?: string;
+  surface?: string;
+  text?: string;
+  textMuted?: string;
+  accent?: string;
+  success?: string;
+  error?: string;
+  border?: string;
 }
 
 /** Verification result returned by the SDK */

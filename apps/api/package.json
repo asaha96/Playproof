@@ -1,0 +1,27 @@
+{
+  "name": "@playproof/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PlayProof API - PCG level generation and verification",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@playproof/shared": "*",
+    "fastify": "^5.2.1",
+    "@fastify/cors": "^10.0.2",
+    "groq-sdk": "^0.9.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "pino-pretty": "^13.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

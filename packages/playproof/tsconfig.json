@@ -23,8 +23,8 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@playproof/shared": ["../shared/src/index.ts"],
-      "@playproof/shared/*": ["../shared/src/*"]
+      "@playproof/shared": ["../shared/dist/index.d.ts"],
+      "@playproof/shared/*": ["../shared/dist/*"]
     }
   },
   "include": ["src/**/*"],

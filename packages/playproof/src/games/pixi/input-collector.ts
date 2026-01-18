@@ -16,6 +16,18 @@ import type {
     CompletedDrag,
     DragPath
 } from '../../types';
+import type { TelemetryRow, TelemetryPointerType } from '@playproof/shared/telemetry';
+
+export type InputTelemetryRow = Omit<TelemetryRow, 'seq' | 'gameId' | 'frame' | 'event'> & { frame: number; event: PointerEventType };
+
+interface PointerSample {
+    coords: PointerCoords;
+    event: PointerEvent;
+}
+
+const POINTER_EVENTS = new Set(['pointer_down', 'pointer_move', 'pointer_up', 'drag_start', 'drag_move', 'drag_end']);
+
+type PointerEventType = 'pointer_down' | 'pointer_move' | 'pointer_up' | 'drag_start' | 'drag_move' | 'drag_end';
 
 // Enable verbose logging in development
 const DEBUG = (globalThis as { process?: { env?: { NODE_ENV?: string } } })
@@ -41,6 +53,9 @@ export class InputCollector {
     private _windowHandlers: Record<string, (e: PointerEvent) => void>;
     private activePointerId: number | null;
     private hasPointerCapture: boolean;
+    private telemetryRows: InputTelemetryRow[];
+    private lastDragEvents: InputTelemetryRow[];
+    private frameIndex: number;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -57,6 +72,10 @@ export class InputCollector {
         this._windowHandlers = {};
         this.activePointerId = null;
         this.hasPointerCapture = false;
+        this.telemetryRows = [];
+        this.lastDragEvents = [];
+        this.frameIndex = 0;
+
     }
 
     private _createEmptyBehaviorData(): BehaviorData {
@@ -112,6 +131,9 @@ export class InputCollector {
         this.lastCompletedDrag = null;
         this.activePointerId = null;
         this.hasPointerCapture = false;
+        this.telemetryRows = [];
+        this.lastDragEvents = [];
+        this.frameIndex = 0;
     }
 
     /**
@@ -257,6 +279,50 @@ export class InputCollector {
         };
     }
 
+    private _getPointerType(e: PointerEvent): TelemetryPointerType {
+        const type = e.pointerType || 'unknown';
+        if (type === 'mouse' || type === 'touch' || type === 'pen') return type;
+        return 'unknown';
+    }
+
+    private _getPointerSamples(e: PointerEvent): PointerSample[] {
+        const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+        return events.map(ce => ({ coords: this._getCoords(ce), event: ce }));
+    }
+
+    private _recordPointerTelemetry(eventType: PointerEventType, samples: PointerSample[], frame: number): InputTelemetryRow[] {
+        const rows: InputTelemetryRow[] = [];
+        for (const sample of samples) {
+            const pointerType = this._getPointerType(sample.event);
+            rows.push({
+                t: sample.coords.timestamp,
+                tsWall: Date.now(),
+                event: eventType,
+                frame,
+                dt: undefined,
+                x: sample.coords.x,
+                y: sample.coords.y,
+                vx: undefined,
+                vy: undefined,
+                meta: {
+                    pointerType,
+                    pointerId: sample.event.pointerId,
+                    buttons: sample.event.buttons,
+                    pressure: sample.event.pressure,
+                    isTrusted: sample.coords.isTrusted
+                }
+            });
+        }
+        return rows;
+    }
+
+    private _recordDragTelemetry(rows: InputTelemetryRow[]): void {
+        this.lastDragEvents.push(...rows.map(row => ({
+            ...row,
+            event: (row.event === 'pointer_move' ? 'drag_move' : row.event) as PointerEventType
+        })));
+    }
+
     /**
      * Process coalesced events if available
      */
@@ -285,11 +351,40 @@ export class InputCollector {
         return points;
     }
 
+    private _recordPointerAnalytics(samples: PointerSample[]): PointerCoords[] {
+        const points: PointerCoords[] = [];
+        for (const sample of samples) {
+            const coords = sample.coords;
+            points.push(coords);
+            this.behaviorData.mouseMovements.push({
+                x: coords.x,
+                y: coords.y,
+                timestamp: coords.timestamp
+            });
+
+            if (!coords.isTrusted) {
+                this.extendedTelemetry.untrustedCount++;
+            }
+        }
+
+        if (samples.length > 1) {
+            this.extendedTelemetry.coalescedCount += samples.length - 1;
+        }
+
+        return points;
+    }
+
     /**
      * Track pointer type for analysis
      */
     private _trackPointerType(e: PointerEvent): void {
         const type = e.pointerType || 'unknown';
+        this.extendedTelemetry.pointerTypes[type] =
+            (this.extendedTelemetry.pointerTypes[type] || 0) + 1;
+    }
+
+    private _trackPointerTypeSample(sample: PointerSample): void {
+        const type = this._getPointerType(sample.event);
         this.extendedTelemetry.pointerTypes[type] =
             (this.extendedTelemetry.pointerTypes[type] || 0) + 1;
     }
@@ -301,9 +396,12 @@ export class InputCollector {
         log('pointerdown', { isCollecting: this.isCollecting, clientX: e.clientX, clientY: e.clientY });
         if (!this.isCollecting) return;
 
-        this._trackPointerType(e);
+        const samples = this._getPointerSamples(e);
+        if (samples[0]) {
+            this._trackPointerTypeSample(samples[0]);
+        }
 
-        const coords = this._getCoords(e);
+        const coords = samples[0]?.coords || this._getCoords(e);
         log('pointerdown coords:', coords);
         this.behaviorData.clickTimings.push(coords.timestamp);
         this.behaviorData.mouseMovements.push({
@@ -311,6 +409,13 @@ export class InputCollector {
             y: coords.y,
             timestamp: coords.timestamp
         });
+
+        const rows = this._recordPointerTelemetry('pointer_down', samples, this.frameIndex);
+        this.telemetryRows.push(...rows);
+        this.lastDragEvents = rows.map(row => ({
+            ...row,
+            event: 'drag_start' as PointerEventType
+        }));
 
         // Capture pointer to ensure we get pointerup even if released outside canvas
         try {
@@ -339,7 +444,16 @@ export class InputCollector {
     private _onPointerMove(e: PointerEvent): void {
         if (!this.isCollecting) return;
 
-        const points = this._processCoalesced(e);
+        const samples = this._getPointerSamples(e);
+        const points = this._recordPointerAnalytics(samples);
+
+        const rows = this._recordPointerTelemetry('pointer_move', samples, this.frameIndex);
+        this.telemetryRows.push(...rows);
+        if (this.isDragging) {
+            this._recordDragTelemetry(rows);
+        } else {
+            this.lastDragEvents = [];
+        }
 
         // Add to current drag path if dragging
         if (this.isDragging) {
@@ -366,7 +480,8 @@ export class InputCollector {
 
         if (!this.isCollecting) return;
 
-        const coords = this._getCoords(e);
+        const samples = this._getPointerSamples(e);
+        const coords = samples[0]?.coords || this._getCoords(e);
         log('pointerup coords:', coords);
         this.behaviorData.clickTimings.push(coords.timestamp);
         this.behaviorData.mouseMovements.push({
@@ -374,6 +489,17 @@ export class InputCollector {
             y: coords.y,
             timestamp: coords.timestamp
         });
+
+        const rows = this._recordPointerTelemetry('pointer_up', samples, this.frameIndex);
+        this.telemetryRows.push(...rows);
+        if (this.isDragging) {
+            this.lastDragEvents.push(...rows.map(row => ({
+                ...row,
+                event: 'drag_end' as PointerEventType
+            })));
+        } else {
+            this.lastDragEvents = [];
+        }
 
         // Complete drag tracking
         if (this.isDragging && this.dragStart) {
@@ -426,6 +552,17 @@ export class InputCollector {
         this.currentDragPath = [];
     }
 
+    consumePointerMetadata(): { rows: InputTelemetryRow[]; dragRows: InputTelemetryRow[] } {
+        return {
+            rows: this._consumeTelemetryRows(),
+            dragRows: this._consumeDragTelemetryRows()
+        };
+    }
+
+    getFrameIndex(): number {
+        return this.frameIndex;
+    }
+
     private _resetActivePointer(): void {
         this.isDragging = false;
         this.dragStart = null;
@@ -433,6 +570,23 @@ export class InputCollector {
         this.activePointerId = null;
         this.hasPointerCapture = false;
     }
+
+    advanceFrame(): void {
+        this.frameIndex += 1;
+    }
+
+    private _consumeTelemetryRows(): InputTelemetryRow[] {
+        const rows = this.telemetryRows;
+        this.telemetryRows = [];
+        return rows;
+    }
+
+    private _consumeDragTelemetryRows(): InputTelemetryRow[] {
+        const rows = this.lastDragEvents;
+        this.lastDragEvents = [];
+        return rows;
+    }
+
 
     /**
      * Finalize data after collection ends

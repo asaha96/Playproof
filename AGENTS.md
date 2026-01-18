@@ -41,8 +41,8 @@ A human verification system that replaces traditional CAPTCHAs with engaging min
 Playproof/
 ├── apps/
 │   ├── web/              # Canonical web app (Next.js when scaffolded)
-│   ├── api/              # Fastify API orchestrator
-│   └── edge-worker/      # Cloudflare Worker (token issuance, caching, prefilter)
+│   ├── api/              # Fastify API orchestrator (planned)
+│   └── edge-worker/      # Cloudflare Worker (planned)
 ├── packages/
 │   ├── playproof/        # SDK package (published as 'playproof')
 │   │   └── src/          # SDK source code
@@ -59,12 +59,12 @@ Playproof/
 
 | Folder | Purpose | Tech Stack |
 |--------|---------|------------|
-| `apps/web` | Primary web application | Next.js (placeholder for now) |
-| `apps/api` | API orchestrator, endpoints: `/issue`, `/events`, `/finalize` | Fastify + TypeScript |
-| `apps/edge-worker` | Edge token issuance, caching, prefilter | Cloudflare Workers |
+| `apps/web` | Primary web application | Next.js |
+| `apps/api` | PCG level generation API with LLM integration | Fastify + TypeScript + Groq |
+| `apps/edge-worker` | Edge token issuance, caching, prefilter (planned) | Cloudflare Workers |
 | `packages/playproof` | Client SDK for embedding verification games | TypeScript + PixiJS |
-| `packages/shared` | Shared types, contracts, utilities | TypeScript |
-| `services/scoring` | ML scoring service | Python + FastAPI + XGBoost |
+| `packages/shared` | Shared types + GridLevel/telemetry schemas + physics | TypeScript |
+| `services/scoring` | ML scoring service (planned) | Python + FastAPI + XGBoost |
 | `demo-app` | Interactive demo for testing SDK | Next.js |
 
 ---
@@ -203,12 +203,69 @@ git pull --ff-only
 
 - **Workspace root**: Configured with npm workspaces
 - **SDK**: `packages/playproof/` (published name: `playproof`)
-- **Web app**: `apps/web/` (placeholder, canonical path)
+- **Shared types**: `packages/shared/` (GridLevel + telemetry schemas + physics engine)
+- **Mini-golf adapter**: GridLevel validation/compilation lives in `packages/shared/src/mini-golf-grid.ts`
+- **Mini-golf archetypes**: Golden GridLevel fixtures live in `packages/shared/src/mini-golf-levels.ts`
+- **Web app**: `apps/web/` (Next.js with Convex + Clerk)
 - **Demo**: `demo-app/` (legacy, functional)
-- **API**: `apps/api/` (Fastify placeholder)
-- **Worker**: `apps/edge-worker/` (Cloudflare placeholder)
-- **Scoring**: `services/scoring/` (FastAPI placeholder)
+- **API**: `apps/api/` (Fastify, IMPLEMENTED)
+  - `POST /pcg/level` - Generate procedural levels with LLM (Groq/Llama 3.1)
+  - `GET /pcg/health` - Health check
+  - `GET /pcg/levels/golden` - Get curated fallback levels
+  - Features: validation retry loop, simulation gate, HMAC signing, LRU cache
+- **Worker**: `apps/edge-worker/` (Cloudflare placeholder, planned)
+- **Scoring**: `services/scoring/` (FastAPI placeholder, planned)
 
 ---
 
-*Last updated: Initial creation*
+## API Endpoints (apps/api)
+
+### POST /pcg/level
+
+Generate a procedurally generated mini-golf level.
+
+**Request Body:**
+```json
+{
+  "gameId": "mini-golf",
+  "difficulty": "easy" | "medium" | "hard",
+  "seed": "optional-seed-string",
+  "skipSimulation": false,
+  "skipCache": false
+}
+```
+
+**Response:**
+```json
+{
+  "gridLevel": { ... },
+  "validationReport": { "valid": true, "errors": [], "warnings": [] },
+  "lintReport": { "strict": false, "issues": [] },
+  "simulationReport": { "passed": true, "attempts": 42, "bestShot": { ... } },
+  "rulesetVersion": 1,
+  "signature": "hmac-sha256-hex"
+}
+```
+
+**Flow:**
+1. Check cache (if seed provided and not skipCache)
+2. Generate level via LLM (Groq Llama 3.1 70B)
+3. Validate with `validateMiniGolfGridLevel()`
+4. If invalid, retry with error feedback (up to 5 times)
+5. Run simulation gate to verify solvability
+6. If unsolvable, retry with feedback
+7. If all retries fail, return golden fallback level
+8. Sign level with HMAC, cache, and return
+
+### Environment Variables
+
+```
+GROQ_API_KEY=gsk_...           # Groq API key (free tier available)
+LEVEL_SIGNING_SECRET=...       # Random secret for HMAC signing
+PORT=3001                      # Server port (default: 3001)
+HOST=0.0.0.0                   # Server host (default: 0.0.0.0)
+```
+
+---
+
+*Last updated: API implementation complete*

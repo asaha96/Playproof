@@ -5,7 +5,8 @@
 
 import { PixiHost } from './pixi-host';
 import { InputCollector } from './input-collector';
-import type { PlayproofConfig, SDKHooks, BehaviorData, AttemptData, GameResult, PlayproofTheme } from '../../types';
+import type { PlayproofConfig, SDKHooks, BehaviorData, AttemptData, GameResult, PlayproofTheme, TelemetryBatch, TelemetryRow } from '../../types';
+import { TelemetryBuffer } from './telemetry';
 
 // Debug logging (dev-only)
 const DEBUG = (globalThis as { process?: { env?: { NODE_ENV?: string } } })
@@ -45,6 +46,10 @@ export abstract class PixiGameBase {
     protected gameName: string;
     protected instructions: GameInstructions;
 
+    protected attemptId: string;
+    protected telemetry: TelemetryBuffer;
+    protected telemetryContext: { levelId?: string; seed?: number | string; rulesetVersion?: number };
+
     constructor(gameArea: HTMLElement, config: PlayproofConfig, hooks: SDKHooks = {} as SDKHooks) {
         this.gameArea = gameArea;
         this.config = config;
@@ -67,6 +72,10 @@ export abstract class PixiGameBase {
             title: 'Game',
             description: 'Complete the challenge'
         };
+
+        this.attemptId = '';
+        this.telemetry = new TelemetryBuffer();
+        this.telemetryContext = {};
     }
 
     /**
@@ -109,6 +118,14 @@ export abstract class PixiGameBase {
         log('Starting input collection');
         this.input!.start();
 
+        this.attemptId = `${this.gameName}-${Math.random().toString(36).slice(2, 10)}`;
+        this.telemetry.reset();
+        this.recordTelemetryEvent({
+            event: 'attempt_start',
+            frame: 0,
+            t: performance.now()
+        });
+
         // Start physics/render loop
         log('Starting host update loop');
         this.host!.start(
@@ -134,8 +151,14 @@ export abstract class PixiGameBase {
 
         this.elapsedTime = performance.now() - this.startTime;
 
+        if (this.input) {
+            this.input.advanceFrame();
+        }
+
         // Let subclass update
         this.update(dt);
+
+        this.flushInputTelemetry();
 
         // Check win/lose conditions
         const result = this.checkWinCondition();
@@ -164,6 +187,18 @@ export abstract class PixiGameBase {
         // Stop host and input
         this.host!.stop();
         const behaviorData = this.input!.stop();
+
+        this.flushInputTelemetry();
+        this.recordTelemetryEvent({
+            event: 'attempt_end',
+            frame: this.input ? this.input.getFrameIndex() : 0,
+            t: performance.now(),
+            meta: {
+                reason,
+                success
+            }
+        });
+        this.flushTelemetry(true);
 
         // Map game outcome to click accuracy for scoring
         behaviorData.clickAccuracy = this.calculateAccuracy(success, reason);
@@ -221,6 +256,38 @@ export abstract class PixiGameBase {
 
         // Wait then callback
         setTimeout(callback, 800);
+    }
+
+    protected recordTelemetryEvent(row: Omit<TelemetryRow, 'seq' | 'gameId'>): void {
+        this.telemetry.add({
+            ...row,
+            gameId: this.gameName,
+            levelId: this.telemetryContext.levelId,
+            seed: this.telemetryContext.seed,
+            rulesetVersion: this.telemetryContext.rulesetVersion
+        });
+    }
+
+    protected flushTelemetry(force = false): void {
+        if (!this.hooks.onTelemetryBatch) return;
+        if (!force && !this.telemetry.shouldFlush()) return;
+
+        const batch = this.telemetry.flush(this.attemptId, this.gameName);
+        if (batch && this.hooks.onTelemetryBatch) {
+            this.hooks.onTelemetryBatch(batch);
+        }
+    }
+
+    protected flushInputTelemetry(): void {
+        if (!this.input) return;
+        const { rows, dragRows } = this.input.consumePointerMetadata();
+        for (const row of rows) {
+            this.recordTelemetryEvent(row);
+        }
+        for (const row of dragRows) {
+            this.recordTelemetryEvent(row);
+        }
+        this.flushTelemetry();
     }
 
     /**

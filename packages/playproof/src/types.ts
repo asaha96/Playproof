@@ -2,35 +2,18 @@
  * PlayProof SDK Type Definitions
  */
 
-// Theme configuration
-export interface PlayproofTheme {
-    primary?: string;
-    secondary?: string;
-    background?: string;
-    surface?: string;
-    text?: string;
-    textMuted?: string;
-    accent?: string;
-    success?: string;
-    error?: string;
-    border?: string;
-}
+import type {
+    BehaviorData,
+    MovementPoint,
+    PlayproofTheme,
+    TelemetryBatch,
+    TelemetryRow,
+    MiniGolfLevelSpec
+} from '@playproof/shared';
 
-// Behavior data collected during verification
-export interface BehaviorData {
-    mouseMovements: MouseMovement[];
-    clickTimings: number[];
-    trajectories: MouseMovement[][];
-    hits: number;
-    misses: number;
-    clickAccuracy: number;
-}
+export type { BehaviorData, MovementPoint, PlayproofTheme, TelemetryBatch, TelemetryRow, MiniGolfLevelSpec };
 
-export interface MouseMovement {
-    x: number;
-    y: number;
-    timestamp: number;
-}
+export type MouseMovement = MovementPoint;
 
 // Extended telemetry for future SDK
 export interface ExtendedTelemetry {
@@ -105,7 +88,7 @@ export interface PlayproofConfig {
 }
 
 export interface SDKHooks {
-    onTelemetryBatch: ((batch: unknown) => void) | null;
+    onTelemetryBatch: ((batch: TelemetryBatch) => void) | null;
     onAttemptEnd: ((attempt: AttemptData) => void) | null;
     regenerate: (() => void) | null;
 }
@@ -118,6 +101,7 @@ export interface AttemptData {
     timestamp: number;
     [key: string]: unknown;
 }
+
 
 // Game types
 export type GameId = 'bubble-pop' | 'mini-golf' | 'basketball' | 'archery' | 'random';
@@ -141,44 +125,8 @@ export interface GameResult {
     reason: string;
 }
 
-// Physics types
-export interface Vec2Type {
-    x: number;
-    y: number;
-}
-
-export interface CircleBodyOptions {
-    friction?: number;
-    restitution?: number;
-    mass?: number;
-    isStatic?: boolean;
-}
-
-export interface RectBodyOptions {
-    restitution?: number;
-}
-
-export interface CollisionResult {
-    collided: boolean;
-    normal?: Vec2Type;
-    penetration?: number;
-}
-
-export interface RectBounds {
-    left: number;
-    right: number;
-    top: number;
-    bottom: number;
-}
 
 // Level specifications
-export interface MiniGolfLevelSpec {
-    version: number;
-    world: { width: number; height: number; friction: number };
-    ball: { x: number; y: number; radius: number };
-    hole: { x: number; y: number; radius: number };
-    walls: { x: number; y: number; w: number; h: number }[];
-}
 
 export interface BasketballLevelSpec {
     version: number;

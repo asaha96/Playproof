@@ -14,6 +14,26 @@
     "./types": {
       "import": "./dist/types.js",
       "types": "./dist/types.d.ts"
+    },
+    "./gridlevel": {
+      "import": "./dist/gridlevel.js",
+      "types": "./dist/gridlevel.d.ts"
+    },
+    "./telemetry": {
+      "import": "./dist/telemetry.js",
+      "types": "./dist/telemetry.d.ts"
+    },
+    "./physics": {
+      "import": "./dist/physics.js",
+      "types": "./dist/physics.d.ts"
+    },
+    "./mini-golf-grid": {
+      "import": "./dist/mini-golf-grid.js",
+      "types": "./dist/mini-golf-grid.d.ts"
+    },
+    "./mini-golf-levels": {
+      "import": "./dist/mini-golf-levels.js",
+      "types": "./dist/mini-golf-levels.d.ts"
     }
   },
   "scripts": {
