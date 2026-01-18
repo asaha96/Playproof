@@ -410,9 +410,10 @@ export class Playproof {
    * Evaluate game results
    */
   private async evaluateResult(behaviorData: BehaviorData): Promise<void> {
-    // Call telemetry hook if available
+    // Call telemetry hook if available (with BehaviorData after game completion)
     if (this.config.hooks?.onTelemetryBatch) {
-      this.config.hooks.onTelemetryBatch(behaviorData);
+      // The hook accepts both PointerTelemetryEvent[] and BehaviorData
+      (this.config.hooks.onTelemetryBatch as any)(behaviorData);
     }
 
     // Wait a bit for Woodwide result if available

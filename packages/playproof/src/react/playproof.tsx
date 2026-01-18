@@ -7,7 +7,7 @@ import React, { useEffect, useRef, useState, useCallback, useId, useContext } fr
 import { PlayproofContext } from './context';
 import { Playproof as PlayproofCore } from '../playproof';
 import { PLAYPROOF_API_URL, DEFAULT_THEME } from '../config';
-import type { VerificationResult, PlayproofTheme, GameId } from '../types';
+import type { VerificationResult, PlayproofTheme, GameId, PointerTelemetryEvent, BehaviorData } from '../types';
 
 export interface PlayproofProps {
   /**
@@ -36,6 +36,24 @@ export interface PlayproofProps {
    * Called with progress updates (0-1)
    */
   onProgress?: (progress: number) => void;
+  
+  /**
+   * Called with batches of telemetry events during gameplay
+   * Receives PointerTelemetryEvent[] batches in real-time
+   */
+  onTelemetryBatch?: (batch: PointerTelemetryEvent[]) => void;
+  
+  /**
+   * Called when the game completes with final telemetry data
+   * Receives converted telemetry data in Woodwide-compatible format
+   */
+  onTelemetry?: (telemetry: {
+    movements: Array<{ x: number; y: number; timestamp: number }>;
+    clicks: Array<{ x: number; y: number; timestamp: number; targetHit: boolean }>;
+    hits: number;
+    misses: number;
+    durationMs: number;
+  }) => void | Promise<{ decision?: string; anomalyScore?: number } | null>;
   
   /**
    * Override the game ID (optional - usually fetched from deployment)
@@ -107,6 +125,8 @@ export function Playproof({
   onFailure,
   onStart,
   onProgress,
+  onTelemetryBatch,
+  onTelemetry,
   gameId: gameIdOverride,
   theme: themeOverride,
   confidenceThreshold = 0.7,
@@ -269,12 +289,45 @@ export function Playproof({
         });
       }
 
+      // Convert BehaviorData to telemetry format for onTelemetry callback
+      const convertBehaviorDataToTelemetry = (behaviorData: BehaviorData, startTime: number, endTime: number) => {
+        const movements = behaviorData.mouseMovements.map(m => ({
+          x: m.x,
+          y: m.y,
+          timestamp: m.timestamp - startTime,
+        }));
+
+        const clicks = behaviorData.clickTimings.map((timestamp, index) => {
+          // Find the movement closest to the click timing
+          const movement = behaviorData.mouseMovements.find(m => 
+            Math.abs(m.timestamp - timestamp) < 100
+          ) || behaviorData.mouseMovements[Math.floor(index * behaviorData.mouseMovements.length / (behaviorData.clickTimings.length || 1))] || { x: 0, y: 0 };
+          
+          return {
+            x: movement.x,
+            y: movement.y,
+            timestamp: timestamp - startTime,
+            targetHit: index < (behaviorData.hits || 0),
+          };
+        });
+
+        return {
+          movements,
+          clicks,
+          hits: behaviorData.hits || 0,
+          misses: behaviorData.misses || 0,
+          durationMs: endTime - startTime,
+        };
+      };
+
       try {
         // Ensure container has the ID
         containerRef.current.id = containerId;
 
         // Create Playproof instance
-        const instance = new PlayproofCore({
+        let instance: PlayproofCore | null = null;
+        
+        instance = new PlayproofCore({
           containerId,
           confidenceThreshold,
           gameId: finalGameId,
@@ -293,6 +346,48 @@ export function Playproof({
           },
           onProgress: (progress: number) => {
             onProgress?.(progress);
+          },
+          hooks: {
+            // Handle telemetry batches during gameplay and after completion
+            onTelemetryBatch: (batch: any) => {
+              // During gameplay: batch is PointerTelemetryEvent[]
+              if (Array.isArray(batch) && batch.length > 0) {
+                // Check if it's PointerTelemetryEvent[] (has eventType property)
+                if (batch[0]?.eventType) {
+                  onTelemetryBatch?.(batch as PointerTelemetryEvent[]);
+                }
+              }
+              // After game completes: batch is BehaviorData (not an array, has mouseMovements)
+              else if (batch && !Array.isArray(batch) && batch.mouseMovements) {
+                const behaviorData = batch as BehaviorData;
+                if (behaviorData.mouseMovements && behaviorData.mouseMovements.length > 0) {
+                  const startTime = behaviorData.mouseMovements[0]?.timestamp || Date.now();
+                  const endTime = behaviorData.mouseMovements[behaviorData.mouseMovements.length - 1]?.timestamp || Date.now();
+                  const telemetry = convertBehaviorDataToTelemetry(behaviorData, startTime, endTime);
+                  
+                  // Call onTelemetry with converted data
+                  if (onTelemetry) {
+                    const result = onTelemetry(telemetry);
+                    // If onTelemetry returns a promise, handle it (for Woodwide integration)
+                    if (result && typeof result === 'object' && 'then' in result) {
+                      result.then(woodwideResult => {
+                        // Store Woodwide result if provided (the SDK expects this)
+                        if (woodwideResult && instance) {
+                          (instance as any).config.woodwideResult = {
+                            decision: woodwideResult.decision || 'review',
+                            anomalyScore: woodwideResult.anomalyScore || 0,
+                          };
+                        }
+                      }).catch(err => {
+                        console.error('[Playproof] onTelemetry error:', err);
+                      });
+                    }
+                  }
+                }
+              }
+            },
+            onAttemptEnd: null,
+            regenerate: null,
           },
         });
 
@@ -335,6 +430,8 @@ export function Playproof({
     onFailure,
     onStart,
     onProgress,
+    onTelemetryBatch,
+    onTelemetry,
     fetchConfig,
     cleanup,
   ]);

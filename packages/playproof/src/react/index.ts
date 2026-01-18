@@ -32,4 +32,10 @@ export { Playproof, type PlayproofProps } from './playproof';
 export { usePlayproof, PlayproofContext, type PlayproofContextValue } from './context';
 
 // Re-export types that consumers might need
-export type { VerificationResult, PlayproofTheme, GameId } from '../types';
+export type { 
+  VerificationResult, 
+  PlayproofTheme, 
+  GameId,
+  PointerTelemetryEvent,
+  BehaviorData,
+} from '../types';

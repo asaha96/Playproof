@@ -86,11 +86,11 @@ abstract class HitObject {
 
     destroy(): void {
         this.scene.remove(this.group);
-        this.group.traverse((obj) => {
+        this.group.traverse((obj: THREE.Object3D) => {
             if (obj instanceof THREE.Mesh) {
                 obj.geometry.dispose();
                 if (Array.isArray(obj.material)) {
-                    obj.material.forEach(m => m.dispose());
+                    obj.material.forEach((m: THREE.Material) => m.dispose());
                 } else {
                     obj.material.dispose();
                 }
@@ -98,7 +98,7 @@ abstract class HitObject {
             if (obj instanceof THREE.Line) {
                 obj.geometry.dispose();
                 if (Array.isArray(obj.material)) {
-                    obj.material.forEach(m => m.dispose());
+                    obj.material.forEach((m: THREE.Material) => m.dispose());
                 } else {
                     (obj.material as THREE.Material).dispose();
                 }
@@ -278,7 +278,7 @@ class Slider extends HitObject {
 
         // Convert 2D path to 3D points for rendering
         const points2D = path.getPoints(50);
-        this.pathPoints3D = points2D.map(p => new THREE.Vector3(p.x, p.y, 0));
+        this.pathPoints3D = points2D.map((p: THREE.Vector2) => new THREE.Vector3(p.x, p.y, 0));
 
         // Create slider body (thick line)
         this.sliderBody = this.createSliderBody();
@@ -350,7 +350,7 @@ class Slider extends HitObject {
 
         // Get path points relative to group position
         const points = this.path.getPoints(50);
-        const relativePoints = points.map(p => 
+        const relativePoints = points.map((p: THREE.Vector2) => 
             new THREE.Vector2(p.x - this.position.x, p.y - this.position.y)
         );
 

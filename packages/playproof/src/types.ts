@@ -149,7 +149,9 @@ export interface PlayproofConfig {
 }
 
 export interface SDKHooks {
-    onTelemetryBatch: ((batch: PointerTelemetryEvent[]) => void) | null;
+    // During gameplay: receives PointerTelemetryEvent[] batches
+    // After completion: receives BehaviorData (the SDK calls this with BehaviorData when game completes)
+    onTelemetryBatch: ((batch: PointerTelemetryEvent[] | BehaviorData) => void) | null;
     onAttemptEnd: ((attempt: AttemptData) => void) | null;
     regenerate: (() => void) | null;
 }
