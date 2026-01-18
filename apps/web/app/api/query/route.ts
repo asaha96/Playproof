@@ -63,16 +63,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Call Convex query or mutation based on type
-    const result =
-      operationType === "mutation"
-        ? await convex.mutation(apiFunction, args)
-        : await convex.query(apiFunction, args);
+    let result;
+    if (type === "mutation") {
+      result = await convex.mutation(apiFunction, args);
+    } else {
+      result = await convex.query(apiFunction, args);
+    }
 
     // Return result
     return NextResponse.json(result);
   } catch (error: any) {
     console.error("[API /query] Error:", error);
-    
+
     // Handle Convex errors
     if (error.message) {
       return NextResponse.json(

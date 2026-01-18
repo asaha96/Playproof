@@ -440,12 +440,12 @@ export class Playproof {
     const wasAgentControlled = this.wasAgentControlled();
     const fallbackDecision: SessionEndResult | null = wasAgentControlled
       ? {
-          type: "session_end",
-          decision: "bot",
-          confidence: 0.5,
-          reason: "No agent decision received before session end",
-          timestamp: Date.now(),
-        }
+        type: "session_end",
+        decision: "bot",
+        confidence: 0.5,
+        reason: "No agent decision received before session end",
+        timestamp: Date.now(),
+      }
       : null;
     const effectiveAgentDecision = agentDecision ?? fallbackDecision;
 
@@ -486,9 +486,6 @@ export class Playproof {
         decision: effectiveAgentDecision.decision,
         reason: effectiveAgentDecision.reason,
       });
-
-      const sessionResult = agentResult.decision === "pass" ? "human" : "bot";
-      await this.reportSession(behaviorData, sessionResult);
 
       this.showResult({
         ...finalResult,
