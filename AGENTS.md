@@ -221,8 +221,15 @@ git pull --ff-only
 
 - **Workspace root**: Configured with npm workspaces
 - **SDK**: `packages/playproof/` (published name: `playproof`)
+  - TelemetrySink abstraction for pluggable transports
+  - HookSink: Original callback-based telemetry (always enabled)
+  - LiveKitSink: Real-time streaming via LiveKit (enabled by default when credentials present)
+  - Config flag `telemetryTransport.livekit.enabled` controls LiveKit (default: true)
 - **Web app**: `apps/web/` (canonical path)
-- **Dashboard**: Deployments page at `/dashboard/deployments`
+- **Dashboard**: 
+  - Deployments page at `/dashboard/deployments`
+  - Attempts page at `/dashboard/attempts` (shows verification results from Woodwide)
+  - Observability page at `/dashboard/observability` (local telemetry testing)
 - **Deployments**: Branding stored per deployment with `type` enum and `isActive` flag
 - **Demo**: `demo-app/` (legacy, functional)
 - **API**: `apps/api/` (Fastify + TypeScript, Woodwide integration)
@@ -233,7 +240,27 @@ git pull --ff-only
 - **Worker**: `apps/edge-worker/` (Cloudflare placeholder)
 - **Shared types**: `packages/shared/` includes `SessionTelemetry`, `MovementFeatures`, `ScoringResponse`
 - **Convex**: `convex/` (Backend functions & schema)
+  - `realtime.ts`: Active attempts registry, token minting queries/mutations
+  - `livekit.ts`: LiveKit token minting actions (Node.js runtime)
+  - `activeAttempts` table: Tracks verification attempts with results
+
+### LiveKit Telemetry Transport
+
+SDK telemetry can be streamed via LiveKit for real-time observation:
+
+1. **SDK Publisher**: When `telemetryTransport.livekit.enabled: true` (default) and `apiKey`/`deploymentId` are provided, SDK connects to LiveKit room and publishes pointer events
+2. **Topics**: `playproof.pointer.v1` for pointer telemetry
+3. **Reliability**: Move events use LOSSY delivery (low latency), state events (down/up) use RELIABLE
+4. **Dashboard Observer**: Authenticated users can observe live telemetry streams
+5. **Results**: Woodwide scoring results are stored in `activeAttempts` table
+
+**Environment Variables** (set in Convex dashboard):
+```
+LIVEKIT_URL=wss://playproof-nghc3aax.livekit.cloud
+LIVEKIT_API_KEY=xxx
+LIVEKIT_API_SECRET=xxx
+```
 
 ---
 
-*Last updated: Woodwide scoring integration in apps/api (TypeScript)*
+*Last updated: LiveKit telemetry transport integration*
