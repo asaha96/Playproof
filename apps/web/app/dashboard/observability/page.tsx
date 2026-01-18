@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect, useId } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,14 +14,12 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Eye, Pause, Play, Trash2, ArrowUp, RotateCcw, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
-import type { PointerTelemetryEvent } from "playproof";
+import { Playproof, type PointerTelemetryEvent } from "playproof/react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const MAX_EVENTS = 1000; // Cap to prevent memory issues
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
-const apiUrl = (path: string) => `${API_BASE}${path}`;
 
-interface WoodwideResult {
+interface HeuristicResult {
   sessionId: string;
   decision: "pass" | "review" | "fail";
   confidence: number;
@@ -36,11 +34,6 @@ interface WoodwideResult {
 }
 
 export default function ObservabilityPage() {
-  const uniqueId = useId();
-  const containerId = `playproof-observability-${uniqueId.replace(/:/g, "-")}`;
-  const containerRef = useRef<HTMLDivElement>(null);
-  const playproofInstanceRef = useRef<any>(null);
-  
   // Authoritative event list (not triggering re-renders)
   const eventsRef = useRef<PointerTelemetryEvent[]>([]);
   
@@ -50,7 +43,6 @@ export default function ObservabilityPage() {
   // Controls
   const [isPaused, setIsPaused] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
-  const [isLoaded, setIsLoaded] = useState(false);
   const [resetKey, setResetKey] = useState(0);
   
   // Stats - track raw counts to avoid capping issues
@@ -61,8 +53,8 @@ export default function ObservabilityPage() {
     dragDistance: 0,
   });
 
-  // Woodwide classification result
-  const [woodwideResult, setWoodwideResult] = useState<WoodwideResult | null>(null);
+  // Heuristic classification result
+  const [heuristicResult, setHeuristicResult] = useState<HeuristicResult | null>(null);
   const [isScoring, setIsScoring] = useState(false);
   
   // Refs for scroll and drag calculation
@@ -124,229 +116,142 @@ export default function ObservabilityPage() {
     setDisplayEvents([...eventsRef.current].slice(-100).reverse());
   }, []);
 
-  // Cleanup function
-  const cleanup = useCallback(() => {
-    if (playproofInstanceRef.current) {
-      try {
-        playproofInstanceRef.current.destroy();
-      } catch (e) {
-        // Ignore cleanup errors
+  // Heuristic scoring function - runs locally without API calls
+  const calculateHeuristicScore = useCallback((data: {
+    mouseMovements: Array<{ x: number; y: number; timestamp: number }>;
+    clickTimings: number[];
+    clickAccuracy: number;
+  }): number => {
+    let totalScore = 0;
+    let weightSum = 0;
+    
+    // Mouse movement analysis (30% weight)
+    if (data.mouseMovements && data.mouseMovements.length > 0) {
+      const movements = data.mouseMovements;
+      let variance = 0;
+      let speed = 0;
+      
+      for (let i = 1; i < movements.length; i++) {
+        const dx = movements[i].x - movements[i - 1].x;
+        const dy = movements[i].y - movements[i - 1].y;
+        const dt = movements[i].timestamp - movements[i - 1].timestamp;
+        
+        if (dt > 0) {
+          speed += Math.sqrt(dx * dx + dy * dy) / dt;
+          if (i > 1) {
+            const prevDx = movements[i - 1].x - movements[i - 2].x;
+            const prevDy = movements[i - 1].y - movements[i - 2].y;
+            const angleChange = Math.abs(Math.atan2(dy, dx) - Math.atan2(prevDy, prevDx));
+            variance += angleChange;
+          }
+        }
       }
-      playproofInstanceRef.current = null;
+      
+      const avgVariance = variance / Math.max(1, movements.length - 2);
+      const avgSpeed = speed / Math.max(1, movements.length - 1);
+      const varianceScore = Math.min(1, avgVariance / 0.5);
+      const speedScore = avgSpeed > 0.01 && avgSpeed < 5 ? 0.8 : 0.3;
+      const movementScore = varianceScore * 0.6 + speedScore * 0.4;
+      totalScore += movementScore * 0.3;
+      weightSum += 0.3;
     }
-    setIsLoaded(false);
+    
+    // Click timing analysis (30% weight)
+    if (data.clickTimings && data.clickTimings.length > 1) {
+      const intervals: number[] = [];
+      for (let i = 1; i < data.clickTimings.length; i++) {
+        intervals.push(data.clickTimings[i] - data.clickTimings[i - 1]);
+      }
+      const mean = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+      const varianceVal = intervals.reduce((sum, t) => sum + Math.pow(t - mean, 2), 0) / intervals.length;
+      const stdDev = Math.sqrt(varianceVal);
+      const cv = mean > 0 ? stdDev / mean : 0;
+      
+      let timingScore = 0.6;
+      if (cv < 0.1) timingScore = 0.2;
+      else if (cv > 1.5) timingScore = 0.4;
+      else if (cv >= 0.2 && cv <= 0.8) timingScore = 0.9;
+      
+      totalScore += timingScore * 0.3;
+      weightSum += 0.3;
+    }
+    
+    // Click accuracy analysis (20% weight)
+    if (data.clickAccuracy !== undefined) {
+      let accuracyScore = 0.6;
+      if (data.clickAccuracy >= 0.98) accuracyScore = 0.5;
+      else if (data.clickAccuracy < 0.3) accuracyScore = 0.3;
+      else if (data.clickAccuracy >= 0.6 && data.clickAccuracy <= 0.95) accuracyScore = 0.9;
+      
+      totalScore += accuracyScore * 0.2;
+      weightSum += 0.2;
+    }
+    
+    return weightSum > 0 ? totalScore / weightSum : 0;
   }, []);
 
-  // Initialize SDK with telemetry hooks
-  useEffect(() => {
-    let mounted = true;
+  // Handle telemetry data when game completes - use heuristic model (no API calls)
+  const handleTelemetry = useCallback(async (telemetry: {
+    movements: Array<{ x: number; y: number; timestamp: number }>;
+    clicks: Array<{ x: number; y: number; timestamp: number; targetHit: boolean }>;
+    hits: number;
+    misses: number;
+    durationMs: number;
+  }) => {
+    if (!telemetry.movements || telemetry.movements.length === 0) {
+      return null;
+    }
 
-    const initPlayproof = async () => {
-      try {
-        cleanup();
+    setIsScoring(true);
+    setHeuristicResult(null);
 
-        // Dynamic import to avoid SSR issues
-        const { Playproof } = await import("playproof");
+    try {
+      // Convert telemetry to format expected by heuristic scorer
+      const behaviorData = {
+        mouseMovements: telemetry.movements,
+        clickTimings: telemetry.clicks.map(c => c.timestamp),
+        clickAccuracy: telemetry.hits / Math.max(1, telemetry.hits + telemetry.misses),
+      };
 
-        if (!mounted || !containerRef.current) return;
-
-        // Ensure container has the ID
-        containerRef.current.id = containerId;
-
-        // Create Playproof instance with telemetry hooks
-        const instance = new Playproof({
-          containerId,
-          confidenceThreshold: 0.7,
-          gameId: "bubble-pop",
-          gameDuration: 30000, // 30 seconds for observability testing
-          logTelemetry: false, // Set to true for console debugging
-          theme: {
-            primary: "#6366f1",
-            secondary: "#8b5cf6",
-            background: "#1a1a2e",
-            surface: "#2a2a3e",
-            text: "#f5f5f5",
-            textMuted: "#a1a1aa",
-            accent: "#22d3ee",
-            success: "#10b981",
-            error: "#ef4444",
-            border: "#3f3f5a",
-          },
-          hooks: {
-            onTelemetryBatch: async (batch: any) => {
-              // Handle pointer telemetry events during gameplay
-              if (Array.isArray(batch) && batch.length > 0 && batch[0]?.eventType) {
-                handleTelemetryBatch(batch);
-              }
-              
-              // When game completes, batch will be BehaviorData (not an array)
-              // Use heuristic model to classify bot vs human
-              if (batch && !Array.isArray(batch)) {
-                try {
-                  const behaviorData = batch as any;
-                  
-                  if (behaviorData.mouseMovements && behaviorData.mouseMovements.length > 0) {
-                    setIsScoring(true);
-                    setWoodwideResult(null);
-                    
-                    // Import Playproof SDK to access verification functions
-                    // Note: We'll calculate confidence directly using the SDK's internal logic
-                    const { Playproof } = await import("playproof");
-                    
-                    // Create a temporary instance to access verification methods
-                    // The SDK uses calculateConfidence internally, so we'll replicate the logic
-                    // or use the SDK's evaluateResult method indirectly
-                    
-                    // For now, use a simplified heuristic calculation
-                    // Based on the SDK's calculateConfidence logic
-                    const calculateHeuristicScore = (data: any): number => {
-                      let totalScore = 0;
-                      let weightSum = 0;
-                      
-                      // Mouse movement analysis (30% weight)
-                      if (data.mouseMovements && data.mouseMovements.length > 0) {
-                        const movements = data.mouseMovements;
-                        let variance = 0;
-                        let speed = 0;
-                        
-                        for (let i = 1; i < movements.length; i++) {
-                          const dx = movements[i].x - movements[i - 1].x;
-                          const dy = movements[i].y - movements[i - 1].y;
-                          const dt = movements[i].timestamp - movements[i - 1].timestamp;
-                          
-                          if (dt > 0) {
-                            speed += Math.sqrt(dx * dx + dy * dy) / dt;
-                            if (i > 1) {
-                              const prevDx = movements[i - 1].x - movements[i - 2].x;
-                              const prevDy = movements[i - 1].y - movements[i - 2].y;
-                              const angleChange = Math.abs(Math.atan2(dy, dx) - Math.atan2(prevDy, prevDx));
-                              variance += angleChange;
-                            }
-                          }
-                        }
-                        
-                        const avgVariance = variance / Math.max(1, movements.length - 2);
-                        const avgSpeed = speed / Math.max(1, movements.length - 1);
-                        const varianceScore = Math.min(1, avgVariance / 0.5);
-                        const speedScore = avgSpeed > 0.01 && avgSpeed < 5 ? 0.8 : 0.3;
-                        const movementScore = varianceScore * 0.6 + speedScore * 0.4;
-                        totalScore += movementScore * 0.3;
-                        weightSum += 0.3;
-                      }
-                      
-                      // Click timing analysis (30% weight)
-                      if (data.clickTimings && data.clickTimings.length > 1) {
-                        const intervals: number[] = [];
-                        for (let i = 1; i < data.clickTimings.length; i++) {
-                          intervals.push(data.clickTimings[i] - data.clickTimings[i - 1]);
-                        }
-                        const mean = intervals.reduce((a, b) => a + b, 0) / intervals.length;
-                        const variance = intervals.reduce((sum, t) => sum + Math.pow(t - mean, 2), 0) / intervals.length;
-                        const stdDev = Math.sqrt(variance);
-                        const cv = mean > 0 ? stdDev / mean : 0;
-                        
-                        let timingScore = 0.6;
-                        if (cv < 0.1) timingScore = 0.2;
-                        else if (cv > 1.5) timingScore = 0.4;
-                        else if (cv >= 0.2 && cv <= 0.8) timingScore = 0.9;
-                        
-                        totalScore += timingScore * 0.3;
-                        weightSum += 0.3;
-                      }
-                      
-                      // Click accuracy analysis (20% weight)
-                      if (data.clickAccuracy !== undefined) {
-                        let accuracyScore = 0.6;
-                        if (data.clickAccuracy >= 0.98) accuracyScore = 0.5;
-                        else if (data.clickAccuracy < 0.3) accuracyScore = 0.3;
-                        else if (data.clickAccuracy >= 0.6 && data.clickAccuracy <= 0.95) accuracyScore = 0.9;
-                        
-                        totalScore += accuracyScore * 0.2;
-                        weightSum += 0.2;
-                      }
-                      
-                      return weightSum > 0 ? totalScore / weightSum : 0;
-                    };
-                    
-                    const calculateConfidence = calculateHeuristicScore;
-                    const createVerificationResult = (score: number, threshold: number, data: any) => ({
-                      passed: score >= threshold,
-                      score,
-                      threshold,
-                      timestamp: Date.now(),
-                      details: {
-                        mouseMovementCount: data.mouseMovements?.length || 0,
-                        clickCount: data.clickTimings?.length || 0,
-                        accuracy: data.clickAccuracy || 0,
-                      },
-                    });
-                    
-                    // Calculate confidence score using heuristic model
-                    const confidenceScore = calculateConfidence(behaviorData);
-                    const threshold = 0.7; // Default confidence threshold
-                    const result = createVerificationResult(confidenceScore, threshold, behaviorData);
-                    
-                    // Convert to WoodwideResult format for display consistency
-                    const heuristicResult: WoodwideResult = {
-                      sessionId: `obs_${Date.now()}`,
-                      decision: result.passed ? "pass" : "fail",
-                      confidence: confidenceScore,
-                      anomaly: {
-                        modelId: "heuristic_fallback",
-                        anomalyScore: null,
-                        isAnomaly: !result.passed,
-                      },
-                      featureSummary: {},
-                      scoredAt: new Date().toISOString(),
-                      latencyMs: 0, // Heuristic is instant
-                    };
-                    
-                    setWoodwideResult(heuristicResult);
-                    console.log("[Observability] Heuristic classification:", {
-                      decision: heuristicResult.decision,
-                      confidence: confidenceScore,
-                      passed: result.passed,
-                      classification: heuristicResult.decision === "pass" ? "HUMAN" : "BOT",
-                    });
-                  }
-                } catch (error) {
-                  console.error("[Observability] Error classifying with heuristic model:", error);
-                } finally {
-                  setIsScoring(false);
-                }
-              }
-            },
-            onAttemptEnd: null,
-            regenerate: null,
-          },
-          onSuccess: (result) => {
-            console.log("[Observability] Verification passed:", result);
-          },
-          onFailure: (result) => {
-            console.log("[Observability] Verification failed:", result);
-          },
-        });
-
-        playproofInstanceRef.current = instance;
-
-        // Start verification UI
-        await instance.verify();
-
-        if (mounted) {
-          setIsLoaded(true);
-        }
-      } catch (err) {
-        console.error("Failed to initialize Playproof:", err);
-      }
-    };
-
-    initPlayproof();
-
-    return () => {
-      mounted = false;
-      cleanup();
-    };
-  }, [containerId, handleTelemetryBatch, cleanup, resetKey]);
+      // Calculate confidence score using heuristic model
+      const confidenceScore = calculateHeuristicScore(behaviorData);
+      const threshold = 0.7; // Default confidence threshold
+      const passed = confidenceScore >= threshold;
+      
+      // Convert to HeuristicResult format for display consistency
+      const result: HeuristicResult = {
+        sessionId: `obs_${Date.now()}`,
+        decision: passed ? "pass" : "fail",
+        confidence: confidenceScore,
+        anomaly: {
+          modelId: "heuristic_fallback",
+          anomalyScore: null,
+          isAnomaly: !passed,
+        },
+        featureSummary: {},
+        scoredAt: new Date().toISOString(),
+        latencyMs: 0, // Heuristic is instant
+      };
+      
+      setHeuristicResult(result);
+      console.log("[Observability] Heuristic classification:", {
+        decision: result.decision,
+        confidence: confidenceScore,
+        passed,
+        classification: result.decision === "pass" ? "HUMAN" : "BOT",
+      });
+      
+      return {
+        decision: result.decision,
+        anomalyScore: 0,
+      };
+    } catch (error) {
+      console.error("[Observability] Error classifying with heuristic model:", error);
+      return null;
+    } finally {
+      setIsScoring(false);
+    }
+  }, [calculateHeuristicScore]);
 
   // Auto-scroll effect (scroll to top for newest events)
   useEffect(() => {
@@ -369,6 +274,7 @@ export default function ObservabilityPage() {
       dragDistance: 0,
     });
     lastPosRef.current = null;
+    setHeuristicResult(null);
   };
 
   // Reset the entire SDK
@@ -487,20 +393,38 @@ export default function ObservabilityPage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-lg">PlayProof SDK</CardTitle>
               <CardDescription>
-                Telemetry is captured via hooks.onTelemetryBatch - game-agnostic
+                Telemetry is captured via onTelemetryBatch - game-agnostic
               </CardDescription>
             </CardHeader>
             <CardContent className="p-4">
-              <div
-                ref={containerRef}
-                id={containerId}
-                className="w-full min-h-[500px]"
-              />
-              {!isLoaded && (
-                <div className="flex items-center justify-center h-[500px] text-muted-foreground">
-                  Loading SDK...
-                </div>
-              )}
+              <div className="w-full min-h-[500px] border rounded-lg p-4 bg-slate-50 dark:bg-slate-900">
+                <Playproof
+                  key={resetKey}
+                  gameId="bubble-pop"
+                  gameDuration={30000}
+                  confidenceThreshold={0.7}
+                  theme={{
+                    primary: "#6366f1",
+                    secondary: "#8b5cf6",
+                    background: "#1a1a2e",
+                    surface: "#2a2a3e",
+                    text: "#f5f5f5",
+                    textMuted: "#a1a1aa",
+                    accent: "#22d3ee",
+                    success: "#10b981",
+                    error: "#ef4444",
+                    border: "#3f3f5a",
+                  }}
+                  onTelemetryBatch={handleTelemetryBatch}
+                  onTelemetry={handleTelemetry}
+                  onSuccess={(result) => {
+                    console.log("[Observability] Verification passed:", result);
+                  }}
+                  onFailure={(result) => {
+                    console.log("[Observability] Verification failed:", result);
+                  }}
+                />
+              </div>
             </CardContent>
           </Card>
 
@@ -565,7 +489,7 @@ export default function ObservabilityPage() {
           </Card>
         </div>
 
-        {/* Woodwide Classification Result */}
+        {/* Heuristic Classification Result */}
         {isScoring && (
           <Alert>
             <AlertCircle className="h-4 w-4" />
@@ -573,21 +497,21 @@ export default function ObservabilityPage() {
           </Alert>
         )}
 
-        {woodwideResult && (
+        {heuristicResult && (
           <Card className="border-2">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 Heuristic Classification
-                {woodwideResult.decision === "pass" ? (
+                {heuristicResult.decision === "pass" ? (
                   <CheckCircle2 className="h-5 w-5 text-green-500" />
-                ) : woodwideResult.decision === "review" ? (
+                ) : heuristicResult.decision === "review" ? (
                   <AlertCircle className="h-5 w-5 text-yellow-500" />
                 ) : (
                   <XCircle className="h-5 w-5 text-red-500" />
                 )}
               </CardTitle>
               <CardDescription>
-                Heuristic model classification result (no Woodwide API call)
+                Heuristic model classification result (no API call required)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -595,7 +519,7 @@ export default function ObservabilityPage() {
                 <div className="flex-1">
                   <p className="text-sm text-muted-foreground mb-1">Classification</p>
                   <p className="text-2xl font-bold">
-                    {woodwideResult.decision === "pass" ? (
+                    {heuristicResult.decision === "pass" ? (
                       <span className="text-green-500">HUMAN</span>
                     ) : (
                       <span className="text-red-500">BOT</span>
@@ -605,16 +529,16 @@ export default function ObservabilityPage() {
                 <div className="flex-1">
                   <p className="text-sm text-muted-foreground mb-1">Confidence Score</p>
                   <p className="text-2xl font-bold">
-                    {(woodwideResult.confidence * 100).toFixed(1)}%
+                    {(heuristicResult.confidence * 100).toFixed(1)}%
                   </p>
                 </div>
                 <div className="flex-1">
                   <p className="text-sm text-muted-foreground mb-1">Decision</p>
                   <Badge 
-                    variant={woodwideResult.decision === "pass" ? "default" : "destructive"}
+                    variant={heuristicResult.decision === "pass" ? "default" : "destructive"}
                     className="text-lg px-3 py-1"
                   >
-                    {woodwideResult.decision.toUpperCase()}
+                    {heuristicResult.decision.toUpperCase()}
                   </Badge>
                 </div>
               </div>
@@ -623,15 +547,15 @@ export default function ObservabilityPage() {
                 <div>
                   <p className="text-muted-foreground">Model ID</p>
                   <p className="font-mono text-xs">
-                    {woodwideResult.anomaly.modelId ?? "heuristic_fallback"}
+                    {heuristicResult.anomaly.modelId ?? "heuristic_fallback"}
                   </p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Is Anomaly</p>
                   <p className="font-semibold">
-                    {woodwideResult.anomaly.isAnomaly === null
+                    {heuristicResult.anomaly.isAnomaly === null
                       ? "N/A"
-                      : woodwideResult.anomaly.isAnomaly
+                      : heuristicResult.anomaly.isAnomaly
                       ? "Yes (Bot-like)"
                       : "No (Human-like)"}
                   </p>
@@ -655,7 +579,7 @@ export default function ObservabilityPage() {
             <div className="flex items-start gap-4 text-sm text-muted-foreground">
               <div>
                 <strong className="text-foreground">How it works:</strong> The SDK automatically captures pointer telemetry 
-                via <code className="bg-muted px-1 rounded">hooks.onTelemetryBatch</code>. This works on top of ANY game 
+                via <code className="bg-muted px-1 rounded">onTelemetryBatch</code>. This works on top of ANY game 
                 that extends <code className="bg-muted px-1 rounded">ThreeBaseGame</code> - completely game-agnostic.
               </div>
               <div>

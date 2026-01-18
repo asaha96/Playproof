@@ -7,6 +7,8 @@ config({ path: path.join(__dirname, "../../.env.local") });
 
 const nextConfig: NextConfig = {
   /* config options here */
+  // Transpile local workspace packages
+  transpilePackages: ["playproof", "@playproof/shared"],
   turbopack: {
     // Set root to monorepo root so Turbopack can resolve modules correctly
     root: path.join(__dirname, "../.."),
@@ -14,11 +16,12 @@ const nextConfig: NextConfig = {
       // Resolve @/convex to root convex folder
       "@/convex": path.join(__dirname, "../../convex"),
     },
+    resolveExtensions: [".tsx", ".ts", ".jsx", ".js", ".mjs", ".json"],
   },
-  // Skip type checking during build (handled separately)
+  // Enable type checking during build
   typescript: {
-    // The root convex folder has its own tsconfig and is type-checked separately
-    ignoreBuildErrors: true,
+    // Enable type checking
+    ignoreBuildErrors: false,
   },
 };
 

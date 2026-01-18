@@ -46,7 +46,8 @@
     "url": ""
   },
   "dependencies": {
-    "@playproof/shared": "*"
+    "@playproof/shared": "*",
+    "livekit-client": "^2.13.1"
   },
   "peerDependencies": {
     "react": ">=18.0.0",

@@ -7,7 +7,7 @@
 
 import { extractFeatures, featuresToCsv } from "../../server/lib/features";
 import { WoodwideClient } from "../../server/services/woodwide";
-import type { SessionTelemetry } from "@playproof/shared";
+import type { SessionTelemetry, TelemetryClick } from "@playproof/shared";
 import { config } from "dotenv";
 import { writeFileSync } from "fs";
 import { join } from "path";
@@ -32,8 +32,8 @@ function generateHumanMovement(
   durationMs: number = 10000,
   startX: number = 100,
   startY: number = 100
-): Array<{ x: number; y: number; timestamp: number }> {
-  const movements: Array<{ x: number; y: number; timestamp: number }> = [];
+): Array<{ x: number; y: number; timestamp: number; isTrusted: boolean }> {
+  const movements: Array<{ x: number; y: number; timestamp: number; isTrusted: boolean }> = [];
   let x = startX;
   let y = startY;
   let timestamp = 0;
@@ -73,7 +73,7 @@ function generateHumanMovement(
     const timingVariation = (Math.random() - 0.5) * 5;
     timestamp += baseInterval + timingVariation + pause;
 
-    movements.push({ x, y, timestamp });
+    movements.push({ x, y, timestamp, isTrusted: true });
   }
 
   return movements;
@@ -91,7 +91,7 @@ function generateTrainingSession(
   const movements = generateHumanMovement(durationMs);
 
   // Generate clicks with some misses
-  const clicks = [];
+  const clicks: TelemetryClick[] = [];
   const numClicks = 3 + Math.floor(Math.random() * 7);
   let hits = 0;
   let misses = 0;

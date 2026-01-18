@@ -30,7 +30,32 @@ const deploymentType = v.union(
   v.literal("snake")
 );
 
+// Verification result decision type
+const verificationDecision = v.union(
+  v.literal("pass"),
+  v.literal("review"),
+  v.literal("fail")
+);
+
 export default defineSchema({
+  // Active verification attempts (for LiveKit telemetry)
+  activeAttempts: defineTable({
+    attemptId: v.string(),
+    deploymentId: v.id("deployments"),
+    userId: v.id("users"), // Owner of the deployment (for access control)
+    roomName: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    // Result from Woodwide scoring (set when attempt ends)
+    result: v.optional(verificationDecision),
+    anomalyScore: v.optional(v.number()),
+    // Audit fields
+    createdByApiKeyHash: v.optional(v.string()),
+  })
+    .index("by_deploymentId", ["deploymentId"])
+    .index("by_userId", ["userId"])
+    .index("by_expiresAt", ["expiresAt"])
+    .index("by_attemptId", ["attemptId"]),
   // Users table - stores authenticated users from Clerk
   users: defineTable({
     // Clerk identifiers (support both for migration compatibility)
@@ -47,6 +72,10 @@ export default defineSchema({
     // Timestamps
     createdAt: v.optional(v.number()),
     updatedAt: v.optional(v.number()),
+    // Branding type (legacy field).
+    // NOTE: This field is retained only for backward compatibility with
+    // existing user records. New code should use the structured branding fields.
+    brandingType: v.optional(v.string()),
     // Branding fields (user-level customization)
     ...brandingFields,
   })
@@ -58,6 +87,8 @@ export default defineSchema({
   deployments: defineTable({
     name: v.string(),
     type: deploymentType,
+    // Owner of the deployment (optional for backward compatibility with existing deployments)
+    userId: v.optional(v.id("users")),
     // Unique deployment identifier for SDK lookup
     deploymentId: v.optional(v.string()),
     // API key for SDK authentication (format: pp_<32 chars>)
@@ -69,6 +100,7 @@ export default defineSchema({
     ...brandingFields,
   })
     .index("by_name", ["name"])
+    .index("by_userId", ["userId"])
     .index("by_updatedAt", ["updatedAt"])
     .index("by_active", ["isActive"])
     .index("by_apiKey", ["apiKey"])
