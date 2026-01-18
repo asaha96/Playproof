@@ -10,7 +10,7 @@ import {
   UserButton,
   useUser,
 } from "@clerk/nextjs"
-import { BarChart3, Gamepad2, Palette, ShieldCheck } from "lucide-react"
+import { BarChart3, BookOpen, Gamepad2, Palette, ShieldCheck } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -48,6 +48,11 @@ const navItems = [
     title: "Playground",
     href: "/dashboard/playground",
     icon: Gamepad2, // Using Gamepad2 as a placeholder, maybe find a better icon or reuse
+  },
+  {
+    title: "Docs",
+    href: "/docs",
+    icon: BookOpen,
   },
 ]
 
