@@ -194,13 +194,23 @@ export default function AnalyticsPage() {
             ) : (
               <ChartContainer config={chartConfig} className="flex-1 min-h-[400px] w-full">
                 <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    className="stroke-muted"
+                    vertical={true}
+                    horizontal={true}
+                  />
                   <XAxis
                     dataKey="date"
                     className="text-xs"
-                    tickLine={false}
-                    axisLine={false}
+                    tickLine={true}
+                    axisLine={true}
                     tickMargin={8}
+                    interval={0}
+                    tick={{ fontSize: 10 }}
+                    angle={-45}
+                    textAnchor="end"
+                    height={60}
                   />
                   <YAxis
                     className="text-xs"
@@ -214,14 +224,16 @@ export default function AnalyticsPage() {
                     dataKey="humans"
                     stroke="var(--color-humans)"
                     strokeWidth={2}
-                    dot={false}
+                    dot={{ r: 3, fill: "var(--color-humans)" }}
+                    activeDot={{ r: 5 }}
                   />
                   <Line
                     type="monotone"
                     dataKey="bots"
                     stroke="var(--color-bots)"
                     strokeWidth={2}
-                    dot={false}
+                    dot={{ r: 3, fill: "var(--color-bots)" }}
+                    activeDot={{ r: 5 }}
                   />
                 </LineChart>
               </ChartContainer>
