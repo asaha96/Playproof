@@ -107,7 +107,7 @@ export function AppSidebar() {
       </SidebarGroup>
       <SidebarFooter>
         <SignedIn>
-          <div className="flex items-center gap-3 rounded-lg border border-sidebar-border bg-sidebar-accent/60 p-2">
+          <div className="flex items-center gap-3 rounded-lg border border-sidebar-border bg-sidebar-accent/60 p-2 group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:!border-none group-data-[collapsible=icon]:!bg-transparent group-data-[collapsible=icon]:justify-center">
             <UserButton appearance={{ elements: { avatarBox: "size-8" } }} />
             <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
               <div className="truncate text-sm font-medium">{userName}</div>
