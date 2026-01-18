@@ -1,13 +1,23 @@
-
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+// Branding fields aligned with SDK PlayproofTheme interface
 const brandingFields = {
+  // Core colors
   primaryColor: v.optional(v.string()),
   secondaryColor: v.optional(v.string()),
-  tertiaryColor: v.optional(v.string()),
+  backgroundColor: v.optional(v.string()),
+  surfaceColor: v.optional(v.string()),
+  // Text colors
+  textColor: v.optional(v.string()),
+  textMutedColor: v.optional(v.string()),
+  // UI colors
+  accentColor: v.optional(v.string()),
+  successColor: v.optional(v.string()),
+  errorColor: v.optional(v.string()),
+  borderColor: v.optional(v.string()),
+  // Typography
   typography: v.optional(v.string()),
-  brandingType: v.optional(v.string()),
 };
 
 const deploymentType = v.union(
