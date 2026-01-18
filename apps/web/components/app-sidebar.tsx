@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import {
   SignInButton,
   SignUpButton,
+  SignOutButton,
   SignedIn,
   SignedOut,
   UserButton,
@@ -35,9 +36,9 @@ const navItems = [
     icon: BarChart3,
   },
   {
-    title: "Minigames",
-    href: "/dashboard/minigames",
-    icon: Gamepad2,
+    title: "Deployments",
+    href: "/dashboard/deployments",
+    icon: Rocket,
   },
   {
     title: "Branding",
@@ -118,7 +119,7 @@ export function AppSidebar() {
         <SignedIn>
           <div className="flex items-center gap-3 rounded-lg border border-sidebar-border bg-sidebar-accent/60 p-2">
             <UserButton appearance={{ elements: { avatarBox: "size-8" } }} />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
               <div className="truncate text-sm font-medium">{userName}</div>
               {userEmail ? (
                 <div className="truncate text-xs text-muted-foreground">
@@ -127,6 +128,11 @@ export function AppSidebar() {
               ) : null}
             </div>
           </div>
+          <SignOutButton>
+            <Button variant="ghost" size="sm" className="w-full mt-2 group-data-[collapsible=icon]:hidden">
+              Sign Out
+            </Button>
+          </SignOutButton>
         </SignedIn>
         <SignedOut>
           <div className="flex flex-col gap-2">
