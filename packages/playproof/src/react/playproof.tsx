@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Playproof React Component
  * Fetches deployment config and renders the verification game

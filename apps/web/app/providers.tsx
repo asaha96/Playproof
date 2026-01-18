@@ -1,16 +1,51 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, createContext, useMemo, useContext } from "react";
 import { ThemeProvider } from "next-themes";
 import { ConvexReactClient } from "convex/react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { useAuth } from "@clerk/nextjs";
-import { PlayproofProvider } from "playproof/react";
 import { useStoreUserEffect } from "../hooks/useStoreUserEffect";
 
 const convex = new ConvexReactClient(
   process.env.NEXT_PUBLIC_CONVEX_URL as string
 );
+
+// Inline PlayproofContext to avoid module resolution issues with playproof/react
+// This is a workaround until the playproof package export issue is resolved
+export interface PlayproofContextValue {
+  client_key: string;
+}
+
+export const PlayproofContext = createContext<PlayproofContextValue | null>(null);
+
+/**
+ * Hook to access the Playproof context
+ * @throws Error if used outside of PlayproofProvider
+ */
+export function usePlayproof(): PlayproofContextValue {
+  const context = useContext(PlayproofContext);
+  if (!context) {
+    throw new Error(
+      'usePlayproof must be used within a PlayproofProvider. ' +
+      'Wrap your app with <PlayproofProvider client_key="...">.'
+    );
+  }
+  return context;
+}
+
+function PlayproofProvider({ client_key, children }: { client_key: string; children: ReactNode }) {
+  const value = useMemo<PlayproofContextValue>(
+    () => ({ client_key }),
+    [client_key]
+  );
+
+  return (
+    <PlayproofContext.Provider value={value}>
+      {children}
+    </PlayproofContext.Provider>
+  );
+}
 
 /**
  * Component that syncs the authenticated user to Convex.
