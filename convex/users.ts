@@ -12,17 +12,32 @@ export const upsertViewer = mutation({
       throw new Error("Called upsertViewer without authentication");
     }
 
-    // Check if user already exists
-    const existingUser = await ctx.db
+    // Check if user already exists (try both clerkId and clerkSubject for compatibility)
+    let existingUser = await ctx.db
       .query("users")
-      .withIndex("by_clerkSubject", (q) => q.eq("clerkSubject", identity.subject))
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
       .unique();
+
+    if (!existingUser) {
+      existingUser = await ctx.db
+        .query("users")
+        .withIndex("by_clerkSubject", (q) => q.eq("clerkSubject", identity.subject))
+        .unique();
+    }
 
     const now = Date.now();
 
     if (existingUser) {
       // Update existing user if name or image changed
       const updates: Record<string, unknown> = { updatedAt: now };
+
+      // Ensure both clerkId and clerkSubject are set for compatibility
+      if (!existingUser.clerkId) {
+        updates.clerkId = identity.subject;
+      }
+      if (!existingUser.clerkSubject) {
+        updates.clerkSubject = identity.subject;
+      }
 
       if (identity.name && identity.name !== existingUser.name) {
         updates.name = identity.name;
@@ -41,8 +56,9 @@ export const upsertViewer = mutation({
       return existingUser._id;
     }
 
-    // Create new user
+    // Create new user with both clerkId and clerkSubject for compatibility
     const userId = await ctx.db.insert("users", {
+      clerkId: identity.subject,
       clerkSubject: identity.subject,
       email: identity.email || "",
       name: identity.name || identity.email?.split("@")[0] || "User",
@@ -66,10 +82,18 @@ export const viewer = query({
       return null;
     }
 
-    const user = await ctx.db
+    // Try both indexes for compatibility
+    let user = await ctx.db
       .query("users")
-      .withIndex("by_clerkSubject", (q) => q.eq("clerkSubject", identity.subject))
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
       .unique();
+
+    if (!user) {
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_clerkSubject", (q) => q.eq("clerkSubject", identity.subject))
+        .unique();
+    }
 
     return user;
   },
