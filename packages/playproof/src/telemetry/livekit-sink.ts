@@ -82,10 +82,13 @@ export class LiveKitSink implements TelemetrySink {
 
       // Connect to room
       await this.room.connect(tokenResponse.livekitUrl!, tokenResponse.token!);
-      this.connected = true;
+      // Note: connected flag is set by RoomEvent.Connected handler above
       
     } catch (error) {
-      console.error('[LiveKitSink] Connection error:', error);
+      console.error(
+        '[LiveKitSink] Failed to connect to LiveKit. Real-time LiveKit telemetry will be disabled for this session (hook sink will still work). Underlying error:',
+        error,
+      );
       this.config.onError?.(error as Error);
       throw error;
     }
@@ -143,7 +146,7 @@ export class LiveKitSink implements TelemetrySink {
    * Check if connected and ready to send
    */
   isReady(): boolean {
-    return this.connected && this.room?.localParticipant !== undefined;
+    return this.connected && this.room?.localParticipant != null;
   }
 
   /**

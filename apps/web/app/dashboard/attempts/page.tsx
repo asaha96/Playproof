@@ -25,6 +25,10 @@ import { Activity, CheckCircle, XCircle, AlertTriangle, Clock } from "lucide-rea
 export default function AttemptsPage() {
   // Fetch recent attempts with results
   const attempts = useQuery(api.realtime.listRecentAttemptsWithResults, { limit: 100 });
+  
+  // Handle loading and error states
+  const isLoading = attempts === undefined;
+  const hasError = attempts === null;
 
   // Format timestamp for display
   const formatTime = (timestamp: number) => {
@@ -156,10 +160,16 @@ export default function AttemptsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {!attempts ? (
+                  {isLoading ? (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                         Loading attempts...
+                      </TableCell>
+                    </TableRow>
+                  ) : hasError ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-red-500">
+                        Failed to load attempts. Please check your authentication and try again.
                       </TableCell>
                     </TableRow>
                   ) : attempts.length === 0 ? (

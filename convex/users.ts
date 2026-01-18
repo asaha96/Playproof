@@ -186,7 +186,8 @@ export const regenerateApiKey = mutation({
 
 /**
  * Get a user by their API key (for SDK authentication)
- * This is public (no auth required) because SDK uses it to validate API keys
+ * This is public (no auth required) because SDK uses it to validate API keys.
+ * Returns minimal info to avoid exposing PII.
  */
 export const getByApiKey = query({
   args: {
@@ -198,15 +199,13 @@ export const getByApiKey = query({
       .withIndex("by_apiKey", (q) => q.eq("apiKey", args.apiKey))
       .first();
 
-    // Return minimal user info for validation
+    // Return minimal user info for validation (no PII)
     if (!user) {
       return null;
     }
 
     return {
       _id: user._id,
-      email: user.email,
-      name: user.name,
     };
   },
 });

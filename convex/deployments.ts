@@ -26,18 +26,32 @@ const brandingInput = v.object({
 
 const deploymentType = v.union(
   v.literal("bubble-pop"),
-  v.literal("golf"),
-  v.literal("basketball"),
-  v.literal("archery")
+  v.literal("archery"),
+  v.literal("osu")
 );
 
 export const list = query({
   args: {},
   handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return [];
+    }
+
+    // Get user
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+      .first();
+
+    if (!user) {
+      return [];
+    }
+
+    // Only return deployments owned by this user
     return await ctx.db
       .query("deployments")
-      .withIndex("by_updatedAt")
-      .order("desc")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
       .collect();
   },
 });
@@ -64,12 +78,23 @@ export const create = mutation({
       throw new Error("Called create without authentication");
     }
 
+    // Get user ID from identity
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+      .first();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
     const branding = resolveBranding(args.branding);
     const now = Date.now();
 
     return await ctx.db.insert("deployments", {
       name: args.name,
       type: args.type,
+      userId: user._id,
       createdAt: now,
       updatedAt: now,
       isActive: args.isActive ?? false,
@@ -90,9 +115,24 @@ export const setActive = mutation({
       throw new Error("Called setActive without authentication");
     }
 
+    // Get user
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+      .first();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
     const deployment = await ctx.db.get(args.id);
     if (!deployment) {
       throw new Error("Deployment not found");
+    }
+
+    // Verify ownership
+    if (deployment.userId && deployment.userId !== user._id) {
+      throw new Error("Not authorized");
     }
 
     await ctx.db.patch(args.id, {
@@ -116,9 +156,24 @@ export const update = mutation({
       throw new Error("Called update without authentication");
     }
 
+    // Get user
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+      .first();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
     const deployment = await ctx.db.get(args.id);
     if (!deployment) {
       throw new Error("Deployment not found");
+    }
+
+    // Verify ownership
+    if (deployment.userId && deployment.userId !== user._id) {
+      throw new Error("Not authorized");
     }
 
     const branding = resolveBranding(args.branding);
@@ -143,9 +198,24 @@ export const remove = mutation({
       throw new Error("Called remove without authentication");
     }
 
+    // Get user
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", identity.subject))
+      .first();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
     const deployment = await ctx.db.get(args.id);
     if (!deployment) {
       throw new Error("Deployment not found");
+    }
+
+    // Verify ownership
+    if (deployment.userId && deployment.userId !== user._id) {
+      throw new Error("Not authorized");
     }
 
     await ctx.db.delete(args.id);

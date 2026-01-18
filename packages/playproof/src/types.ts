@@ -145,7 +145,7 @@ export interface PlayproofConfig {
      * When livekit.enabled is true (default), telemetry is streamed to LiveKit in addition to hooks.
      * When false, only the original hooks.onTelemetryBatch is used.
      */
-    telemetryTransport: TelemetryTransportConfig;
+    telemetryTransport?: TelemetryTransportConfig;
     onSuccess: ((result: VerificationResult) => void) | null;
     onFailure: ((result: VerificationResult) => void) | null;
     onStart: (() => void) | null;
@@ -172,7 +172,9 @@ export interface TelemetryTransportConfig {
 }
 
 export interface SDKHooks {
-    onTelemetryBatch: ((batch: PointerTelemetryEvent[]) => void) | null;
+    // During gameplay: receives PointerTelemetryEvent[] batches
+    // After completion: receives BehaviorData (the SDK calls this with BehaviorData when game completes)
+    onTelemetryBatch: ((batch: PointerTelemetryEvent[] | BehaviorData) => void) | null;
     onAttemptEnd: ((attempt: AttemptData) => void) | null;
     regenerate: (() => void) | null;
 }
@@ -187,7 +189,7 @@ export interface AttemptData {
 }
 
 // Game types
-export type GameId = 'bubble-pop' | 'archery' | 'random';
+export type GameId = 'bubble-pop' | 'archery' | 'osu' | 'random';
 
 export interface GameInfo {
     GameClass: new (gameArea: HTMLElement, config: PlayproofConfig, hooks: SDKHooks) => BaseGame;

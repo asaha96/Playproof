@@ -5,6 +5,7 @@ declare module 'three' {
     export const Scene: any;
     export const Color: any;
     export const PerspectiveCamera: any;
+    export const OrthographicCamera: any;
     export const WebGLRenderer: any;
     export const Object3D: any;
     export const Mesh: any;
@@ -21,6 +22,8 @@ declare module 'three' {
     export const RingGeometry: any;
     export const CircleGeometry: any;
     export const TubeGeometry: any;
+    export const ShapeGeometry: any;
+    export const Shape: any;
     export const Material: any;
     export const MeshBasicMaterial: any;
     export const MeshStandardMaterial: any;
@@ -41,6 +44,11 @@ declare module 'three' {
     export const Clock: any;
     export const CanvasTexture: any;
     export const QuadraticBezierCurve3: any;
+    // Curves for 2D paths
+    export const CurvePath: any;
+    export const LineCurve: any;
+    export const QuadraticBezierCurve: any;
+    export const SplineCurve: any;
     
     // Constants
     export const DoubleSide: any;
@@ -54,6 +62,7 @@ declare module 'three' {
     export type Scene = any;
     export type Color = any;
     export type PerspectiveCamera = any;
+    export type OrthographicCamera = any;
     export type WebGLRenderer = any;
     export type Object3D = any;
     export type Mesh = any;
@@ -63,6 +72,8 @@ declare module 'three' {
     export type Raycaster = any;
     export type BufferGeometry = any;
     export type SphereGeometry = any;
+    export type ShapeGeometry = any;
+    export type Shape = any;
     export type Material = any;
     export type MeshBasicMaterial = any;
     export type MeshStandardMaterial = any;
@@ -78,4 +89,9 @@ declare module 'three' {
     export type Points = any;
     export type Clock = any;
     export type Intersection = any;
+    // Curve types
+    export type CurvePath<T> = any;
+    export type LineCurve = any;
+    export type QuadraticBezierCurve = any;
+    export type SplineCurve = any;
 }

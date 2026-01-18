@@ -26,9 +26,8 @@ const brandingFields = {
 
 const deploymentType = v.union(
   v.literal("bubble-pop"),
-  v.literal("golf"),
-  v.literal("basketball"),
-  v.literal("archery")
+  v.literal("archery"),
+  v.literal("osu")
 );
 
 // Verification result decision type
@@ -43,6 +42,7 @@ export default defineSchema({
   activeAttempts: defineTable({
     attemptId: v.string(),
     deploymentId: v.id("deployments"),
+    userId: v.id("users"), // Owner of the deployment (for access control)
     roomName: v.string(),
     createdAt: v.number(),
     expiresAt: v.number(),
@@ -53,6 +53,7 @@ export default defineSchema({
     createdByApiKeyHash: v.optional(v.string()),
   })
     .index("by_deploymentId", ["deploymentId"])
+    .index("by_userId", ["userId"])
     .index("by_expiresAt", ["expiresAt"])
     .index("by_attemptId", ["attemptId"]),
   // Users table - stores authenticated users from Clerk
@@ -84,6 +85,7 @@ export default defineSchema({
   deployments: defineTable({
     name: v.string(),
     type: deploymentType,
+    userId: v.id("users"), // Owner of the deployment
     createdAt: v.number(),
     updatedAt: v.number(),
     isActive: v.boolean(),
@@ -91,6 +93,7 @@ export default defineSchema({
     ...brandingFields,
   })
     .index("by_name", ["name"])
+    .index("by_userId", ["userId"])
     .index("by_updatedAt", ["updatedAt"])
     .index("by_active", ["isActive"]),
   // Sessions table - stores verification sessions for a deployment

@@ -10,6 +10,7 @@ import { v } from "convex/values";
 import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { AccessToken } from "livekit-server-sdk";
+import { createHash } from "crypto";
 
 // Attempt expiry TTL (30 minutes)
 const ATTEMPT_TTL_MS = 30 * 60 * 1000;
@@ -29,16 +30,11 @@ function generateAttemptId(): string {
 }
 
 /**
- * Hash an API key for auditing (simple hash, not cryptographic)
+ * Hash an API key for auditing using SHA-256 (cryptographically secure)
  */
 function hashApiKey(apiKey: string): string {
-  let hash = 0;
-  for (let i = 0; i < apiKey.length; i++) {
-    const char = apiKey.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash; // Convert to 32bit integer
-  }
-  return `hash_${Math.abs(hash).toString(36)}`;
+  const hash = createHash("sha256").update(apiKey).digest("hex");
+  return `sha256_${hash.substring(0, 16)}`;
 }
 
 /**
@@ -90,6 +86,15 @@ export const createAttemptAndPublisherToken = action({
       };
     }
 
+    // Verify deployment belongs to the user (security check)
+    if (deployment.userId && deployment.userId !== user._id) {
+      return {
+        success: false,
+        // Use generic message to avoid leaking existence of other users' deployments
+        error: "Deployment not found",
+      };
+    }
+
     // Generate attempt ID and room name
     const attemptId = generateAttemptId();
     const roomName = generateRoomName(args.deploymentId, attemptId);
@@ -115,6 +120,7 @@ export const createAttemptAndPublisherToken = action({
     await ctx.runMutation(internal.realtime.insertAttemptInternal, {
       attemptId,
       deploymentId: args.deploymentId,
+      userId: user._id,
       roomName,
       createdAt: now,
       expiresAt: now + ATTEMPT_TTL_MS,
