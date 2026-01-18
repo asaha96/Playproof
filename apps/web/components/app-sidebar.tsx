@@ -41,17 +41,12 @@ const navItems = [
     icon: Rocket,
   },
   {
-    title: "Branding",
-    href: "/dashboard/branding",
-    icon: Palette,
-  },
-  {
     title: "Playground",
     href: "/dashboard/playground",
     icon: Gamepad2, // Using Gamepad2 as a placeholder, maybe find a better icon or reuse
   },
   {
-    title: "Docs",
+    title: "Documentation",
     href: "/dashboard/docs",
     icon: BookOpen,
   },

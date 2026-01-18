@@ -10,30 +10,6 @@ import Link from "next/link";
 export default function DocsPage() {
     return (
         <div className="min-h-screen bg-background pb-20">
-            {/* Hero Section */}
-            <section className="bg-muted/30 border-b border-border py-20">
-                <div className="container mx-auto px-4 max-w-6xl">
-                    <div className="flex items-center gap-3 mb-6">
-                        <Badge variant="outline" className="border-primary/40 text-primary bg-primary/5 px-3 py-1 text-sm">v1.2.0-beta</Badge>
-                        <Badge variant="secondary" className="bg-secondary/50 text-muted-foreground hover:bg-secondary/60 transition-colors">Latest Build</Badge>
-                    </div>
-                    <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6 bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">
-                        Playproof SDK
-                    </h1>
-                    <p className="text-xl text-muted-foreground max-w-2xl text-balance leading-relaxed">
-                        The definitive guide to integrating game-based CAPTCHA verification. Secure your app with engaging micro-games, deep customization, and actionable telemetry.
-                    </p>
-                    <div className="flex flex-wrap gap-4 mt-10">
-                        <Button size="lg" className="h-12 px-8 text-base bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95">
-                            Get Started <ChevronRight className="ml-2 h-4 w-4" />
-                        </Button>
-                        <Button size="lg" variant="outline" className="h-12 px-8 text-base border-input bg-background/50 hover:bg-accent hover:text-accent-foreground backdrop-blur-sm">
-                            View API Reference
-                        </Button>
-                    </div>
-                </div>
-            </section>
-
             <div className="container mx-auto px-4 max-w-6xl py-12 flex flex-col items-start lg:flex-row gap-16">
 
                 {/* Navigation Sidebar */}
