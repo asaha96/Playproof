@@ -10,6 +10,8 @@
 
 import type * as branding from "../branding.js";
 import type * as deployments from "../deployments.js";
+import type * as livekit from "../livekit.js";
+import type * as realtime from "../realtime.js";
 import type * as sessions from "../sessions.js";
 import type * as users from "../users.js";
 
@@ -22,6 +24,8 @@ import type {
 declare const fullApi: ApiFromModules<{
   branding: typeof branding;
   deployments: typeof deployments;
+  livekit: typeof livekit;
+  realtime: typeof realtime;
   sessions: typeof sessions;
   users: typeof users;
 }>;

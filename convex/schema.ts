@@ -31,7 +31,30 @@ const deploymentType = v.union(
   v.literal("archery")
 );
 
+// Verification result decision type
+const verificationDecision = v.union(
+  v.literal("pass"),
+  v.literal("review"),
+  v.literal("fail")
+);
+
 export default defineSchema({
+  // Active verification attempts (for LiveKit telemetry)
+  activeAttempts: defineTable({
+    attemptId: v.string(),
+    deploymentId: v.id("deployments"),
+    roomName: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    // Result from Woodwide scoring (set when attempt ends)
+    result: v.optional(verificationDecision),
+    anomalyScore: v.optional(v.number()),
+    // Audit fields
+    createdByApiKeyHash: v.optional(v.string()),
+  })
+    .index("by_deploymentId", ["deploymentId"])
+    .index("by_expiresAt", ["expiresAt"])
+    .index("by_attemptId", ["attemptId"]),
   // Users table - stores authenticated users from Clerk
   users: defineTable({
     // Clerk identifiers (support both for migration compatibility)
@@ -48,6 +71,8 @@ export default defineSchema({
     // Timestamps
     createdAt: v.optional(v.number()),
     updatedAt: v.optional(v.number()),
+    // Branding type (legacy field)
+    brandingType: v.optional(v.string()),
     // Branding fields (user-level customization)
     ...brandingFields,
   })

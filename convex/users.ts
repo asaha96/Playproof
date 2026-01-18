@@ -1,3 +1,4 @@
+import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
 /**
@@ -180,5 +181,32 @@ export const regenerateApiKey = mutation({
     });
 
     return newApiKey;
+  },
+});
+
+/**
+ * Get a user by their API key (for SDK authentication)
+ * This is public (no auth required) because SDK uses it to validate API keys
+ */
+export const getByApiKey = query({
+  args: {
+    apiKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_apiKey", (q) => q.eq("apiKey", args.apiKey))
+      .first();
+
+    // Return minimal user info for validation
+    if (!user) {
+      return null;
+    }
+
+    return {
+      _id: user._id,
+      email: user.email,
+      name: user.name,
+    };
   },
 });
