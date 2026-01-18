@@ -3,7 +3,15 @@
  * Main entry point
  */
 
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Load env from multiple locations (local first, then root)
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
+dotenv.config({ path: resolve(__dirname, '../.env') }); // apps/api/.env
+dotenv.config({ path: resolve(__dirname, '../../../.env.local') }); // root .env.local
+
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { pcgRoutes } from './routes/pcg.js';

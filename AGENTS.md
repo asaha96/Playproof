@@ -59,11 +59,11 @@ Playproof/
 
 | Folder | Purpose | Tech Stack |
 |--------|---------|------------|
-| `apps/web` | Primary web application | Next.js (placeholder for now) |
-| `apps/api` | API orchestrator, endpoints: `/issue`, `/events`, `/finalize` | Fastify + TypeScript |
+| `apps/web` | Primary web application | Next.js + Convex + Clerk |
+| `apps/api` | PCG level generation API | Fastify + Groq LLM + TypeScript |
 | `apps/edge-worker` | Edge token issuance, caching, prefilter | Cloudflare Workers |
-| `packages/playproof` | Client SDK for embedding verification deployments | TypeScript + PixiJS |
-| `packages/shared` | Shared types, contracts, utilities | TypeScript |
+| `packages/playproof` | Client SDK for embedding verification games | TypeScript + PixiJS |
+| `packages/shared` | Shared types, GridLevel schema, physics engine, telemetry | TypeScript |
 | `services/scoring` | ML scoring service | Python + FastAPI + XGBoost |
 | `demo-app` | Interactive demo for testing SDK | Next.js |
 
@@ -203,16 +203,64 @@ git pull --ff-only
 
 - **Workspace root**: Configured with npm workspaces
 - **SDK**: `packages/playproof/` (published name: `playproof`)
-- **Web app**: `apps/web/` (placeholder, canonical path)
+- **Shared**: `packages/shared/` (GridLevel schema, telemetry, physics engine)
+- **Web app**: `apps/web/` (Next.js + Convex + Clerk)
 - **Dashboard**: Deployments page at `/dashboard/deployments`
-- **Deployments**: Branding stored per deployment with `type` enum and `isActive` flag (user branding removed)
-- **Terminology**: Legacy naming updated to "deployments" across Convex and web UI
+- **Deployments**: Branding stored per deployment with `type` enum and `isActive` flag
 - **Demo**: `demo-app/` (legacy, functional)
-- **API**: `apps/api/` (Fastify placeholder)
+- **API**: `apps/api/` (Fastify - IMPLEMENTED)
+  - `POST /pcg/level` - Generate procedural levels with LLM
+  - `GET /pcg/health` - Health check
+  - `GET /pcg/levels/golden` - Get curated fallback levels
 - **Worker**: `apps/edge-worker/` (Cloudflare placeholder)
 - **Scoring**: `services/scoring/` (FastAPI placeholder)
 - **Convex**: `convex/` (Backend functions & schema)
 
 ---
 
-*Last updated: Deployment terminology and schema updates*
+## PCG API (apps/api)
+
+### Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/pcg/level` | POST | Generate a procedurally generated mini-golf level |
+| `/pcg/health` | GET | Health check |
+| `/pcg/levels/golden` | GET | Get curated fallback levels |
+
+### POST /pcg/level
+
+**Request:**
+```json
+{
+  "gameId": "mini-golf",
+  "difficulty": "easy" | "medium" | "hard",
+  "seed": "optional-seed",
+  "skipSimulation": false,
+  "skipCache": false
+}
+```
+
+**Response:**
+```json
+{
+  "gridLevel": { ... },
+  "validationReport": { "valid": true, "errors": [], "warnings": [] },
+  "lintReport": { "strict": false, "issues": [] },
+  "simulationReport": { "passed": true, "attempts": 42 },
+  "rulesetVersion": 1,
+  "signature": "hmac-sha256-hex"
+}
+```
+
+### Environment Variables
+
+Set in root `.env.local`:
+```
+GROQ_API_KEY=gsk_...           # Groq API key (free at console.groq.com)
+LEVEL_SIGNING_SECRET=...       # Random hex for HMAC signing
+```
+
+---
+
+*Last updated: PCG API implementation complete*
