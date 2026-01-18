@@ -9,7 +9,7 @@ import type { PlayproofTheme, PlayproofConfig, SDKHooks, TelemetryTransportConfi
  * Hardcoded Playproof API URL - end users don't need to configure this
  * This points to the Next.js web app which proxies requests to Convex
  */
-export const PLAYPROOF_API_URL = 'https://playproof.app';
+export const PLAYPROOF_API_URL = 'http://localhost:3000';
 
 export const DEFAULT_THEME: PlayproofTheme = {
   primary: '#6366f1',
