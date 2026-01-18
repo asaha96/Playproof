@@ -163,7 +163,7 @@ export interface AttemptData {
 }
 
 // Game types
-export type GameId = 'bubble-pop' | 'archery' | 'random';
+export type GameId = 'bubble-pop' | 'archery' | 'snake' | 'random';
 
 export interface GameInfo {
     GameClass: new (gameArea: HTMLElement, config: PlayproofConfig, hooks: SDKHooks) => BaseGame;

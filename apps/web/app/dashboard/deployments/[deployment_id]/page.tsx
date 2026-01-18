@@ -40,13 +40,11 @@ import { api } from "@/convex/_generated/api";
 import { useThemeColors, LIGHT_THEME_COLORS, PLAYPROOF_FONTS, type PlayproofFontFamily } from "@/hooks/useThemeColors";
 import type { Id } from "@/convex/_generated/dataModel";
 
-type DeploymentType = "bubble-pop" | "golf" | "basketball" | "archery";
+type DeploymentType = "bubble-pop" | "snake";
 
 const deploymentTypes: Array<{ value: DeploymentType; label: string }> = [
   { value: "bubble-pop", label: "Bubble Pop" },
-  { value: "golf", label: "Golf" },
-  { value: "basketball", label: "Basketball" },
-  { value: "archery", label: "Archery" },
+  { value: "snake", label: "Snake" },
 ];
 
 type ColorFieldProps = {

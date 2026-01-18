@@ -28,7 +28,8 @@ const deploymentType = v.union(
   v.literal("bubble-pop"),
   v.literal("golf"),
   v.literal("basketball"),
-  v.literal("archery")
+  v.literal("archery"),
+  v.literal("snake")
 );
 
 export default defineSchema({
@@ -63,6 +64,10 @@ export default defineSchema({
     updatedAt: v.number(),
     isActive: v.boolean(),
     sessionIds: v.optional(v.array(v.id("sessions"))),
+    // Optional deployment-level API key (legacy field)
+    apiKey: v.optional(v.string()),
+    // Optional deployment ID string (for external reference)
+    deploymentId: v.optional(v.string()),
     ...brandingFields,
   })
     .index("by_name", ["name"])

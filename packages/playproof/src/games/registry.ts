@@ -5,6 +5,7 @@
 
 import { BubblePopGame } from './three/bubble-pop';
 import { ArcheryGame } from './three/archery';
+import { SnakeGame } from './three/snake-game';
 import type { GameId, PlayproofConfig, SDKHooks, BaseGame } from '../types';
 
 type GameConstructor = new (gameArea: HTMLElement, config: PlayproofConfig, hooks: SDKHooks) => BaseGame;
@@ -39,6 +40,13 @@ export const GAME_REGISTRY: Record<string, GameRegistryEntry> = {
         name: 'Archery',
         description: 'Draw back and hit the target!',
         duration: 12000,
+        isThree: true
+    },
+    'snake': {
+        GameClass: SnakeGame as unknown as GameConstructor,
+        name: 'Snake',
+        description: 'Collect orbs and grow your snake!',
+        duration: 15000,
         isThree: true
     }
 };
