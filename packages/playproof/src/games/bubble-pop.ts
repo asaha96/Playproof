@@ -3,7 +3,7 @@
  * A simple ~10 second game for behavior verification
  */
 
-import type { BehaviorData, MovementPoint, PlayproofConfig } from '@playproof/shared';
+import type { BehaviorData, MouseMovement, PlayproofConfig } from '../types';
 
 export class BubblePopGame {
   private gameArea: HTMLElement;
@@ -14,9 +14,10 @@ export class BubblePopGame {
     clickTimings: [],
     trajectories: [],
     hits: 0,
-    misses: 0
+    misses: 0,
+    clickAccuracy: 0
   };
-  private currentTrajectory: MovementPoint[] = [];
+  private currentTrajectory: MouseMovement[] = [];
   private isRunning = false;
   private bubbleInterval: ReturnType<typeof setInterval> | null = null;
   private onComplete: ((data: BehaviorData) => void) | null = null;
@@ -38,7 +39,7 @@ export class BubblePopGame {
     if (!this.isRunning) return;
 
     const rect = this.gameArea.getBoundingClientRect();
-    const movement: MovementPoint = {
+    const movement: MouseMovement = {
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
       timestamp: Date.now()
@@ -82,7 +83,8 @@ export class BubblePopGame {
       clickTimings: [],
       trajectories: [],
       hits: 0,
-      misses: 0
+      misses: 0,
+      clickAccuracy: 0
     };
 
     // Clear game area
@@ -97,7 +99,8 @@ export class BubblePopGame {
     }, 800);
 
     // End game after duration
-    setTimeout(() => this.end(), this.config.gameDuration);
+    const duration = this.config.gameDuration || 10000;
+    setTimeout(() => this.end(), duration);
   }
 
   private spawnBubble(): void {
@@ -145,7 +148,7 @@ export class BubblePopGame {
       const bubbleH = bubbleRect.height;
 
       if (x >= bubbleX && x <= bubbleX + bubbleW &&
-          y >= bubbleY && y <= bubbleY + bubbleH) {
+        y >= bubbleY && y <= bubbleY + bubbleH) {
         return bubble;
       }
     }
