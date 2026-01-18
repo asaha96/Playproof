@@ -117,6 +117,9 @@ export interface PlayproofConfig {
     confidenceThreshold: number;
     gameDuration: number | null;
     gameId: GameId;
+    // API credentials for fetching deployment branding
+    apiKey: string | null;
+    deploymentId: string | null;
     onSuccess: ((result: VerificationResult) => void) | null;
     onFailure: ((result: VerificationResult) => void) | null;
     onStart: (() => void) | null;
