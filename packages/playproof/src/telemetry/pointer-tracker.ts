@@ -20,6 +20,8 @@ export interface PointerTrackerConfig {
     moveThrottleMs?: number;
     /** Whether to log events to console (default: false) */
     logEvents?: boolean;
+    /** Maximum number of events to store (default: 10000, FIFO eviction) */
+    maxEvents?: number;
     /** Callback for batched events */
     onBatch?: (events: PointerTelemetryEvent[]) => void;
 }
@@ -45,6 +47,7 @@ export class PointerTelemetryTracker {
         this.config = {
             moveThrottleMs: config.moveThrottleMs ?? 50,
             logEvents: config.logEvents ?? false,
+            maxEvents: config.maxEvents ?? 10000,
             onBatch: config.onBatch ?? (() => {}),
         };
 
@@ -57,7 +60,8 @@ export class PointerTelemetryTracker {
     }
 
     /**
-     * Attach to an element and start tracking
+     * Attach to an element and initialize tracking state.
+     * Note: Event tracking does not begin until {@link start} is called.
      */
     attach(element: HTMLElement): void {
         if (this.element) {
@@ -71,7 +75,7 @@ export class PointerTelemetryTracker {
         this.isDown = false;
         this.lastMoveFlush = 0;
 
-        // Add listeners with passive: false for touch support
+        // Add listeners with passive: true for better scroll performance
         element.addEventListener('pointermove', this.boundPointerMove, { passive: true });
         element.addEventListener('pointerdown', this.boundPointerDown, { passive: true });
         element.addEventListener('pointerup', this.boundPointerUp, { passive: true });
@@ -140,7 +144,17 @@ export class PointerTelemetryTracker {
     flush(): void {
         if (this.buffer.length > 0) {
             this.events.push(...this.buffer);
-            this.config.onBatch(this.buffer);
+            
+            // FIFO eviction if we exceed maxEvents
+            if (this.events.length > this.config.maxEvents) {
+                this.events = this.events.slice(-this.config.maxEvents);
+            }
+            
+            try {
+                this.config.onBatch(this.buffer);
+            } catch (error) {
+                console.error('[PointerTelemetry] Error in onBatch callback:', error);
+            }
             this.buffer = [];
         }
     }
@@ -163,6 +177,9 @@ export class PointerTelemetryTracker {
         }
         if (config.logEvents !== undefined) {
             this.config.logEvents = config.logEvents;
+        }
+        if (config.maxEvents !== undefined) {
+            this.config.maxEvents = config.maxEvents;
         }
         if (config.onBatch !== undefined) {
             this.config.onBatch = config.onBatch;
@@ -222,7 +239,7 @@ export class PointerTelemetryTracker {
         // - Move events: throttle to reduce noise
         const isImportantEvent = eventType !== 'move';
 
-        if (isImportantEvent || now - this.lastMoveFlush > this.config.moveThrottleMs) {
+        if (isImportantEvent || now - this.lastMoveFlush >= this.config.moveThrottleMs) {
             this.lastMoveFlush = now;
             this.flush();
         }

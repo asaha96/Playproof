@@ -64,7 +64,7 @@ export interface PointerTelemetryEvent {
     eventType: 'move' | 'down' | 'up' | 'enter' | 'leave';
     pointerType: string;      // 'mouse', 'touch', 'pen'
     pointerId: number;        // Unique pointer ID
-    isTrusted: boolean;       // Whether event was user-generated
+    isTrusted: boolean;       // Browser event.isTrusted flag; telemetry only, not a reliable standalone bot-detection signal
 }
 
 // Extended telemetry for future SDK

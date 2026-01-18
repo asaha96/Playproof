@@ -36,7 +36,7 @@ export default function ObservabilityPage() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [resetKey, setResetKey] = useState(0);
   
-  // Stats
+  // Stats - track raw counts to avoid capping issues
   const [stats, setStats] = useState({
     totalEvents: 0,
     moveEvents: 0,
@@ -68,13 +68,15 @@ export default function ObservabilityPage() {
       eventsRef.current = eventsRef.current.slice(-MAX_EVENTS);
     }
 
-    // Update stats
+    // Update stats - use raw running totals, not capped array length
     setStats((prev) => {
       let dragDistance = prev.dragDistance;
       let moveCount = prev.moveEvents;
       let clickCount = prev.clickEvents;
+      let totalCount = prev.totalEvents;
       
       batch.forEach(event => {
+        totalCount++;
         if (event.eventType === "move") {
           moveCount++;
           // Calculate drag distance if mouse is down and we have a previous position
@@ -90,7 +92,7 @@ export default function ObservabilityPage() {
       });
 
       return {
-        totalEvents: eventsRef.current.length,
+        totalEvents: totalCount,
         moveEvents: moveCount,
         clickEvents: clickCount,
         dragDistance: Math.round(dragDistance * 100) / 100,
@@ -110,10 +112,6 @@ export default function ObservabilityPage() {
         // Ignore cleanup errors
       }
       playproofInstanceRef.current = null;
-    }
-    // Clear container
-    if (containerRef.current) {
-      containerRef.current.innerHTML = "";
     }
     setIsLoaded(false);
   }, []);
@@ -257,6 +255,7 @@ export default function ObservabilityPage() {
               variant={autoScroll ? "default" : "outline"}
               size="sm"
               onClick={() => setAutoScroll(!autoScroll)}
+              aria-label={autoScroll ? "Disable auto-scroll" : "Enable auto-scroll"}
             >
               <ArrowUp className="h-4 w-4 mr-1" />
               Auto-scroll
@@ -265,6 +264,7 @@ export default function ObservabilityPage() {
               variant={isPaused ? "default" : "outline"}
               size="sm"
               onClick={() => setIsPaused(!isPaused)}
+              aria-label={isPaused ? "Resume telemetry capture" : "Pause telemetry capture"}
             >
               {isPaused ? (
                 <>
@@ -278,11 +278,11 @@ export default function ObservabilityPage() {
                 </>
               )}
             </Button>
-            <Button variant="outline" size="sm" onClick={handleClear}>
+            <Button variant="outline" size="sm" onClick={handleClear} aria-label="Clear all captured events">
               <Trash2 className="h-4 w-4 mr-1" />
               Clear
             </Button>
-            <Button variant="destructive" size="sm" onClick={handleReset}>
+            <Button variant="destructive" size="sm" onClick={handleReset} aria-label="Reset SDK and clear all data">
               <RotateCcw className="h-4 w-4 mr-1" />
               Reset
             </Button>
