@@ -8,7 +8,7 @@
  * or use the Python SDK if available.
  */
 
-import { extractFeatures, featuresToCsv } from "./src/lib/features.js";
+import { extractFeatures, featuresToCsv } from "../../server/lib/features";
 import type { SessionTelemetry } from "@playproof/shared";
 import { writeFileSync } from "fs";
 import { join } from "path";
@@ -151,7 +151,7 @@ async function main() {
   console.log("   2. Or use the Python SDK:");
   console.log(`      python -c "from woodwide import WoodWide; import pandas as pd; client = WoodWide(api_key='YOUR_KEY'); df = pd.read_csv('${filename}'); client.api.datasets.upload(file=df, name='movement_human_train')"`);
   console.log("   3. Train the model:");
-  console.log(`      curl -X POST http://localhost:3002/api/v1/training/start \\`);
+  console.log(`      curl -X POST http://localhost:3000/api/v1/training/start \\`);
   console.log(`        -H "Content-Type: application/json" \\`);
   console.log(`        -d '{"datasetName": "movement_human_train", "modelName": "movement_anomaly_v1", "modelType": "anomaly"}'`);
   console.log("\n✨ Done!");

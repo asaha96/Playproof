@@ -1,7 +1,7 @@
 #!/bin/bash
 # Manual curl test for scoring endpoint
 
-API_URL="${API_URL:-http://localhost:3002}"
+API_URL="${API_URL:-http://localhost:3000}"
 
 echo "🧪 Testing PlayProof Scoring API"
 echo "   API URL: $API_URL"

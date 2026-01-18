@@ -39,8 +39,9 @@ A human verification system that replaces traditional CAPTCHAs with branded depl
 ```
 Playproof/
 ├── apps/
-│   ├── web/              # Canonical web app (Next.js)
-│   ├── api/              # Fastify API orchestrator + Woodwide scoring
+│   ├── web/              # Canonical web app (Next.js, includes API routes)
+│   │   └── woodwide/     # Woodwide data, scripts, tests, docs
+│   ├── api/              # Legacy Fastify API (deprecated; not source of truth)
 │   └── edge-worker/      # Cloudflare Worker (token issuance, caching, prefilter)
 ├── convex/               # Convex backend (schema, functions)
 ├── packages/
@@ -58,22 +59,33 @@ Playproof/
 | Folder | Purpose | Tech Stack |
 |--------|---------|------------|
 | `apps/web` | Primary web application | Next.js |
-| `apps/api` | API orchestrator with Woodwide bot detection scoring | Fastify + TypeScript |
+| `apps/web/app/api` | API routes (scoring, training, batch, datasets) | Next.js Route Handlers |
+| `apps/web/server` | API services, scoring pipeline, Woodwide client | TypeScript |
+| `apps/web/woodwide` | Woodwide training data/scripts/tests/docs | TypeScript + Shell |
+| `apps/api` | Legacy API orchestrator (deprecated) | Fastify + TypeScript |
 | `apps/edge-worker` | Edge token issuance, caching, prefilter | Cloudflare Workers |
 | `packages/playproof` | Client SDK for embedding verification deployments | TypeScript + PixiJS |
 | `packages/shared` | Shared types, contracts, scoring schemas | TypeScript |
 | `demo-app` | Interactive demo for testing SDK | Next.js |
 
-### API Endpoints (`apps/api`)
+### API Endpoints (`apps/web` app router)
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/health` | GET | Health check |
 | `/ready` | GET | Readiness check |
+| `/metrics` | GET | Woodwide observability metrics |
 | `/api/v1/score` | POST | Score a verification session (returns PASS/REVIEW/FAIL) |
 | `/api/v1/training/start` | POST | Start Woodwide model training |
 | `/api/v1/training/:modelId` | GET | Get training status |
 | `/api/v1/datasets/upload` | POST | Upload dataset for training |
+| `/api/v1/batch/stats` | GET | Batch queue + scheduler stats |
+| `/api/v1/batch/process` | POST | Manually process batch inference |
+| `/api/v1/batch/result/:sessionId` | GET | Get batch result for a session |
+| `/api/v1/batch/scheduler/start` | POST | Start batch scheduler |
+| `/api/v1/batch/scheduler/stop` | POST | Stop batch scheduler |
+| `/api/v1/batch/scheduler/status` | GET | Batch scheduler status |
+| `/api/v1/batch/clear` | POST | Clear batch queue |
 
 ---
 
@@ -122,9 +134,9 @@ Update this file **immediately** after any of these changes:
 2. **Avoid cross-cutting refactors on feature branches** - If you need to refactor shared code, do it in a separate PR first
 3. **Parallel work pattern**:
    - Branch A works in `packages/playproof`
-   - Branch B works in `apps/api`
+   - Branch B works in `apps/web/app/api` and `apps/web/server`
    - Branch C works in `packages/shared`
-   - Branch D works in `apps/web`
+   - Branch D works in `apps/web/app` (UI)
    - Minimal collision because each touches different folders
 
 ---
@@ -141,7 +153,7 @@ npm install
 npm run dev              # Default dev (apps/web)
 npm run dev:web          # apps/web
 npm run dev:demo         # demo-app
-npm run dev:api          # apps/api
+npm run dev:api          # legacy Fastify (deprecated)
 npm run dev:worker       # apps/edge-worker
 npm run convex:dev       # convex dev
 ```
@@ -152,7 +164,7 @@ npm run convex:dev       # convex dev
 # Run specific workspace
 npm run dev -w apps/web
 npm run dev -w demo-app
-npm run dev -w apps/api
+npm run dev -w apps/api  # legacy Fastify (deprecated)
 npm run dev -w apps/edge-worker
 
 # Build specific workspace
@@ -160,14 +172,14 @@ npm run build -w apps/web
 npm run build -w demo-app
 ```
 
-### API Service (apps/api)
+### API Service (apps/web Next.js)
 
 ```bash
-# Development (from workspace root)
-npm run dev:api
+# API routes are served by the web app
+npm run dev:web
 
 # Or directly
-cd apps/api
+cd apps/web
 npm run dev
 ```
 
@@ -179,6 +191,8 @@ ANOMALY_MODEL_ID=mdl_xxx
 ANOMALY_THRESHOLD_PASS=1.0
 ANOMALY_THRESHOLD_REVIEW=2.5
 ```
+
+Legacy Fastify app (`apps/api`) remains only for reference/testing and is not the source of truth for API behavior.
 
 ---
 
@@ -225,15 +239,17 @@ git pull --ff-only
 - **Dashboard**: Deployments page at `/dashboard/deployments`
 - **Deployments**: Branding stored per deployment with `type` enum and `isActive` flag
 - **Demo**: `demo-app/` (legacy, functional)
-- **API**: `apps/api/` (Fastify + TypeScript, Woodwide integration)
+- **API**: `apps/web/app/api/` + `apps/web/server/` (Next.js route handlers, Woodwide integration)
   - Bot detection scoring via movement telemetry analysis
   - Feature extraction: velocity, acceleration, jerk, path efficiency, jitter, etc.
   - Woodwide ML platform integration for anomaly detection
   - Three-tier decision: PASS (≤1.0) / REVIEW (≤2.5) / FAIL (>2.5)
+- **Woodwide assets**: `apps/web/woodwide/` (training data, scripts, tests, docs)
+- **Legacy API**: `apps/api/` (Fastify, deprecated)
 - **Worker**: `apps/edge-worker/` (Cloudflare placeholder)
 - **Shared types**: `packages/shared/` includes `SessionTelemetry`, `MovementFeatures`, `ScoringResponse`
 - **Convex**: `convex/` (Backend functions & schema)
 
 ---
 
-*Last updated: Woodwide scoring integration in apps/api (TypeScript)*
+*Last updated: Next.js API routes + Woodwide assets moved into apps/web*

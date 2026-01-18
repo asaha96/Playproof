@@ -5,15 +5,15 @@
  * Run with: npx tsx train-model.ts
  */
 
-import { extractFeatures, featuresToCsv } from "./src/lib/features.js";
-import { WoodwideClient } from "./src/services/woodwide.js";
+import { extractFeatures, featuresToCsv } from "../../server/lib/features";
+import { WoodwideClient } from "../../server/services/woodwide";
 import type { SessionTelemetry } from "@playproof/shared";
 import { config } from "dotenv";
 import { writeFileSync } from "fs";
 import { join } from "path";
 
 // Load environment variables
-config({ path: "../../.env.local" });
+config({ path: "../../../../.env.local" });
 
 const API_URL = process.env.WOODWIDE_BASE_URL || "https://api.woodwide.ai";
 const API_KEY = process.env.WOODWIDE_API_KEY || "";
@@ -264,7 +264,7 @@ async function trainModel() {
       process.exit(1);
     } else {
       console.warn("⚠️  Training still in progress. Check status later:");
-      console.warn(`   curl http://localhost:3002/api/v1/training/${trainingResult.modelId}`);
+      console.warn(`   curl http://localhost:3000/api/v1/training/${trainingResult.modelId}`);
     }
   } catch (error) {
     console.error("\n❌ Error:", error);

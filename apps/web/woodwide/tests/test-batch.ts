@@ -2,9 +2,9 @@
  * Test Batch Inference System
  */
 
-import { sessionQueue } from "./src/services/batch/queue.js";
-import { processBatch, getBatchStats } from "./src/services/batch/inference.js";
-import { extractFeatures } from "./src/lib/features.js";
+import { sessionQueue } from "../../server/services/batch/queue";
+import { processBatch, getBatchStats } from "../../server/services/batch/inference";
+import { extractFeatures } from "../../server/lib/features";
 import type { SessionTelemetry } from "@playproof/shared";
 
 // Generate test sessions
