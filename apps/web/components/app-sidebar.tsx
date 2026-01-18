@@ -52,7 +52,7 @@ const navItems = [
   },
   {
     title: "Docs",
-    href: "/docs",
+    href: "/dashboard/docs",
     icon: BookOpen,
   },
 ]
