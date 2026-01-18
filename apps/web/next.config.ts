@@ -16,6 +16,7 @@ const nextConfig: NextConfig = {
       // Resolve @/convex to root convex folder
       "@/convex": path.join(__dirname, "../../convex"),
     },
+    resolveExtensions: [".tsx", ".ts", ".jsx", ".js", ".mjs", ".json"],
   },
   // Enable type checking during build
   typescript: {
