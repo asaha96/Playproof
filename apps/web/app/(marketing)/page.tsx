@@ -1,7 +1,6 @@
-"use client";
-
 import Link from "next/link";
-import { SignInButton, SignUpButton, SignedIn, SignedOut } from "@clerk/nextjs";
+import { SignInButton, SignUpButton } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -129,7 +128,9 @@ const deploymentTypes = [
   { name: "Bubble Pop", description: "Rapid pattern recognition." },
 ];
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const { userId } = await auth();
+
   return (
     <div className="flex flex-col">
       {/* Hero Section */}
@@ -163,27 +164,28 @@ export default function LandingPage() {
         </p>
 
         <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row">
-          <SignedOut>
-            <SignUpButton mode="modal">
-              <Button size="lg" className="gap-2">
-                Get Started Free
-                <ArrowRight className="size-4" />
-              </Button>
-            </SignUpButton>
-            <SignInButton mode="modal">
-              <Button variant="outline" size="lg">
-                Sign In
-              </Button>
-            </SignInButton>
-          </SignedOut>
-          <SignedIn>
+          {!userId ? (
+            <>
+              <SignUpButton mode="modal">
+                <Button size="lg" className="gap-2">
+                  Get Started Free
+                  <ArrowRight className="size-4" />
+                </Button>
+              </SignUpButton>
+              <SignInButton mode="modal">
+                <Button variant="outline" size="lg">
+                  Sign In
+                </Button>
+              </SignInButton>
+            </>
+          ) : (
             <Link href="/dashboard">
               <Button size="lg" className="gap-2">
                 Go to Dashboard
                 <ArrowRight className="size-4" />
               </Button>
             </Link>
-          </SignedIn>
+          )}
         </div>
 
         {/* Stats */}
@@ -303,27 +305,28 @@ export default function LandingPage() {
             Get started in minutes with our simple SDK.
           </p>
           <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-            <SignedOut>
-              <SignUpButton mode="modal">
-                <Button size="lg" className="gap-2">
-                  Start Building
-                  <ArrowRight className="size-4" />
-                </Button>
-              </SignUpButton>
-              <a href="https://github.com/asaha96/Playproof" target="_blank" rel="noopener noreferrer">
-                <Button variant="outline" size="lg">
-                  View on GitHub
-                </Button>
-              </a>
-            </SignedOut>
-            <SignedIn>
+            {!userId ? (
+              <>
+                <SignUpButton mode="modal">
+                  <Button size="lg" className="gap-2">
+                    Start Building
+                    <ArrowRight className="size-4" />
+                  </Button>
+                </SignUpButton>
+                <a href="https://github.com/asaha96/Playproof" target="_blank" rel="noopener noreferrer">
+                  <Button variant="outline" size="lg">
+                    View on GitHub
+                  </Button>
+                </a>
+              </>
+            ) : (
               <Link href="/dashboard">
                 <Button size="lg" className="gap-2">
                   Go to Dashboard
                   <ArrowRight className="size-4" />
                 </Button>
               </Link>
-            </SignedIn>
+            )}
           </div>
         </div>
       </section>
