@@ -14,8 +14,15 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Eye, Pause, Play, Trash2, ArrowUp, RotateCcw, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
-import { Playproof, type PointerTelemetryEvent } from "playproof/react";
+import { Playproof, type PointerTelemetryEvent, type GameId } from "playproof/react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const MAX_EVENTS = 1000; // Cap to prevent memory issues
 
@@ -44,6 +51,7 @@ export default function ObservabilityPage() {
   const [isPaused, setIsPaused] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
   const [resetKey, setResetKey] = useState(0);
+  const [selectedGame, setSelectedGame] = useState<GameId>("bubble-pop");
   
   // Stats - track raw counts to avoid capping issues
   const [stats, setStats] = useState({
@@ -283,6 +291,14 @@ export default function ObservabilityPage() {
     setResetKey(prev => prev + 1);
   };
 
+  // Handle game selection change
+  const handleGameChange = (gameId: GameId | null) => {
+    if (gameId) {
+      setSelectedGame(gameId);
+      handleReset(); // Reset SDK when game changes
+    }
+  };
+
   // Format timestamp for display
   const formatTime = (tMs: number) => {
     return (tMs / 1000).toFixed(3) + "s";
@@ -320,6 +336,17 @@ export default function ObservabilityPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Select value={selectedGame} onValueChange={handleGameChange}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Select game" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bubble-pop">Bubble Pop</SelectItem>
+                <SelectItem value="osu">OSU</SelectItem>
+                <SelectItem value="snake">Snake</SelectItem>
+                <SelectItem value="random">Random</SelectItem>
+              </SelectContent>
+            </Select>
             <Button
               variant={autoScroll ? "default" : "outline"}
               size="sm"
@@ -400,7 +427,7 @@ export default function ObservabilityPage() {
               <div className="w-full min-h-[500px] border rounded-lg p-4 bg-slate-50 dark:bg-slate-900">
                 <Playproof
                   key={resetKey}
-                  gameId="bubble-pop"
+                  gameId={selectedGame}
                   gameDuration={30000}
                   confidenceThreshold={0.7}
                   theme={{
