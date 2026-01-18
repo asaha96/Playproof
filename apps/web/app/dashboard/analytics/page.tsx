@@ -42,51 +42,51 @@ export default function AnalyticsPage() {
 
   const statCards = stats
     ? [
-        {
-          label: "Human pass rate",
-          value: `${(stats.humanPassRate * 100).toFixed(1)}%`,
-          note: `${stats.totalSessions} sessions`,
-          icon: UserCheck,
-          trend: stats.humanPassRate > 0.8 ? "positive" : "neutral",
-        },
-        {
-          label: "Bot detections",
-          value: stats.botDetections.toLocaleString(),
-          note: `of ${stats.totalSessions} sessions`,
-          icon: Bot,
-          trend: stats.botDetections < stats.totalSessions * 0.1 ? "positive" : "neutral",
-        },
-        {
-          label: "Avg. session time",
-          value: `${(stats.avgSessionMs / 1000).toFixed(1)}s`,
-          note: `${stats.totalSessions} sessions`,
-          icon: TrendingUp,
-          trend: stats.avgSessionMs < 5000 ? "positive" : "neutral",
-        },
-        {
-          label: "Completion rate",
-          value: `${((stats.completionRate ?? 0) * 100).toFixed(1)}%`,
-          note: `${stats.totalSessions} sessions`,
-          icon: Target,
-          trend: (stats.completionRate ?? 0) > 0.9 ? "positive" : "neutral",
-        },
-      ]
+      {
+        label: "Human pass rate",
+        value: `${(stats.humanPassRate * 100).toFixed(1)}%`,
+        note: `${stats.totalSessions} sessions`,
+        icon: UserCheck,
+        trend: stats.humanPassRate > 0.8 ? "positive" : "neutral",
+      },
+      {
+        label: "Bot detections",
+        value: stats.botDetections.toLocaleString(),
+        note: `of ${stats.totalSessions} sessions`,
+        icon: Bot,
+        trend: stats.botDetections < stats.totalSessions * 0.1 ? "positive" : "neutral",
+      },
+      {
+        label: "Avg. session time",
+        value: `${(stats.avgSessionMs / 1000).toFixed(1)}s`,
+        note: `${stats.totalSessions} sessions`,
+        icon: TrendingUp,
+        trend: stats.avgSessionMs < 5000 ? "positive" : "neutral",
+      },
+      {
+        label: "Completion rate",
+        value: `${((stats.completionRate ?? 0) * 100).toFixed(1)}%`,
+        note: `${stats.totalSessions} sessions`,
+        icon: Target,
+        trend: (stats.completionRate ?? 0) > 0.9 ? "positive" : "neutral",
+      },
+    ]
     : [
-        { label: "Human pass rate", value: "--", note: "Loading sessions", icon: UserCheck },
-        { label: "Bot detections", value: "--", note: "Loading sessions", icon: Bot },
-        {
-          label: "Avg. session time",
-          value: "--",
-          note: "Loading sessions",
-          icon: TrendingUp,
-        },
-        {
-          label: "Completion rate",
-          value: "--",
-          note: "Loading sessions",
-          icon: Target,
-        },
-      ];
+      { label: "Human pass rate", value: "--", note: "Loading sessions", icon: UserCheck },
+      { label: "Bot detections", value: "--", note: "Loading sessions", icon: Bot },
+      {
+        label: "Avg. session time",
+        value: "--",
+        note: "Loading sessions",
+        icon: TrendingUp,
+      },
+      {
+        label: "Completion rate",
+        value: "--",
+        note: "Loading sessions",
+        icon: Target,
+      },
+    ];
 
   const formatSessionId = (id: string) => {
     if (id.length <= 8) {
@@ -98,20 +98,20 @@ export default function AnalyticsPage() {
   // Prepare time series chart data
   const chartData = timeSeriesData
     ? timeSeriesData.map((day) => ({
-        date: new Date(day.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-        humans: day.humans,
-        bots: day.bots,
-        passRate: day.total > 0 ? (day.humans / day.total) * 100 : 0,
-      }))
+      date: new Date(day.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      humans: day.humans,
+      bots: day.bots,
+      passRate: day.total > 0 ? (day.humans / day.total) * 100 : 0,
+    }))
     : [];
 
   // Prepare deployment breakdown data
   const deploymentBreakdown = stats && 'byDeployment' in stats && stats.byDeployment
     ? Object.entries(stats.byDeployment as Record<string, { count: number; passRate: number }>).map(([deploymentId, data]) => ({
-        deployment: deploymentId.slice(-8),
-        passRate: data.passRate * 100,
-        count: data.count,
-      }))
+      deployment: deploymentId.slice(-8),
+      passRate: data.passRate * 100,
+      count: data.count,
+    }))
     : [];
 
   const chartConfig = {
@@ -283,42 +283,6 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
       </div>
-
-      {deploymentBreakdown.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Performance by deployment</CardTitle>
-            <CardDescription>Human pass rate across different deployments.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer config={chartConfig} className="h-64">
-              <BarChart data={deploymentBreakdown}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis
-                  dataKey="deployment"
-                  className="text-xs"
-                  tickLine={false}
-                  axisLine={false}
-                  tickMargin={8}
-                />
-                <YAxis
-                  className="text-xs"
-                  tickLine={false}
-                  axisLine={false}
-                  tickMargin={8}
-                  domain={[0, 100]}
-                />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar
-                  dataKey="passRate"
-                  fill="var(--color-passRate)"
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-      )}
 
       <Card>
         <CardHeader>

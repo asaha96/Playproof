@@ -1,7 +1,9 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
-const BOT_THRESHOLD = 1;
+// Threshold for human classification - scores >= this are considered human
+// suspectScore represents human probability (0.0 = likely bot, 1.0 = likely human)
+const BOT_THRESHOLD = 0.5;
 
 const clientInfoInput = v.object({
   deviceType: v.optional(v.string()),
