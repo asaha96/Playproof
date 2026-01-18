@@ -1,151 +1,206 @@
-import { query } from "./_generated/server";
 import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
+
+const BOT_THRESHOLD = 0.5;
+
+const clientInfoInput = v.object({
+  deviceType: v.optional(v.string()),
+  deviceVendor: v.optional(v.string()),
+  deviceModel: v.optional(v.string()),
+  browserName: v.optional(v.string()),
+  browserVersion: v.optional(v.string()),
+  osName: v.optional(v.string()),
+  osVersion: v.optional(v.string()),
+  userAgent: v.optional(v.string()),
+  ipAddress: v.optional(v.string()),
+  language: v.optional(v.string()),
+  location: v.optional(
+    v.object({
+      country: v.optional(v.string()),
+      region: v.optional(v.string()),
+      city: v.optional(v.string()),
+      timezone: v.optional(v.string()),
+      latitude: v.optional(v.number()),
+      longitude: v.optional(v.number()),
+    })
+  ),
+  requestHeaders: v.optional(
+    v.array(v.object({ name: v.string(), value: v.string() }))
+  ),
+  cookies: v.optional(
+    v.array(v.object({ name: v.string(), value: v.string() }))
+  ),
+});
+
+export const recent = query({
+  args: {
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 10;
+    const sessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_startAt")
+      .order("desc")
+      .take(limit);
+
+    const results = await Promise.all(
+      sessions.map(async (session) => {
+        const deployment = await ctx.db.get(session.deploymentId);
+        return {
+          _id: session._id,
+          deploymentId: session.deploymentId,
+          deploymentName: deployment?.name ?? "Unknown deployment",
+          suspectScore: session.suspectScore,
+          scorePercent: Math.round(session.suspectScore * 100),
+          startAt: session.startAt,
+          endAt: session.endAt,
+          durationMs: session.durationMs,
+          result: session.suspectScore >= BOT_THRESHOLD ? "Bot" : "Human",
+        };
+      })
+    );
+
+    return results;
+  },
+});
 
 /**
  * Get aggregated statistics for the analytics dashboard
  */
 export const stats = query({
-    args: {},
-    handler: async (ctx) => {
-        const sessions = await ctx.db.query("sessions").collect();
+  args: {},
+  handler: async (ctx) => {
+    const sessions = await ctx.db.query("sessions").collect();
 
-        const totalSessions = sessions.length;
-        // Normalize results to check for pass/Human vs fail/Bot
-        const passedSessions = sessions.filter((s) => s.result === "pass" || s.result === "Human").length;
-        const botDetections = sessions.filter((s) => s.result === "fail" || s.result === "Bot").length;
+    const totalSessions = sessions.length;
+    const humanSessions = sessions.filter((s) => s.suspectScore < BOT_THRESHOLD).length;
+    const botDetections = sessions.filter((s) => s.suspectScore >= BOT_THRESHOLD).length;
 
-        const humanPassRate = totalSessions > 0 ? passedSessions / totalSessions : 0;
-        const avgSessionMs =
-            totalSessions > 0
-                ? sessions.reduce((acc, s) => acc + s.durationMs, 0) / totalSessions
-                : 0;
+    const humanPassRate = totalSessions > 0 ? humanSessions / totalSessions : 0;
+    const avgSessionMs =
+      totalSessions > 0
+        ? sessions.reduce((acc, s) => acc + s.durationMs, 0) / totalSessions
+        : 0;
 
-        const completionRate = humanPassRate; // Simplified for now
+    const completionRate = humanPassRate;
 
-        // Aggregations
-        const byGame: Record<string, { count: number; passCount: number }> = {};
-        const riskFlags: Record<string, number> = {};
+    // Aggregate by deployment
+    const byDeployment: Record<string, { count: number; passCount: number }> = {};
 
-        for (const s of sessions) {
-            const game = s.gameId || s.minigameName;
-            if (!byGame[game]) {
-                byGame[game] = { count: 0, passCount: 0 };
-            }
-            byGame[game].count++;
-            if (s.result === "pass" || s.result === "Human") {
-                byGame[game].passCount++;
-            }
+    for (const s of sessions) {
+      const deploymentId = s.deploymentId.toString();
+      if (!byDeployment[deploymentId]) {
+        byDeployment[deploymentId] = { count: 0, passCount: 0 };
+      }
+      byDeployment[deploymentId].count++;
+      if (s.suspectScore < BOT_THRESHOLD) {
+        byDeployment[deploymentId].passCount++;
+      }
+    }
 
-            if (s.riskFlags) {
-                for (const flag of s.riskFlags) {
-                    riskFlags[flag] = (riskFlags[flag] || 0) + 1;
-                }
-            }
-        }
+    // Format byDeployment for frontend
+    const byDeploymentFormatted: Record<string, { count: number; passRate: number }> = {};
+    for (const [deploymentId, data] of Object.entries(byDeployment)) {
+      byDeploymentFormatted[deploymentId] = {
+        count: data.count,
+        passRate: data.count > 0 ? data.passCount / data.count : 0,
+      };
+    }
 
-        // Format byGame for frontend
-        const byGameFormatted: Record<string, { count: number; passRate: number }> = {};
-        for (const [game, data] of Object.entries(byGame)) {
-            byGameFormatted[game] = {
-                count: data.count,
-                passRate: data.count > 0 ? data.passCount / data.count : 0,
-            };
-        }
-
-        return {
-            totalSessions,
-            humanPassRate,
-            botDetections,
-            avgSessionMs,
-            completionRate,
-            byGame: byGameFormatted,
-            riskFlags,
-        };
-    },
-});
-
-/**
- * Get recent verification sessions
- */
-export const recent = query({
-    args: { limit: v.optional(v.number()) },
-    handler: async (ctx, args) => {
-        const limit = args.limit ?? 10;
-        const sessions = await ctx.db
-            .query("sessions")
-            .order("desc")
-            .take(limit);
-
-        // Format sessions to match frontend expectations
-        return sessions.map((session) => ({
-            _id: session._id,
-            minigameId: session._id, // Placeholder - adjust based on your schema
-            minigameName: session.minigameName || "Unknown",
-            gameId: session.gameId,
-            suspectScore: session.scorePercent / 100,
-            scorePercent: session.scorePercent,
-            startAt: session.createdAt,
-            endAt: session.createdAt + session.durationMs,
-            durationMs: session.durationMs,
-            result: session.result === "pass" || session.result === "Human" ? "Human" : "Bot",
-            riskFlags: session.riskFlags || [],
-        }));
-    },
+    return {
+      totalSessions,
+      humanPassRate,
+      botDetections,
+      avgSessionMs,
+      completionRate,
+      byDeployment: byDeploymentFormatted,
+    };
+  },
 });
 
 /**
  * Get time series data for the analytics component
  */
 export const timeSeries = query({
-    args: { days: v.optional(v.number()) },
-    handler: async (ctx, args) => {
-        const days = args.days ?? 14;
-        // In a real app with many records, you'd want to use an index on creation time
-        // and aggregate more efficiently or pre-calculate. For now/demo, we scan.
+  args: { days: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const days = args.days ?? 14;
+    const now = Date.now();
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const startTime = now - days * msPerDay;
 
-        // We want to return data for the last N days
-        const now = Date.now();
-        const msPerDay = 24 * 60 * 60 * 1000;
-        const startTime = now - (days * msPerDay);
+    const sessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_startAt")
+      .filter((q) => q.gte(q.field("startAt"), startTime))
+      .collect();
 
-        const sessions = await ctx.db
-            .query("sessions")
-            .filter((q) => q.gte(q.field("createdAt"), startTime))
-            .collect();
+    // Group by day
+    const daysMap = new Map<string, { humans: number; bots: number; total: number }>();
 
-        // Group by day
-        const daysMap = new Map<string, { humans: number; bots: number; total: number }>();
+    // Initialize all days to 0 to ensure continuous line
+    for (let i = 0; i < days; i++) {
+      const date = new Date(now - i * msPerDay);
+      const dateStr = date.toISOString().split("T")[0];
+      daysMap.set(dateStr, { humans: 0, bots: 0, total: 0 });
+    }
 
-        // Initialize all days to 0 to ensure continuous line
-        for (let i = 0; i < days; i++) {
-            const date = new Date(now - (i * msPerDay));
-            const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
-            daysMap.set(dateStr, { humans: 0, bots: 0, total: 0 });
-        }
+    for (const s of sessions) {
+      const dateStr = new Date(s.startAt).toISOString().split("T")[0];
+      if (!daysMap.has(dateStr)) continue;
 
-        for (const s of sessions) {
-            const dateStr = new Date(s.createdAt).toISOString().split('T')[0];
-            // If the session is within our range (it might be slightly off due to timezone if not careful, 
-            // but this is rough)
-            if (!daysMap.has(dateStr)) continue;
+      const entry = daysMap.get(dateStr)!;
+      entry.total++;
+      if (s.suspectScore < BOT_THRESHOLD) {
+        entry.humans++;
+      } else {
+        entry.bots++;
+      }
+    }
 
-            const entry = daysMap.get(dateStr)!;
-            entry.total++;
-            if (s.result === "pass" || s.result === "Human") {
-                entry.humans++;
-            } else {
-                entry.bots++;
-            }
-        }
+    // Convert map to sorted array
+    const result = Array.from(daysMap.entries())
+      .map(([date, data]) => ({
+        date,
+        ...data,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
 
-        // Convert map to sorted array
-        const result = Array.from(daysMap.entries())
-            .map(([date, data]) => ({
-                date,
-                ...data
-            }))
-            .sort((a, b) => a.date.localeCompare(b.date));
+    return result;
+  },
+});
 
-        return result;
-    },
+export const create = mutation({
+  args: {
+    deploymentId: v.id("deployments"),
+    startAt: v.number(),
+    endAt: v.number(),
+    durationMs: v.number(),
+    suspectScore: v.number(),
+    clientInfo: v.optional(clientInfoInput),
+  },
+  handler: async (ctx, args) => {
+    const deployment = await ctx.db.get(args.deploymentId);
+    if (!deployment) {
+      throw new Error("Deployment not found");
+    }
+
+    const sessionId = await ctx.db.insert("sessions", {
+      deploymentId: args.deploymentId,
+      startAt: args.startAt,
+      endAt: args.endAt,
+      durationMs: args.durationMs,
+      suspectScore: args.suspectScore,
+      clientInfo: args.clientInfo,
+    });
+
+    const sessionIds = deployment.sessionIds ?? [];
+    await ctx.db.patch(args.deploymentId, {
+      sessionIds: [...sessionIds, sessionId],
+      updatedAt: Date.now(),
+    });
+
+    return sessionId;
+  },
 });
