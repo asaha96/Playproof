@@ -80,7 +80,11 @@ export function getSystemPrompt(): string {
 
 Your task is to generate valid GridLevel JSON for mini-golf levels. Each level must be fun, challenging, and solvable.
 
-Grid Dimensions: 20 columns x 14 rows (0-indexed, so cols 0-19, rows 0-13)
+CRITICAL GRID REQUIREMENTS:
+- Grid is EXACTLY 20 columns x 14 rows
+- The "tiles" array MUST have EXACTLY 14 strings
+- Each string MUST be EXACTLY 20 characters long
+- Use "." for empty spaces
 
 ${TILE_LEGEND}
 
@@ -88,49 +92,42 @@ ${PLACEMENT_RULES}
 
 ${DESIGN_REQUIREMENTS}
 
-CRITICAL: Output ONLY valid JSON. No markdown, no explanation, just the JSON object.
-The JSON must match this TypeScript interface:
-
-interface GridLevel {
-  schema: "playproof.gridlevel.v1";
-  gameId: "mini-golf";
-  version: number;
-  seed?: string;
-  grid: {
-    cols: 20;
-    rows: 14;
-    tiles: string[]; // Array of 14 strings, each exactly 20 characters
-  };
-  entities: Array<PortalEntity | MovingBlockEntity>;
-  rules?: { difficulty?: "easy" | "medium" | "hard" };
-  design: {
-    intent: string;
-    playerHint: string;
-    solutionSketch: string[];
-    aestheticNotes: string;
-  };
+EXAMPLE OUTPUT (easy level):
+{
+  "schema": "playproof.gridlevel.v1",
+  "gameId": "mini-golf",
+  "version": 1,
+  "grid": {
+    "cols": 20,
+    "rows": 14,
+    "tiles": [
+      "....................",
+      "....................",
+      "...B................",
+      "....................",
+      "....................",
+      "....................",
+      "................H...",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "....................",
+      "...................."
+    ]
+  },
+  "entities": [],
+  "rules": { "difficulty": "easy" },
+  "design": {
+    "intent": "Simple straight shot for beginners",
+    "playerHint": "Aim directly at the hole",
+    "solutionSketch": ["Direct shot with medium power"],
+    "aestheticNotes": "Open field, no obstacles"
+  }
 }
 
-interface PortalEntity {
-  type: "portal";
-  id: string;
-  entrance: { tx: number; ty: number };
-  exit: { tx: number; ty: number };
-  cooldownMs?: number;
-  exitVelocityMultiplier?: number;
-}
-
-interface MovingBlockEntity {
-  type: "movingBlock";
-  id: string;
-  motion: {
-    axis: "x" | "y";
-    rangeTiles: number;
-    speedTilesPerSec: number;
-    mode: "pingpong" | "loop";
-    phase?: number;
-  };
-}`;
+CRITICAL: Output ONLY valid JSON. No markdown, no explanation, no code blocks, just the raw JSON object.`;
 }
 
 export function getGenerationPrompt(difficulty: GridLevelDifficulty, seed?: string): string {
@@ -141,14 +138,14 @@ export function getGenerationPrompt(difficulty: GridLevelDifficulty, seed?: stri
 Requirements for ${difficulty}:
 ${getDifficultyRequirements(difficulty)}
 
-Remember:
-- Grid is 20 columns x 14 rows
-- Each row in tiles[] must be EXACTLY 20 characters
-- Ball spawn zone: columns 1-5, rows 2-11
-- Hole zone: columns 14-18, rows 2-11
-- Keep it solvable - imagine shooting the ball yourself
+CRITICAL REQUIREMENTS:
+- The "tiles" array MUST have EXACTLY 14 strings (14 rows)
+- Each string MUST be EXACTLY 20 characters (20 columns)
+- Ball (B) must be in columns 1-5, rows 2-11
+- Hole (H) must be in columns 14-18, rows 2-11
+- Use "." to fill empty spaces
 
-Output ONLY the JSON object, nothing else.`;
+Output ONLY the raw JSON object. No markdown, no code blocks, no explanation.`;
 }
 
 function getDifficultyRequirements(difficulty: GridLevelDifficulty): string {
@@ -193,16 +190,15 @@ export function getRetryPrompt(issues: GridLevelIssue[], previousAttempt: string
   
   return `Your previous level had validation errors. Please fix them.
 
+CRITICAL: The tiles array MUST have EXACTLY 14 strings, each EXACTLY 20 characters!
+
 ERRORS (must fix):
 ${errorList || 'None'}
 
 WARNINGS (should fix if possible):
 ${warningList || 'None'}
 
-Previous attempt (for reference):
-${previousAttempt}
-
-Generate a corrected level. Output ONLY the JSON object, nothing else.`;
+Generate a corrected level. Output ONLY the raw JSON object, no markdown, no code blocks.`;
 }
 
 export function parseGridLevelFromLLM(response: string): GridLevel | null {
@@ -238,6 +234,12 @@ export function parseGridLevelFromLLM(response: string): GridLevel | null {
       parsed.grid?.tiles &&
       Array.isArray(parsed.grid.tiles)
     ) {
+      // Post-process: fix grid dimensions (LLMs often get character counts wrong)
+      const fixedTiles = fixGridDimensions(parsed.grid.tiles);
+      parsed.grid.tiles = fixedTiles;
+      parsed.grid.cols = 20;
+      parsed.grid.rows = 14;
+      
       return parsed as GridLevel;
     }
     
@@ -245,4 +247,142 @@ export function parseGridLevelFromLLM(response: string): GridLevel | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Fix grid dimensions - LLMs often struggle with exact character counts
+ * Pad/truncate rows to exactly 20 chars and ensure exactly 14 rows
+ * Preserves B (ball) and H (hole) positions when possible
+ */
+function fixGridDimensions(tiles: string[]): string[] {
+  const TARGET_COLS = 20;
+  const TARGET_ROWS = 14;
+  
+  // First pass: clean and normalize rows
+  let fixedRows = tiles.map(row => {
+    if (typeof row !== 'string') return '.'.repeat(TARGET_COLS);
+    
+    // Remove any whitespace and normalize
+    const cleaned = row.replace(/\s/g, '');
+    
+    if (cleaned.length < TARGET_COLS) {
+      // Pad with dots on the right
+      return cleaned + '.'.repeat(TARGET_COLS - cleaned.length);
+    } else if (cleaned.length > TARGET_COLS) {
+      // Smart truncate: try to keep H if it exists beyond col 20
+      const hasHole = cleaned.includes('H');
+      const holePos = cleaned.indexOf('H');
+      
+      if (hasHole && holePos >= TARGET_COLS) {
+        // Hole is beyond col 20, try to shift the content
+        // Move hole to a valid position (col 16 = index 16)
+        let truncated = cleaned.slice(0, TARGET_COLS);
+        if (!truncated.includes('H')) {
+          // Replace a dot near the end with H
+          const chars = truncated.split('');
+          // Find a good spot for the hole (cols 14-18 = indices 14-18)
+          for (let i = 16; i >= 14; i--) {
+            if (chars[i] === '.') {
+              chars[i] = 'H';
+              break;
+            }
+          }
+          truncated = chars.join('');
+        }
+        return truncated;
+      }
+      return cleaned.slice(0, TARGET_COLS);
+    }
+    return cleaned;
+  });
+  
+  // Ensure exactly 14 rows
+  while (fixedRows.length < TARGET_ROWS) {
+    fixedRows.push('.'.repeat(TARGET_COLS));
+  }
+  if (fixedRows.length > TARGET_ROWS) {
+    fixedRows = fixedRows.slice(0, TARGET_ROWS);
+  }
+  
+  // Verify we have exactly one B and one H
+  const allTiles = fixedRows.join('');
+  const ballCount = (allTiles.match(/B/g) || []).length;
+  const holeCount = (allTiles.match(/H/g) || []).length;
+  
+  // If missing ball, add at valid position
+  if (ballCount === 0) {
+    const row = 3; // Valid row for ball
+    const chars = fixedRows[row].split('');
+    chars[3] = 'B'; // Valid column for ball
+    fixedRows[row] = chars.join('');
+  }
+  
+  // If missing hole, add at valid position  
+  if (holeCount === 0) {
+    const row = 6; // Valid row for hole
+    const chars = fixedRows[row].split('');
+    chars[16] = 'H'; // Valid column for hole
+    fixedRows[row] = chars.join('');
+  }
+  
+  // Fix hole position if it's outside valid zone (cols 14-18, rows 2-11)
+  // Also fix ball position if it's outside valid zone (cols 1-5, rows 2-11)
+  fixedRows = fixedRows.map((row, rowIdx) => {
+    const chars = row.split('');
+    for (let col = 0; col < chars.length; col++) {
+      // Fix hole outside valid zone
+      if (chars[col] === 'H') {
+        const validHoleCol = col >= 14 && col <= 18;
+        const validHoleRow = rowIdx >= 2 && rowIdx <= 11;
+        if (!validHoleCol || !validHoleRow) {
+          // Move hole to a valid position
+          chars[col] = '.';
+        }
+      }
+      // Fix ball outside valid zone  
+      if (chars[col] === 'B') {
+        const validBallCol = col >= 1 && col <= 5;
+        const validBallRow = rowIdx >= 2 && rowIdx <= 11;
+        if (!validBallCol || !validBallRow) {
+          chars[col] = '.';
+        }
+      }
+    }
+    return chars.join('');
+  });
+  
+  // Re-check and add ball/hole if they were removed
+  const allTiles2 = fixedRows.join('');
+  if (!allTiles2.includes('B')) {
+    const chars = fixedRows[3].split('');
+    chars[3] = 'B';
+    fixedRows[3] = chars.join('');
+  }
+  if (!allTiles2.includes('H')) {
+    const chars = fixedRows[6].split('');
+    chars[16] = 'H';
+    fixedRows[6] = chars.join('');
+  }
+  
+  // If too many balls/holes, remove extras
+  if (ballCount > 1 || holeCount > 1) {
+    let foundBall = false;
+    let foundHole = false;
+    fixedRows = fixedRows.map(row => {
+      const chars = row.split('');
+      for (let i = 0; i < chars.length; i++) {
+        if (chars[i] === 'B') {
+          if (foundBall) chars[i] = '.';
+          else foundBall = true;
+        }
+        if (chars[i] === 'H') {
+          if (foundHole) chars[i] = '.';
+          else foundHole = true;
+        }
+      }
+      return chars.join('');
+    });
+  }
+  
+  return fixedRows;
 }
