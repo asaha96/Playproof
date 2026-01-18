@@ -44,6 +44,10 @@ export interface BehaviorData {
     hits: number;
     misses: number;
     clickAccuracy: number;
+    // Game timing - set by the game engine
+    startTime?: number;   // Absolute timestamp when game started (Date.now())
+    endTime?: number;     // Absolute timestamp when game ended (Date.now())
+    durationMs?: number;  // Actual game duration in milliseconds
 }
 
 export interface MouseMovement {

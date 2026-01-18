@@ -116,6 +116,9 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
             hits: 0,
             misses: 0,
             clickAccuracy: 0,
+            startTime: undefined,
+            endTime: undefined,
+            durationMs: undefined,
         };
     }
 
@@ -257,6 +260,7 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
         this.behaviorData = this.createEmptyBehaviorData();
         this.allTelemetryEvents = []; // Clear previous telemetry
         this.startTime = Date.now();
+        this.behaviorData.startTime = this.startTime; // Store in behavior data
         this.startEngine();
 
         // Start pointer telemetry tracking
@@ -269,6 +273,11 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
 
     protected endGame(): void {
         this.stop();
+
+        // Set end time and calculate duration
+        const endTime = Date.now();
+        this.behaviorData.endTime = endTime;
+        this.behaviorData.durationMs = this.startTime ? endTime - this.startTime : 0;
 
         // Stop pointer telemetry tracking (flushes remaining events)
         this.pointerTracker.stop();
