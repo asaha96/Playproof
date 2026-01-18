@@ -1,9 +1,9 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
-// Threshold for human classification - scores >= this are considered human
+// Threshold for human classification - scores >= 60% are considered human
 // suspectScore represents human probability (0.0 = likely bot, 1.0 = likely human)
-const BOT_THRESHOLD = 0.5;
+const BOT_THRESHOLD = 0.6;
 
 const clientInfoInput = v.object({
   deviceType: v.optional(v.string()),
@@ -122,15 +122,15 @@ export const stats = query({
 });
 
 /**
- * Get time series data for the analytics component
+ * Get time series data for the analytics component (24 hours, hourly granularity)
  */
 export const timeSeries = query({
-  args: { days: v.optional(v.number()) },
+  args: { hours: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    const days = args.days ?? 14;
+    const hours = args.hours ?? 24;
     const now = Date.now();
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const startTime = now - days * msPerDay;
+    const msPerHour = 60 * 60 * 1000;
+    const startTime = now - hours * msPerHour;
 
     const sessions = await ctx.db
       .query("sessions")
@@ -138,21 +138,22 @@ export const timeSeries = query({
       .filter((q) => q.gte(q.field("startAt"), startTime))
       .collect();
 
-    // Group by day
-    const daysMap = new Map<string, { humans: number; bots: number; total: number }>();
+    // Group by hour
+    const hoursMap = new Map<string, { humans: number; bots: number; total: number }>();
 
-    // Initialize all days to 0 to ensure continuous line
-    for (let i = 0; i < days; i++) {
-      const date = new Date(now - i * msPerDay);
-      const dateStr = date.toISOString().split("T")[0];
-      daysMap.set(dateStr, { humans: 0, bots: 0, total: 0 });
+    // Initialize all hours to 0 to ensure continuous line
+    for (let i = 0; i < hours; i++) {
+      const date = new Date(now - i * msPerHour);
+      // Format as "HH:00" for hour buckets
+      const hourStr = date.toISOString().slice(0, 13); // e.g., "2026-01-18T07"
+      hoursMap.set(hourStr, { humans: 0, bots: 0, total: 0 });
     }
 
     for (const s of sessions) {
-      const dateStr = new Date(s.startAt).toISOString().split("T")[0];
-      if (!daysMap.has(dateStr)) continue;
+      const hourStr = new Date(s.startAt).toISOString().slice(0, 13);
+      if (!hoursMap.has(hourStr)) continue;
 
-      const entry = daysMap.get(dateStr)!;
+      const entry = hoursMap.get(hourStr)!;
       entry.total++;
       if (s.suspectScore >= BOT_THRESHOLD) {
         entry.humans++;
@@ -162,7 +163,7 @@ export const timeSeries = query({
     }
 
     // Convert map to sorted array
-    const result = Array.from(daysMap.entries())
+    const result = Array.from(hoursMap.entries())
       .map(([date, data]) => ({
         date,
         ...data,

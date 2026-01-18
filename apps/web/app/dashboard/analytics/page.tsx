@@ -38,7 +38,7 @@ import { api } from "@/convex/_generated/api";
 export default function AnalyticsPage() {
   const stats = useQuery(api.sessions.stats);
   const sessions = useQuery(api.sessions.recent, { limit: 10 });
-  const timeSeriesData = useQuery(api.sessions.timeSeries, { days: 14 });
+  const timeSeriesData = useQuery(api.sessions.timeSeries, { hours: 24 });
 
   const statCards = stats
     ? [
@@ -95,14 +95,18 @@ export default function AnalyticsPage() {
     return `${id.slice(0, 4)}...${id.slice(-4)}`;
   };
 
-  // Prepare time series chart data
+  // Prepare time series chart data (hourly for last 24 hours)
   const chartData = timeSeriesData
-    ? timeSeriesData.map((day) => ({
-      date: new Date(day.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      humans: day.humans,
-      bots: day.bots,
-      passRate: day.total > 0 ? (day.humans / day.total) * 100 : 0,
-    }))
+    ? timeSeriesData.map((hour) => {
+      // Parse ISO string like "2026-01-18T07" to get hour
+      const date = new Date(hour.date + ":00:00Z");
+      return {
+        date: date.toLocaleTimeString("en-US", { hour: "numeric", hour12: true }),
+        humans: hour.humans,
+        bots: hour.bots,
+        passRate: hour.total > 0 ? (hour.humans / hour.total) * 100 : 0,
+      };
+    })
     : [];
 
   // Prepare deployment breakdown data
@@ -148,7 +152,7 @@ export default function AnalyticsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="secondary">Last 14 days</Badge>
+          <Badge variant="secondary">Last 24 hours</Badge>
           <Button size="sm" variant="outline">
             Export
           </Button>
@@ -175,7 +179,7 @@ export default function AnalyticsPage() {
           <CardHeader>
             <CardTitle>Verification trends</CardTitle>
             <CardDescription>
-              Human vs bot detection over the last 14 days.
+              Human vs bot detection over the last 24 hours.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex-1 flex flex-col min-h-0">
