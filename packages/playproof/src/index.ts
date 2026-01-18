@@ -20,6 +20,9 @@ export type {
   PointerTelemetryEvent,
 } from './types';
 
+// Re-export session controller types for agent integration
+export type { SessionEndResult } from './telemetry/session-controller';
+
 export { PLAYPROOF_FONTS } from './types';
 
 // Export telemetry utilities for advanced consumers

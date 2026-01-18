@@ -25,6 +25,10 @@ import {
 } from "@/components/ui/select";
 
 const MAX_EVENTS = 1000; // Cap to prevent memory issues
+const OBS_API_KEY = process.env.NEXT_PUBLIC_PLAYPROOF_CLIENT_KEY || "";
+const OBS_DEPLOYMENT_ID = process.env.NEXT_PUBLIC_PLAYPROOF_DEPLOYMENT_ID || "";
+const OBS_API_BASE_URL = process.env.NEXT_PUBLIC_PLAYPROOF_API_URL || "";
+const OBS_AGENT_ENABLED = Boolean(OBS_API_KEY && OBS_DEPLOYMENT_ID);
 
 interface HeuristicResult {
   sessionId: string;
@@ -74,6 +78,15 @@ export default function ObservabilityPage() {
   useEffect(() => {
     isPausedRef.current = isPaused;
   }, [isPaused]);
+
+  useEffect(() => {
+    console.log("[Observability] Agent config", {
+      enabled: OBS_AGENT_ENABLED,
+      hasApiKey: Boolean(OBS_API_KEY),
+      hasDeploymentId: Boolean(OBS_DEPLOYMENT_ID),
+      apiBaseUrl: OBS_API_BASE_URL || "(default)",
+    });
+  }, []);
 
   // Handle incoming telemetry batch from SDK
   const handleTelemetryBatch = useCallback((batch: PointerTelemetryEvent[]) => {
@@ -428,8 +441,11 @@ export default function ObservabilityPage() {
                 <Playproof
                   key={resetKey}
                   gameId={selectedGame}
-                  gameDuration={30000}
+                  gameDuration={OBS_AGENT_ENABLED ? undefined : 30000}
                   confidenceThreshold={0.7}
+                  apiKey={OBS_AGENT_ENABLED ? OBS_API_KEY : undefined}
+                  deploymentId={OBS_AGENT_ENABLED ? OBS_DEPLOYMENT_ID : undefined}
+                  apiBaseUrl={OBS_API_BASE_URL || undefined}
                   theme={{
                     primary: "#6366f1",
                     secondary: "#8b5cf6",

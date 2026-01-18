@@ -28,8 +28,10 @@ export function calculateConfidence(behaviorData: BehaviorData): number {
     scores.push({ weight: 0.3, score: timingScore });
   }
 
-  // Click accuracy analysis
-  if (behaviorData.clickAccuracy !== undefined) {
+  // Click accuracy analysis - only include if there were actual clicks
+  // If clickAccuracy is 0, it means no clicks happened, so don't include it
+  const totalClicks = (behaviorData.hits || 0) + (behaviorData.misses || 0);
+  if (behaviorData.clickAccuracy !== undefined && totalClicks > 0) {
     const accuracyScore = analyzeClickAccuracy(behaviorData.clickAccuracy);
     scores.push({ weight: 0.2, score: accuracyScore });
   }
@@ -41,12 +43,46 @@ export function calculateConfidence(behaviorData: BehaviorData): number {
   }
 
   // Weighted average
-  if (scores.length === 0) return 0;
+  if (scores.length === 0) {
+    // No data collected - return neutral score
+    return 0.5;
+  }
+
+  // Require at least some mouse movement data for a valid score
+  // If we only have one component, the score might not be reliable
+  if (scores.length === 1 && scores[0].weight < 0.3) {
+    // Only have accuracy or trajectory, which alone isn't enough
+    return 0.5;
+  }
 
   const totalWeight = scores.reduce((sum, s) => sum + s.weight, 0);
   const weightedSum = scores.reduce((sum, s) => sum + (s.weight * s.score), 0);
 
+  // Debug logging (can be removed in production)
+  if (typeof window !== 'undefined' && (window as any).__PLAYPROOF_DEBUG__) {
+    console.log('[PlayProof Verification]', {
+      movementCount: behaviorData.mouseMovements?.length || 0,
+      clickCount: behaviorData.clickTimings?.length || 0,
+      hits: behaviorData.hits || 0,
+      misses: behaviorData.misses || 0,
+      clickAccuracy: behaviorData.clickAccuracy,
+      trajectoryCount: behaviorData.trajectories?.length || 0,
+      scores: scores.map(s => ({ component: getComponentName(s.weight), weight: s.weight, score: s.score.toFixed(3) })),
+      totalWeight: totalWeight.toFixed(2),
+      finalScore: (weightedSum / totalWeight).toFixed(3),
+    });
+  }
+
   return weightedSum / totalWeight;
+}
+
+/**
+ * Helper to identify component type for debugging
+ */
+function getComponentName(weight: number): string {
+  if (weight === 0.3) return 'movement/timing';
+  if (weight === 0.2) return 'accuracy/trajectory';
+  return 'unknown';
 }
 
 /**
@@ -54,36 +90,56 @@ export function calculateConfidence(behaviorData: BehaviorData): number {
  * Humans have curved, slightly jittery movements; bots are linear
  */
 function analyzeMouseMovements(movements: MouseMovement[]): number {
-  if (movements.length < 3) return 0.3;
+  if (movements.length < 3) {
+    // Not enough data - return neutral score
+    return 0.5;
+  }
 
   let totalVariance = 0;
   let totalSpeed = 0;
+  let validSpeedCount = 0;
+  let validVarianceCount = 0;
 
   for (let i = 1; i < movements.length; i++) {
     const dx = movements[i].x - movements[i - 1].x;
     const dy = movements[i].y - movements[i - 1].y;
     const dt = movements[i].timestamp - movements[i - 1].timestamp;
 
+    // Only process if there's a meaningful time difference (at least 1ms)
     if (dt > 0) {
       const speed = Math.sqrt(dx * dx + dy * dy) / dt;
       totalSpeed += speed;
+      validSpeedCount++;
 
       // Check for direction changes (humans change direction more)
       if (i > 1) {
         const prevDx = movements[i - 1].x - movements[i - 2].x;
         const prevDy = movements[i - 1].y - movements[i - 2].y;
-        const angleChange = Math.abs(Math.atan2(dy, dx) - Math.atan2(prevDy, prevDx));
-        totalVariance += angleChange;
+        const prevDt = movements[i - 1].timestamp - movements[i - 2].timestamp;
+        
+        // Only calculate angle change if previous movement had valid timing
+        if (prevDt > 0) {
+          const angleChange = Math.abs(Math.atan2(dy, dx) - Math.atan2(prevDy, prevDx));
+          // Normalize angle to [0, PI] range
+          const normalizedAngle = Math.min(angleChange, Math.PI * 2 - angleChange);
+          totalVariance += normalizedAngle;
+          validVarianceCount++;
+        }
       }
     }
   }
 
-  const avgVariance = totalVariance / (movements.length - 2);
-  const avgSpeed = totalSpeed / (movements.length - 1);
+  // Calculate averages only if we have valid data
+  if (validSpeedCount === 0 || validVarianceCount === 0) {
+    return 0.5; // Not enough valid data
+  }
+
+  const avgVariance = totalVariance / validVarianceCount;
+  const avgSpeed = totalSpeed / validSpeedCount;
 
   // Humans typically have variance between 0.1 and 1.5 radians
   // and reasonable speeds
-  const varianceScore = Math.min(1, avgVariance / 0.5);
+  const varianceScore = Math.min(1, Math.max(0, avgVariance / 0.5));
   const speedScore = avgSpeed > 0.01 && avgSpeed < 5 ? 0.8 : 0.3;
 
   return (varianceScore * 0.6 + speedScore * 0.4);
@@ -94,11 +150,22 @@ function analyzeMouseMovements(movements: MouseMovement[]): number {
  * Humans have variable reaction times; bots are too consistent
  */
 function analyzeClickTimings(timings: number[]): number {
-  if (timings.length < 2) return 0.5;
+  if (timings.length < 2) {
+    // Not enough clicks for timing analysis
+    return 0.5;
+  }
 
   const intervals: number[] = [];
   for (let i = 1; i < timings.length; i++) {
-    intervals.push(timings[i] - timings[i - 1]);
+    const interval = timings[i] - timings[i - 1];
+    // Only include positive intervals
+    if (interval > 0) {
+      intervals.push(interval);
+    }
+  }
+
+  if (intervals.length === 0) {
+    return 0.5; // No valid intervals
   }
 
   const mean = intervals.reduce((a, b) => a + b, 0) / intervals.length;
@@ -139,11 +206,14 @@ function analyzeTrajectories(trajectories: MouseMovement[][]): number {
   if (trajectories.length < 1) return 0.5;
 
   let curvatureScore = 0;
+  let validTrajectoryCount = 0;
 
   for (const trajectory of trajectories) {
     if (trajectory.length < 3) continue;
 
     let totalCurvature = 0;
+    let validPoints = 0;
+    
     for (let i = 1; i < trajectory.length - 1; i++) {
       // Calculate curvature at each point
       const v1 = {
@@ -155,14 +225,24 @@ function analyzeTrajectories(trajectories: MouseMovement[][]): number {
         y: trajectory[i + 1].y - trajectory[i].y
       };
 
-      const cross = v1.x * v2.y - v1.y * v2.x;
-      const dot = v1.x * v2.x + v1.y * v2.y;
-      const angle = Math.abs(Math.atan2(cross, dot));
-
-      totalCurvature += angle;
+      // Check if vectors have meaningful magnitude
+      const v1Mag = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
+      const v2Mag = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
+      
+      if (v1Mag > 0.1 && v2Mag > 0.1) {
+        const cross = v1.x * v2.y - v1.y * v2.x;
+        const dot = v1.x * v2.x + v1.y * v2.y;
+        const angle = Math.abs(Math.atan2(cross, dot));
+        // Normalize angle to [0, PI] range
+        const normalizedAngle = Math.min(angle, Math.PI * 2 - angle);
+        totalCurvature += normalizedAngle;
+        validPoints++;
+      }
     }
 
-    const avgCurvature = totalCurvature / (trajectory.length - 2);
+    if (validPoints === 0) continue;
+
+    const avgCurvature = totalCurvature / validPoints;
     // Natural human movements have some curvature
     if (avgCurvature > 0.05 && avgCurvature < 0.5) {
       curvatureScore += 1;
@@ -172,9 +252,12 @@ function analyzeTrajectories(trajectories: MouseMovement[][]): number {
     } else {
       curvatureScore += 0.5;
     }
+    validTrajectoryCount++;
   }
 
-  return curvatureScore / trajectories.length;
+  if (validTrajectoryCount === 0) return 0.5;
+
+  return curvatureScore / validTrajectoryCount;
 }
 
 /**

@@ -9,7 +9,18 @@ import type { PlayproofTheme, PlayproofConfig, SDKHooks, TelemetryTransportConfi
  * Hardcoded Playproof API URL - end users don't need to configure this
  * This points to the Next.js web app which proxies requests to Convex
  */
-export const PLAYPROOF_API_URL = 'https://playproof.app';
+function resolveDefaultApiBaseUrl(): string {
+  if (typeof process !== 'undefined' && process.env) {
+    const envUrl =
+      process.env.NEXT_PUBLIC_PLAYPROOF_API_URL || process.env.PLAYPROOF_API_URL;
+    if (envUrl) {
+      return envUrl;
+    }
+  }
+  return 'https://playproof.app';
+}
+
+export const PLAYPROOF_API_URL = resolveDefaultApiBaseUrl();
 
 export const DEFAULT_THEME: PlayproofTheme = {
   primary: '#6366f1',
@@ -47,6 +58,7 @@ export const DEFAULT_CONFIG: PlayproofConfig = {
   gameDuration: null, // null = use game default, or specify ms
   gameId: 'bubble-pop', // 'bubble-pop', 'osu', 'snake', or 'random'
   logTelemetry: false, // Set to true to console.log telemetry events (verbose)
+  apiBaseUrl: PLAYPROOF_API_URL,
   // API credentials for fetching deployment branding
   apiKey: null,
   deploymentId: null,

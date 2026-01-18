@@ -137,6 +137,11 @@ export interface PlayproofConfig {
     gameDuration: number | null;
     gameId: GameId;
     logTelemetry: boolean;    // Whether to console.log telemetry events (default: false)
+    /**
+     * Base URL for Playproof API requests.
+     * Defaults to https://playproof.app unless overridden.
+     */
+    apiBaseUrl: string;
     // API credentials for fetching deployment branding
     apiKey: string | null;
     /**

@@ -50,6 +50,57 @@ export const getDeployment = internalQuery({
 });
 
 /**
+ * Internal query to get attempt by attemptId (used by actions)
+ */
+export const getAttemptByAttemptId = internalQuery({
+  args: {
+    attemptId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("activeAttempts")
+      .withIndex("by_attemptId", (q) => q.eq("attemptId", args.attemptId))
+      .first();
+  },
+});
+
+/**
+ * Internal mutation to update agent state (used by actions)
+ */
+export const updateAttemptAgentStateInternal = internalMutation({
+  args: {
+    attemptId: v.string(),
+    agentState: v.object({
+      windowScores: v.array(v.object({
+        windowId: v.number(),
+        startMs: v.number(),
+        endMs: v.number(),
+        decision: v.union(v.literal("pass"), v.literal("review"), v.literal("fail")),
+        confidence: v.number(),
+        anomalyScore: v.number(),
+      })),
+      agentDecision: v.optional(v.union(v.literal("human"), v.literal("bot"))),
+      agentReason: v.optional(v.string()),
+      decidedAt: v.optional(v.number()),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const attempt = await ctx.db
+      .query("activeAttempts")
+      .withIndex("by_attemptId", (q) => q.eq("attemptId", args.attemptId))
+      .first();
+
+    if (!attempt) {
+      throw new Error("Attempt not found");
+    }
+
+    await ctx.db.patch(attempt._id, {
+      agentState: args.agentState,
+    });
+  },
+});
+
+/**
  * Internal mutation to insert an attempt record (used by actions)
  */
 export const insertAttemptInternal = internalMutation({

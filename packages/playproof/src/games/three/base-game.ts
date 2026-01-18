@@ -7,8 +7,12 @@ import * as THREE from 'three';
 import { ThreeEngine, EngineConfig } from './engine';
 import { PointerTelemetryTracker } from '../../telemetry/pointer-tracker';
 import { HookSink, CompositeSink, LiveKitSink } from '../../telemetry';
+import { SessionController, type SessionEndResult } from '../../telemetry/session-controller';
 import type { TelemetrySink } from '../../telemetry/sink';
 import type { BehaviorData, PlayproofConfig, SDKHooks, BaseGame, PointerTelemetryEvent } from '../../types';
+
+// Default max session duration (safety timeout) when agent is enabled
+const DEFAULT_AGENT_MAX_DURATION_MS = 30000;
 
 export interface MouseMovement {
     x: number;
@@ -34,6 +38,11 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
     // Telemetry sink abstraction (supports multiple transports)
     protected telemetrySink: TelemetrySink | null = null;
     protected livekitSink: LiveKitSink | null = null;
+
+    // Session controller for agent-driven session management
+    protected sessionController: SessionController | null = null;
+    protected agentDecision: SessionEndResult | null = null;
+    protected useAgentControl = false; // Whether to use agent-driven session control
 
     constructor(gameArea: HTMLElement, config: PlayproofConfig, hooks: SDKHooks = {} as SDKHooks) {
         const engineConfig: EngineConfig = {
@@ -82,8 +91,12 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
             this.livekitSink = new LiveKitSink({
                 apiKey: this.config.apiKey!,
                 deploymentId: this.config.deploymentId!,
+                apiBaseUrl: this.config.apiBaseUrl,
                 onConnected: (roomName, attemptId) => {
                     console.log('[Playproof] LiveKit connected:', { roomName, attemptId });
+                    if (this.sessionController) {
+                        this.sessionController.setRoom(this.livekitSink?.getRoom() ?? null);
+                    }
                 },
                 onDisconnected: () => {
                     console.log('[Playproof] LiveKit disconnected');
@@ -259,6 +272,7 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
         this.onComplete = onComplete;
         this.behaviorData = this.createEmptyBehaviorData();
         this.allTelemetryEvents = []; // Clear previous telemetry
+        this.agentDecision = null; // Clear previous agent decision
         this.startTime = Date.now();
         this.behaviorData.startTime = this.startTime; // Store in behavior data
         this.startEngine();
@@ -266,13 +280,57 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
         // Start pointer telemetry tracking
         this.pointerTracker.start();
 
-        // End after duration
-        const duration = this.config.gameDuration || 10000;
-        setTimeout(() => this.endGame(), duration);
+        // Determine whether to use agent control or fixed timeout
+        // Agent control is enabled when:
+        // 1. LiveKit is connected (we need the room for control messages)
+        // 2. No explicit gameDuration is set (null means agent-controlled)
+        const livekitEnabled = this.config.telemetryTransport?.livekit?.enabled ?? true;
+        const hasCredentials = Boolean(this.config.apiKey && this.config.deploymentId);
+        const hasExplicitDuration = this.config.gameDuration !== null && this.config.gameDuration !== undefined;
+        const isLivekitReady = this.livekitSink?.isReady() ?? false;
+        this.useAgentControl = livekitEnabled && hasCredentials && !hasExplicitDuration;
+
+        console.log('[Playproof] Session control evaluation', {
+            hasLiveKit: Boolean(this.livekitSink),
+            isLivekitReady,
+            livekitEnabled,
+            hasCredentials,
+            hasExplicitDuration,
+            gameDuration: this.config.gameDuration,
+            attemptId: this.livekitSink?.getAttemptId() ?? null,
+            roomName: this.livekitSink?.getRoomName() ?? null,
+        });
+
+        if (this.useAgentControl) {
+            // Use agent-driven session control
+            this.sessionController = new SessionController({
+                room: this.livekitSink?.getRoom() ?? null,
+                maxDuration: DEFAULT_AGENT_MAX_DURATION_MS,
+                onSessionEnd: (result) => {
+                    this.agentDecision = result;
+                    this.endGame();
+                },
+                onTimeout: () => {
+                    console.warn('[Playproof] Agent session timeout - no decision received');
+                },
+            });
+            this.sessionController.start();
+            console.log('[Playproof] Using agent-controlled session (max 30s)');
+        } else {
+            // Fall back to fixed duration timeout
+            const duration = this.config.gameDuration || 10000;
+            setTimeout(() => this.endGame(), duration);
+            console.log(`[Playproof] Using fixed duration session (${duration}ms)`);
+        }
     }
 
     protected endGame(): void {
         this.stop();
+
+        // Stop session controller if active
+        if (this.sessionController) {
+            this.sessionController.stop();
+        }
 
         // Set end time and calculate duration
         const endTime = Date.now();
@@ -299,6 +357,20 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
     }
 
     /**
+     * Get the agent decision (if agent control was used)
+     */
+    public getAgentDecision(): SessionEndResult | null {
+        return this.agentDecision;
+    }
+
+    /**
+     * Check if the session was agent-controlled
+     */
+    public wasAgentControlled(): boolean {
+        return this.useAgentControl;
+    }
+
+    /**
      * Get the current LiveKit attempt ID (if connected)
      */
     public getLivekitAttemptId(): string | null {
@@ -306,6 +378,12 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
     }
 
     destroy(): void {
+        // Clean up session controller
+        if (this.sessionController) {
+            this.sessionController.stop();
+            this.sessionController = null;
+        }
+
         // Clean up pointer telemetry tracker
         this.pointerTracker.destroy();
 

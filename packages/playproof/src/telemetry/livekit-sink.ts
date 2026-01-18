@@ -24,12 +24,16 @@ async function getLivekitModule() {
 // Telemetry topic for pointer events (versioned for future compatibility)
 export const POINTER_TOPIC = 'playproof.pointer.v1';
 
+// Control topic for session control messages from agent
+export const CONTROL_TOPIC = 'playproof.control.v1';
+
 /**
  * Configuration for LiveKitSink
  */
 export interface LiveKitSinkConfig {
   apiKey: string;
   deploymentId: string;
+  apiBaseUrl?: string;
   onConnected?: (roomName: string, attemptId: string) => void;
   onDisconnected?: () => void;
   onError?: (error: Error) => void;
@@ -45,9 +49,15 @@ export class LiveKitSink implements TelemetrySink {
   private attemptId: string | null = null;
   private roomName: string | null = null;
   private seq = 0; // Sequence number for ordering
+  private loggedNotReady = false;
+  private batchLogCount = 0;
 
   constructor(config: LiveKitSinkConfig) {
     this.config = config;
+  }
+
+  private getApiBaseUrl(): string {
+    return this.config.apiBaseUrl || PLAYPROOF_API_URL;
   }
 
   /**
@@ -56,15 +66,25 @@ export class LiveKitSink implements TelemetrySink {
    */
   async connect(): Promise<void> {
     if (this.connected) {
+      console.log('[LiveKitSink] connect() called but already connected');
       return;
     }
 
     try {
+      console.log('[LiveKitSink] connect() starting', {
+        deploymentId: this.config.deploymentId,
+        hasApiKey: Boolean(this.config.apiKey),
+      });
+
       // Request publisher token from Convex
       const tokenResponse = await this.requestPublisherToken();
       
       if (!tokenResponse.success) {
-        throw new Error(tokenResponse.error || 'Failed to get LiveKit token');
+        const error = new Error(tokenResponse.error || 'Failed to get LiveKit token');
+        console.warn('[LiveKitSink] Token request failed:', error.message);
+        this.config.onError?.(error);
+        // Don't throw - let the sink fail gracefully, hook sink will still work
+        return;
       }
 
       // Dynamically import livekit-client to avoid SSR issues
@@ -74,9 +94,14 @@ export class LiveKitSink implements TelemetrySink {
       this.room = new Room();
       
       this.room.on(RoomEvent.Connected, () => {
-        this.connected = true;
-        console.log('[LiveKitSink] Connected to room:', this.roomName);
-        this.config.onConnected?.(this.roomName!, this.attemptId!);
+        if (!this.connected) {
+          this.connected = true;
+          console.log('[LiveKitSink] Connected to room:', {
+            roomName: this.roomName,
+            attemptId: this.attemptId,
+          });
+          this.config.onConnected?.(this.roomName!, this.attemptId!);
+        }
       });
 
       this.room.on(RoomEvent.Disconnected, () => {
@@ -85,7 +110,7 @@ export class LiveKitSink implements TelemetrySink {
         this.config.onDisconnected?.();
       });
 
-      this.room.on(RoomEvent.ConnectionQualityChanged, (quality) => {
+      this.room.on(RoomEvent.ConnectionQualityChanged, (quality: ConnectionQualityType) => {
         console.log('[LiveKitSink] Connection quality:', quality);
       });
 
@@ -96,14 +121,29 @@ export class LiveKitSink implements TelemetrySink {
       // Connect to room
       await this.room.connect(tokenResponse.livekitUrl!, tokenResponse.token!);
       // Note: connected flag is set by RoomEvent.Connected handler above
-      
+      console.log('[LiveKitSink] room.connect resolved', {
+        roomName: tokenResponse.roomName,
+        attemptId: tokenResponse.attemptId,
+      });
+      if (!this.connected) {
+        this.connected = true;
+        console.log('[LiveKitSink] Connected to room (post-connect):', {
+          roomName: this.roomName,
+          attemptId: this.attemptId,
+        });
+        this.config.onConnected?.(this.roomName!, this.attemptId!);
+      }
+
+      // Start the server-side agent for this session
+      void this.startAgentSession(tokenResponse.roomName!, tokenResponse.attemptId!);
+
     } catch (error) {
-      console.error(
-        '[LiveKitSink] Failed to connect to LiveKit. Real-time LiveKit telemetry will be disabled for this session (hook sink will still work). Underlying error:',
+      console.warn(
+        '[LiveKitSink] Failed to connect to LiveKit. Real-time LiveKit telemetry will be disabled for this session (hook sink will still work).',
         error,
       );
       this.config.onError?.(error as Error);
-      throw error;
+      // Don't throw - let it fail gracefully, hook sink will still work
     }
   }
 
@@ -136,10 +176,29 @@ export class LiveKitSink implements TelemetrySink {
    */
   sendPointerBatch(batch: PointerTelemetryEvent[], reliable = false): void {
     if (!this.isReady()) {
+      if (!this.loggedNotReady) {
+        console.warn('[LiveKitSink] sendPointerBatch called before ready', {
+          connected: this.connected,
+          hasRoom: Boolean(this.room),
+          roomName: this.roomName,
+          attemptId: this.attemptId,
+        });
+        this.loggedNotReady = true;
+      }
       return;
     }
 
     try {
+      if (this.batchLogCount < 5) {
+        console.log('[LiveKitSink] Sending telemetry batch', {
+          attemptId: this.attemptId,
+          roomName: this.roomName,
+          batchSize: batch.length,
+          reliable,
+        });
+        this.batchLogCount += 1;
+      }
+
       // Create message with sequence number for ordering
       const message = {
         v: 1, // Protocol version
@@ -183,6 +242,52 @@ export class LiveKitSink implements TelemetrySink {
   }
 
   /**
+   * Get the LiveKit room instance (for session controller)
+   */
+  getRoom(): RoomType | null {
+    return this.room;
+  }
+
+  /**
+   * Start the server-side agent for this session.
+   * This is called automatically after connecting to LiveKit.
+   * The agent will join the same room and process telemetry in real-time.
+   */
+  private async startAgentSession(roomName: string, attemptId: string): Promise<void> {
+    try {
+      console.log('[LiveKitSink] Starting agent session', {
+        roomName,
+        attemptId,
+        apiUrl: this.getApiBaseUrl(),
+      });
+
+      const response = await fetch(`${this.getApiBaseUrl()}/api/livekit/agent/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          attemptId,
+          roomName,
+          apiKey: this.config.apiKey,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.warn('[LiveKitSink] Failed to start agent session:', errorData.error || `HTTP ${response.status}`);
+        return;
+      }
+
+      const result = await response.json();
+      console.log('[LiveKitSink] Agent session started:', result);
+    } catch (error) {
+      // Non-fatal: agent will not provide real-time decisions, but telemetry still works
+      console.warn('[LiveKitSink] Failed to start agent session:', (error as Error).message);
+    }
+  }
+
+  /**
    * Request a publisher token from the Next.js API
    */
   private async requestPublisherToken(): Promise<{
@@ -194,7 +299,13 @@ export class LiveKitSink implements TelemetrySink {
     attemptId?: string;
   }> {
     try {
-      const response = await fetch(`${PLAYPROOF_API_URL}/api/livekit/token`, {
+      console.log('[LiveKitSink] Requesting LiveKit token', {
+        apiUrl: this.getApiBaseUrl(),
+        deploymentId: this.config.deploymentId,
+        hasApiKey: Boolean(this.config.apiKey),
+      });
+
+      const response = await fetch(`${this.getApiBaseUrl()}/api/livekit/token`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -207,14 +318,25 @@ export class LiveKitSink implements TelemetrySink {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        console.warn('[LiveKitSink] LiveKit token request failed', {
+          status: response.status,
+          error: errorData.error || response.statusText,
+        });
         return {
           success: false,
           error: errorData.error || `HTTP ${response.status}: ${response.statusText}`,
         };
       }
 
-      return await response.json();
+      const payload = await response.json();
+      console.log('[LiveKitSink] LiveKit token received', {
+        roomName: payload.roomName,
+        attemptId: payload.attemptId,
+        hasToken: Boolean(payload.token),
+      });
+      return payload;
     } catch (error) {
+      console.warn('[LiveKitSink] LiveKit token request error:', (error as Error).message);
       return {
         success: false,
         error: (error as Error).message,

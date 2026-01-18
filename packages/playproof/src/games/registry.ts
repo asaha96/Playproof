@@ -85,10 +85,15 @@ export function createGame(
     const info = getGameInfo(gameId);
     const GameClass = info.GameClass;
 
-    // Override duration if game has a preferred one
+    // Override duration if game has a preferred one, unless agent-control uses null
+    const resolvedDuration =
+        config.gameDuration === null
+            ? null
+            : (config.gameDuration ?? info.duration);
+
     const gameConfig: PlayproofConfig = {
         ...config,
-        gameDuration: config.gameDuration || info.duration
+        gameDuration: resolvedDuration
     };
 
     return new GameClass(gameArea, gameConfig, hooks);

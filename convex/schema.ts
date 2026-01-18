@@ -51,6 +51,20 @@ export default defineSchema({
     anomalyScore: v.optional(v.number()),
     // Audit fields
     createdByApiKeyHash: v.optional(v.string()),
+    // Real-time AI agent state (set by agent during session)
+    agentState: v.optional(v.object({
+      windowScores: v.array(v.object({
+        windowId: v.number(),
+        startMs: v.number(),
+        endMs: v.number(),
+        decision: v.union(v.literal("pass"), v.literal("review"), v.literal("fail")),
+        confidence: v.number(),
+        anomalyScore: v.number(),
+      })),
+      agentDecision: v.optional(v.union(v.literal("human"), v.literal("bot"))),
+      agentReason: v.optional(v.string()),
+      decidedAt: v.optional(v.number()),
+    })),
   })
     .index("by_deploymentId", ["deploymentId"])
     .index("by_userId", ["userId"])

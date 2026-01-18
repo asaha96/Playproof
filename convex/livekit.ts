@@ -111,7 +111,7 @@ export const createAttemptAndPublisherToken = action({
       roomJoin: true,
       canPublish: true,
       canPublishData: true,
-      canSubscribe: false, // SDK cannot subscribe (publisher-only)
+      canSubscribe: true, // Required to receive control data messages from agent
     });
 
     const jwt = await token.toJwt();
@@ -135,6 +135,113 @@ export const createAttemptAndPublisherToken = action({
       roomName,
       attemptId,
     };
+  },
+});
+
+/**
+ * Create an agent token for server-side agent to join the room.
+ * This allows the agent to subscribe to telemetry and publish control messages.
+ */
+export const createAgentToken = action({
+  args: {
+    attemptId: v.string(),
+    roomName: v.string(),
+  },
+  handler: async (ctx, args): Promise<{
+    success: boolean;
+    error?: string;
+    token?: string;
+    livekitUrl?: string;
+  }> => {
+    // Get LiveKit credentials from environment
+    const livekitUrl = process.env.LIVEKIT_URL;
+    const livekitApiKey = process.env.LIVEKIT_API_KEY;
+    const livekitApiSecret = process.env.LIVEKIT_API_SECRET;
+
+    if (!livekitUrl || !livekitApiKey || !livekitApiSecret) {
+      return {
+        success: false,
+        error: "LiveKit not configured",
+      };
+    }
+
+    // Verify attempt exists
+    const attempt = await ctx.runQuery(internal.realtime.getAttemptByAttemptId, {
+      attemptId: args.attemptId,
+    });
+
+    if (!attempt) {
+      return {
+        success: false,
+        error: "Attempt not found",
+      };
+    }
+
+    // Verify room name matches
+    if (attempt.roomName !== args.roomName) {
+      return {
+        success: false,
+        error: "Room name mismatch",
+      };
+    }
+
+    // Create LiveKit access token with agent grants
+    const token = new AccessToken(livekitApiKey, livekitApiSecret, {
+      identity: `agent_${args.attemptId}`,
+      ttl: "30m",
+    });
+
+    token.addGrant({
+      room: args.roomName,
+      roomJoin: true,
+      canPublish: false, // Agent doesn't need to publish audio/video
+      canPublishData: true, // Agent publishes control messages
+      canSubscribe: true, // Agent subscribes to telemetry
+    });
+
+    const jwt = await token.toJwt();
+
+    return {
+      success: true,
+      token: jwt,
+      livekitUrl,
+    };
+  },
+});
+
+/**
+ * Update attempt with agent state (called by agent during/after session)
+ */
+export const updateAttemptAgentState = action({
+  args: {
+    attemptId: v.string(),
+    agentState: v.object({
+      windowScores: v.array(v.object({
+        windowId: v.number(),
+        startMs: v.number(),
+        endMs: v.number(),
+        decision: v.union(v.literal("pass"), v.literal("review"), v.literal("fail")),
+        confidence: v.number(),
+        anomalyScore: v.number(),
+      })),
+      agentDecision: v.optional(v.union(v.literal("human"), v.literal("bot"))),
+      agentReason: v.optional(v.string()),
+      decidedAt: v.optional(v.number()),
+    }),
+  },
+  handler: async (ctx, args): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await ctx.runMutation(internal.realtime.updateAttemptAgentStateInternal, {
+        attemptId: args.attemptId,
+        agentState: args.agentState,
+      });
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   },
 });
 

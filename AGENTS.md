@@ -230,6 +230,11 @@ git pull --ff-only
   - HookSink: Original callback-based telemetry (always enabled)
   - LiveKitSink: Real-time streaming via LiveKit (enabled by default when credentials present)
   - Config flag `telemetryTransport.livekit.enabled` controls LiveKit (default: true)
+  - Supports `apiBaseUrl` override and React `Playproof` props `apiKey`/`apiBaseUrl` for agent access in internal apps
+  - Agent decisions override verification result; SDK timeout defaults to bot (fail-closed)
+  - Agent control requires `gameDuration` to remain null; SDK no longer forces default duration when LiveKit agent is enabled
+  - Agent control no longer requires LiveKit to be ready at game start; SessionController attaches once connected
+  - Game registry preserves null `gameDuration` to allow agent-controlled sessions
 - **Web app**: `apps/web/` (canonical path)
 - **Dashboard**: 
   - Deployments page at `/dashboard/deployments`
@@ -242,6 +247,9 @@ git pull --ff-only
   - Feature extraction: velocity, acceleration, jerk, path efficiency, jitter, etc.
   - Woodwide ML platform integration for anomaly detection
   - Three-tier decision: PASS (<=1.0) / REVIEW (<=2.5) / FAIL (>2.5)
+- **Real-time agent**: Windowed scoring uses cumulative telemetry (session start → window end); LLM calls use OpenAI SDK with Azure envs (`AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_MODEL`); sustained review streaks (>=10) trigger bot decision in heuristic fallback
+- **LiveKit Node SDK**: `@livekit/rtc-node` used for server-side room connections (Next.js serverExternalPackages includes it)
+ - **LiveKit tokens**: SDK publisher tokens allow subscribing to data so agent control messages are received
 - **Woodwide assets**: `apps/web/woodwide/` (training data, scripts, tests, docs)
 - **Legacy API**: `apps/api/` (Fastify, deprecated)
 - **Worker**: `apps/edge-worker/` (Cloudflare placeholder)
@@ -270,4 +278,4 @@ LIVEKIT_API_SECRET=xxx
 
 ---
 
-*Last updated: Removed deprecated demo-app references, updated SDK tech stack to Three.js*
+*Last updated: Registry preserves null gameDuration for agent-controlled sessions*

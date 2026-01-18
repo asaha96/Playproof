@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
   /* config options here */
   // Transpile local workspace packages
   transpilePackages: ["playproof", "@playproof/shared"],
+  serverExternalPackages: ["@livekit/rtc-node"],
   turbopack: {
     // Set root to monorepo root so Turbopack can resolve modules correctly
     root: path.join(__dirname, "../.."),

@@ -18,6 +18,18 @@ export interface PlayproofProps {
    * Optional if gameId and theme are both provided (preview mode)
    */
   deploymentId?: string;
+
+  /**
+   * API key for LiveKit telemetry + agent control.
+   * Overrides any PlayproofProvider client_key.
+   */
+  apiKey?: string;
+
+  /**
+   * Base URL for Playproof API requests.
+   * Defaults to https://playproof.app unless overridden.
+   */
+  apiBaseUrl?: string;
   
   /**
    * Called when verification succeeds
@@ -123,6 +135,8 @@ type LoadingState = 'loading' | 'ready' | 'error';
  */
 export function Playproof({
   deploymentId,
+  apiKey: apiKeyOverride,
+  apiBaseUrl: apiBaseUrlOverride,
   onSuccess,
   onFailure,
   onStart,
@@ -176,6 +190,7 @@ export function Playproof({
 
   // Check if we're in preview mode (no deployment ID, using overrides)
   const isPreviewMode = !deploymentId && !!gameIdOverride;
+  const apiBaseUrl = apiBaseUrlOverride ?? PLAYPROOF_API_URL;
 
   // Fetch deployment configuration
   const fetchConfig = useCallback(async (): Promise<DeploymentConfig | null> => {
@@ -184,14 +199,14 @@ export function Playproof({
     }
     
     try {
-      const response = await fetch(`${PLAYPROOF_API_URL}/api/query`, {
+      const response = await fetch(`${apiBaseUrl}/api/query`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           path: 'deployments:getBrandingByCredentials',
-          args: { apiKey: client_key, deploymentId },
+          args: { apiKey: apiKeyOverride ?? client_key, deploymentId },
         }),
       });
 
@@ -243,7 +258,7 @@ export function Playproof({
       console.error('[Playproof] Error fetching deployment config:', err);
       return null;
     }
-  }, [client_key, deploymentId]);
+  }, [apiBaseUrl, apiKeyOverride, client_key, deploymentId]);
 
   // Cleanup function
   const cleanup = useCallback(() => {
@@ -361,8 +376,9 @@ export function Playproof({
           gameId: finalGameId,
           gameDuration: gameDuration || null,
           theme: finalTheme,
-          apiKey: client_key || undefined,
+          apiKey: apiKeyOverride ?? (client_key || undefined),
           deploymentId: deploymentId || undefined,
+          apiBaseUrl: apiBaseUrlOverride,
           onSuccess: (result: VerificationResult) => {
             onSuccessRef.current?.(result);
           },
@@ -455,6 +471,8 @@ export function Playproof({
   }, [
     containerId,
     client_key,
+    apiKeyOverride,
+    apiBaseUrlOverride,
     deploymentId,
     gameIdOverride,
     isPreviewMode,

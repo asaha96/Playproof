@@ -219,7 +219,7 @@ export default function EditDeploymentPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col p-6 lg:grid lg:grid-cols-[400px_1fr]">
+    <div className="flex h-screen flex-col p-6 lg:grid lg:grid-cols-[400px_1fr] gap-6">
       {/* Form Panel */}
       <form
         onSubmit={handleSubmit}

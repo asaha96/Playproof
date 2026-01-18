@@ -3,10 +3,14 @@
  * Game-based captcha verification for better human/bot segmentation
  */
 
-import { mergeConfig, validateThreshold } from './config';
+import { mergeConfig, validateThreshold, PLAYPROOF_API_URL } from './config';
 import { calculateConfidence, createVerificationResult } from './verification';
 import { createGame, getGameInfo, getGameInstructions, getRandomGameId } from './games/registry';
 import type { PlayproofConfig, BehaviorData, VerificationResult, SDKHooks, BaseGame } from './types';
+import type { SessionEndResult } from './telemetry/session-controller';
+
+// Default UI duration when agent-controlled (safety timeout)
+const AGENT_MAX_DURATION_MS = 30000;
 
 // Google Fonts import for all supported font families
 const fontImportCSS = `
@@ -154,10 +158,9 @@ export class Playproof {
     }
 
     try {
-      // Import the hardcoded API URL
-      const { PLAYPROOF_API_URL } = await import('./config');
+      const apiBaseUrl = this.config.apiBaseUrl || PLAYPROOF_API_URL;
 
-      console.log('[Playproof Debug] Fetching branding from:', PLAYPROOF_API_URL);
+      console.log('[Playproof Debug] Fetching branding from:', apiBaseUrl);
 
       const requestBody = {
         path: 'deployments:getBrandingByCredentials',
@@ -166,7 +169,7 @@ export class Playproof {
 
       console.log('[Playproof Debug] Request payload:', JSON.stringify(requestBody, null, 2));
 
-      const response = await fetch(`${PLAYPROOF_API_URL}/api/query`, {
+      const response = await fetch(`${apiBaseUrl}/api/query`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -279,8 +282,14 @@ export class Playproof {
     }
     const instructions = getGameInstructions(gameId);
     const gameInfo = getGameInfo(gameId);
-    const duration = this.config.gameDuration || gameInfo.duration || 10000;
-    const durationSec = Math.ceil(duration / 1000);
+    const livekitEnabled = this.config.telemetryTransport?.livekit?.enabled ?? true;
+    const hasLivekitCredentials = Boolean(this.config.apiKey && this.config.deploymentId);
+    const isAgentControlled =
+      this.config.gameDuration == null && livekitEnabled && hasLivekitCredentials;
+    const durationMs = isAgentControlled
+      ? AGENT_MAX_DURATION_MS
+      : (this.config.gameDuration ?? gameInfo.duration ?? 10000);
+    const durationSec = Math.ceil(durationMs / 1000);
 
     container.className = 'playproof-container';
     container.innerHTML = `
@@ -357,7 +366,24 @@ export class Playproof {
 
     // Get game info for duration
     const gameInfo = getGameInfo(gameId);
-    const duration = this.config.gameDuration || gameInfo.duration || 10000;
+    const livekitEnabled = this.config.telemetryTransport?.livekit?.enabled ?? true;
+    const hasLivekitCredentials = Boolean(this.config.apiKey && this.config.deploymentId);
+    const isAgentControlled = this.config.gameDuration == null && livekitEnabled && hasLivekitCredentials;
+    const durationForUi = isAgentControlled
+      ? AGENT_MAX_DURATION_MS
+      : (this.config.gameDuration ?? gameInfo.duration ?? 10000);
+    const gameDurationForGame = isAgentControlled
+      ? null
+      : (this.config.gameDuration ?? gameInfo.duration ?? 10000);
+
+    console.log("[Playproof] Game duration selection", {
+      isAgentControlled,
+      durationForUi,
+      gameDurationForGame,
+      livekitEnabled,
+      hasLivekitCredentials,
+      configuredDuration: this.config.gameDuration,
+    });
 
     // Create SDK hooks for future use
     const hooks: SDKHooks = {
@@ -369,7 +395,7 @@ export class Playproof {
     // Initialize game via registry
     this.game = createGame(gameId, this.gameArea!, {
       ...this.config,
-      gameDuration: duration
+      gameDuration: gameDurationForGame
     }, hooks);
 
     // For Three.js games, we need to await init
@@ -382,12 +408,12 @@ export class Playproof {
 
     this.progressInterval = setInterval(() => {
       const elapsed = Date.now() - startTime;
-      const progress = Math.min(100, (elapsed / duration) * 100);
+      const progress = Math.min(100, (elapsed / durationForUi) * 100);
       if (this.progressFill) {
         this.progressFill.style.width = `${progress}%`;
       }
 
-      const remaining = Math.max(0, Math.ceil((duration - elapsed) / 1000));
+      const remaining = Math.max(0, Math.ceil((durationForUi - elapsed) / 1000));
       if (this.timerDisplay) {
         this.timerDisplay.textContent = `${remaining}s`;
       }
@@ -410,6 +436,19 @@ export class Playproof {
    * Evaluate game results
    */
   private async evaluateResult(behaviorData: BehaviorData): Promise<void> {
+    const agentDecision = this.getAgentDecision();
+    const wasAgentControlled = this.wasAgentControlled();
+    const fallbackDecision: SessionEndResult | null = wasAgentControlled
+      ? {
+          type: "session_end",
+          decision: "bot",
+          confidence: 0.5,
+          reason: "No agent decision received before session end",
+          timestamp: Date.now(),
+        }
+      : null;
+    const effectiveAgentDecision = agentDecision ?? fallbackDecision;
+
     // Note: Telemetry is now sent via the TelemetrySink abstraction in base-game.ts
     // The hook is called in real-time during the game via TelemetrySink.
     // BehaviorData is also passed for backward compatibility with onTelemetry callbacks.
@@ -420,10 +459,46 @@ export class Playproof {
 
     // Wait a bit for Woodwide result if available
     let woodwideResult = this.config.woodwideResult;
-    if (!woodwideResult && this.config.hooks?.onTelemetryBatch) {
+    if (!effectiveAgentDecision && !woodwideResult && this.config.hooks?.onTelemetryBatch) {
       // Give a moment for async telemetry processing
       await new Promise(resolve => setTimeout(resolve, 100));
       woodwideResult = this.config.woodwideResult;
+    }
+
+    if (effectiveAgentDecision) {
+      const agentResult = {
+        decision: effectiveAgentDecision.decision === "human" ? "pass" : "fail",
+        anomalyScore: effectiveAgentDecision.decision === "human" ? 0 : 5,
+      } as const;
+
+      const score = calculateConfidence(behaviorData);
+      const baseResult = createVerificationResult(
+        score,
+        this.config.confidenceThreshold,
+        behaviorData
+      );
+      const finalResult: VerificationResult = {
+        ...baseResult,
+        passed: agentResult.decision === "pass",
+      };
+
+      console.log("[Playproof] Using agent decision for verification", {
+        decision: effectiveAgentDecision.decision,
+        reason: effectiveAgentDecision.reason,
+      });
+
+      this.showResult({
+        ...finalResult,
+        score: agentResult.anomalyScore,
+      }, agentResult);
+
+      if (agentResult.decision === "pass") {
+        this.config.onSuccess?.(finalResult);
+      } else {
+        this.config.onFailure?.(finalResult);
+      }
+
+      return;
     }
 
     const score = calculateConfidence(behaviorData);
@@ -454,6 +529,26 @@ export class Playproof {
         this.config.onFailure(result);
       }
     }
+  }
+
+  /**
+   * Read the agent decision from the active game (if supported)
+   */
+  private getAgentDecision(): SessionEndResult | null {
+    if (!this.game) return null;
+    const maybeGame = this.game as unknown as { getAgentDecision?: () => SessionEndResult | null };
+    if (typeof maybeGame.getAgentDecision !== "function") return null;
+    return maybeGame.getAgentDecision() ?? null;
+  }
+
+  /**
+   * Check if the current game used agent-controlled session management
+   */
+  private wasAgentControlled(): boolean {
+    if (!this.game) return false;
+    const maybeGame = this.game as unknown as { wasAgentControlled?: () => boolean };
+    if (typeof maybeGame.wasAgentControlled !== "function") return false;
+    return Boolean(maybeGame.wasAgentControlled());
   }
 
   /**

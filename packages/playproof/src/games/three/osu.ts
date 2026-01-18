@@ -39,10 +39,10 @@ interface HitResult {
 // Pre-cached Geometries and Materials
 // ============================================================================
 
-const circleGeometryCache: Map<string, THREE.CircleGeometry> = new Map();
-const ringGeometryCache: Map<string, THREE.RingGeometry> = new Map();
+const circleGeometryCache: Map<string, InstanceType<typeof THREE.CircleGeometry>> = new Map();
+const ringGeometryCache: Map<string, InstanceType<typeof THREE.RingGeometry>> = new Map();
 
-function getCachedCircleGeometry(radius: number, segments: number = 32): THREE.CircleGeometry {
+function getCachedCircleGeometry(radius: number, segments: number = 32): InstanceType<typeof THREE.CircleGeometry> {
     const key = `${radius.toFixed(3)}_${segments}`;
     if (!circleGeometryCache.has(key)) {
         circleGeometryCache.set(key, new THREE.CircleGeometry(radius, segments));
@@ -50,7 +50,7 @@ function getCachedCircleGeometry(radius: number, segments: number = 32): THREE.C
     return circleGeometryCache.get(key)!;
 }
 
-function getCachedRingGeometry(inner: number, outer: number, segments: number = 48): THREE.RingGeometry {
+function getCachedRingGeometry(inner: number, outer: number, segments: number = 48): InstanceType<typeof THREE.RingGeometry> {
     const key = `${inner.toFixed(3)}_${outer.toFixed(3)}_${segments}`;
     if (!ringGeometryCache.has(key)) {
         ringGeometryCache.set(key, new THREE.RingGeometry(inner, outer, segments));
