@@ -19,7 +19,7 @@ export async function OPTIONS() {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { path, args } = body;
+        const { path, args, type = 'query' } = body;
 
         if (!path) {
             return NextResponse.json(
@@ -57,8 +57,13 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Call the Convex query/mutation
-        const result = await convex.query(apiFunction, args || {});
+        // Call the Convex query or mutation based on type
+        let result;
+        if (type === 'mutation') {
+            result = await convex.mutation(apiFunction, args || {});
+        } else {
+            result = await convex.query(apiFunction, args || {});
+        }
 
         return NextResponse.json(
             { status: 'success', value: result },

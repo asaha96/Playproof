@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
-const BOT_THRESHOLD = 0.3;
+const BOT_THRESHOLD = 1;
 
 const clientInfoInput = v.object({
   deviceType: v.optional(v.string()),
@@ -56,7 +56,7 @@ export const recent = query({
           startAt: session.startAt,
           endAt: session.endAt,
           durationMs: session.durationMs,
-          result: session.suspectScore >= BOT_THRESHOLD ? "Bot" : "Human",
+          result: session.suspectScore < BOT_THRESHOLD ? "Bot" : "Human",
         };
       })
     );
@@ -74,8 +74,8 @@ export const stats = query({
     const sessions = await ctx.db.query("sessions").collect();
 
     const totalSessions = sessions.length;
-    const humanSessions = sessions.filter((s) => s.suspectScore < BOT_THRESHOLD).length;
-    const botDetections = sessions.filter((s) => s.suspectScore >= BOT_THRESHOLD).length;
+    const humanSessions = sessions.filter((s) => s.suspectScore >= BOT_THRESHOLD).length;
+    const botDetections = sessions.filter((s) => s.suspectScore < BOT_THRESHOLD).length;
 
     const humanPassRate = totalSessions > 0 ? humanSessions / totalSessions : 0;
     const avgSessionMs =
@@ -94,7 +94,7 @@ export const stats = query({
         byDeployment[deploymentId] = { count: 0, passCount: 0 };
       }
       byDeployment[deploymentId].count++;
-      if (s.suspectScore < BOT_THRESHOLD) {
+      if (s.suspectScore >= BOT_THRESHOLD) {
         byDeployment[deploymentId].passCount++;
       }
     }
@@ -152,7 +152,7 @@ export const timeSeries = query({
 
       const entry = daysMap.get(dateStr)!;
       entry.total++;
-      if (s.suspectScore < BOT_THRESHOLD) {
+      if (s.suspectScore >= BOT_THRESHOLD) {
         entry.humans++;
       } else {
         entry.bots++;
@@ -204,3 +204,59 @@ export const create = mutation({
     return sessionId;
   },
 });
+
+/**
+ * Public mutation for SDK to record sessions using API key authentication.
+ * This allows the SDK to report verification results without Clerk auth.
+ */
+export const createWithApiKey = mutation({
+  args: {
+    apiKey: v.string(),
+    deploymentId: v.id("deployments"),
+    startAt: v.number(),
+    endAt: v.number(),
+    durationMs: v.number(),
+    suspectScore: v.number(),
+  },
+  handler: async (ctx, args) => {
+    // Validate API key against users table
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_apiKey", (q) => q.eq("apiKey", args.apiKey))
+      .first();
+
+    if (!user) {
+      throw new Error("Invalid API key");
+    }
+
+    // Get deployment and verify it exists
+    const deployment = await ctx.db.get(args.deploymentId);
+    if (!deployment) {
+      throw new Error("Deployment not found");
+    }
+
+    // Optionally verify the user owns this deployment
+    if (deployment.userId && deployment.userId !== user._id) {
+      throw new Error("API key does not have access to this deployment");
+    }
+
+    // Create the session
+    const sessionId = await ctx.db.insert("sessions", {
+      deploymentId: args.deploymentId,
+      startAt: args.startAt,
+      endAt: args.endAt,
+      durationMs: args.durationMs,
+      suspectScore: args.suspectScore,
+    });
+
+    // Update deployment's session list
+    const sessionIds = deployment.sessionIds ?? [];
+    await ctx.db.patch(args.deploymentId, {
+      sessionIds: [...sessionIds, sessionId],
+      updatedAt: Date.now(),
+    });
+
+    return { success: true, sessionId };
+  },
+});
+
