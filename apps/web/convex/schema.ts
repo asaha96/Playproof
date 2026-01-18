@@ -57,6 +57,8 @@ export default defineSchema({
   deployments: defineTable({
     name: v.string(),
     type: deploymentType,
+    // API key for SDK authentication (format: pp_<32 chars>)
+    apiKey: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
     isActive: v.boolean(),
