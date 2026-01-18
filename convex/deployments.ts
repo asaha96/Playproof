@@ -77,3 +77,53 @@ export const setActive = mutation({
     });
   },
 });
+
+export const update = mutation({
+  args: {
+    id: v.id("deployments"),
+    name: v.string(),
+    type: deploymentType,
+    isActive: v.boolean(),
+    branding: v.optional(brandingInput),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Called update without authentication");
+    }
+
+    const deployment = await ctx.db.get(args.id);
+    if (!deployment) {
+      throw new Error("Deployment not found");
+    }
+
+    const branding = resolveBranding(args.branding);
+
+    await ctx.db.patch(args.id, {
+      name: args.name,
+      type: args.type,
+      isActive: args.isActive,
+      updatedAt: Date.now(),
+      ...branding,
+    });
+  },
+});
+
+export const remove = mutation({
+  args: {
+    id: v.id("deployments"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Called remove without authentication");
+    }
+
+    const deployment = await ctx.db.get(args.id);
+    if (!deployment) {
+      throw new Error("Deployment not found");
+    }
+
+    await ctx.db.delete(args.id);
+  },
+});
