@@ -114,15 +114,16 @@ export class LiveKitSink implements TelemetrySink {
     try {
       if (this.room) {
         this.room.disconnect();
-        this.room = null;
       }
     } catch (error) {
       console.warn('[LiveKitSink] Error during disconnect:', error);
+      this.config.onError?.(error as Error);
     } finally {
+      this.room = null;
       this.connected = false;
       this.attemptId = null;
       this.roomName = null;
-      this.seq = 0;
+      // Don't reset seq - if reconnecting, sequence should continue
     }
   }
 
@@ -134,7 +135,7 @@ export class LiveKitSink implements TelemetrySink {
    *                   If false, use LOSSY delivery (for high-frequency move events)
    */
   sendPointerBatch(batch: PointerTelemetryEvent[], reliable = false): void {
-    if (!this.connected || !this.room?.localParticipant) {
+    if (!this.isReady()) {
       return;
     }
 
@@ -151,7 +152,7 @@ export class LiveKitSink implements TelemetrySink {
       const data = new TextEncoder().encode(JSON.stringify(message));
 
       // Publish data with appropriate reliability
-      this.room.localParticipant.publishData(data, {
+      this.room!.localParticipant.publishData(data, {
         reliable,
         topic: POINTER_TOPIC,
       });

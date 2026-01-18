@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { api } from "../../../../../convex/_generated/api";
+import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -181,8 +181,13 @@ export default function AttemptsPage() {
                   ) : (
                       attempts.map((attempt) => (
                       <TableRow key={attempt._id}>
-                        <TableCell className="font-mono text-xs" title={attempt.attemptId}>
-                          {attempt.attemptId.substring(0, 20)}...
+                        <TableCell 
+                          className="font-mono text-xs cursor-help" 
+                          title={attempt.attemptId}
+                        >
+                          {attempt.attemptId.length > 20 
+                            ? `${attempt.attemptId.substring(0, 20)}...` 
+                            : attempt.attemptId}
                         </TableCell>
                         <TableCell>{attempt.deploymentName}</TableCell>
                         <TableCell>

@@ -30,10 +30,9 @@ export const validateApiKey = internalQuery({
       return null;
     }
 
+    // Return minimal info needed for validation (no PII)
     return {
       _id: user._id,
-      email: user.email,
-      name: user.name,
     };
   },
 });

@@ -72,7 +72,9 @@ export default defineSchema({
     // Timestamps
     createdAt: v.optional(v.number()),
     updatedAt: v.optional(v.number()),
-    // Branding type (legacy field)
+    // Branding type (legacy field).
+    // NOTE: This field is retained only for backward compatibility with
+    // existing user records. New code should use the structured branding fields.
     brandingType: v.optional(v.string()),
     // Branding fields (user-level customization)
     ...brandingFields,
@@ -85,7 +87,8 @@ export default defineSchema({
   deployments: defineTable({
     name: v.string(),
     type: deploymentType,
-    userId: v.id("users"), // Owner of the deployment
+    // Owner of the deployment (optional for backward compatibility with existing deployments)
+    userId: v.optional(v.id("users")),
     // Unique deployment identifier for SDK lookup
     deploymentId: v.optional(v.string()),
     // API key for SDK authentication (format: pp_<32 chars>)
