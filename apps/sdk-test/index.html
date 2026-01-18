@@ -90,20 +90,23 @@
 </head>
 
 <body>
-    <div class="debug-
-    ">
-        <h3></h3>
+    <div class="debug-panel">
+        <h3>🔧 SDK Debug Panel</h3>
         <div class="debug-row">
-            <span class="debug-label"></span>
-            <span class="debug-value" id="debug-apikey"></span>
+            <span class="debug-label">API Key:</span>
+            <span class="debug-value" id="debug-apikey">-</span>
         </div>
         <div class="debug-row">
-            <span class="debug-label"></span>
-            <span class="debug-value" id="debug-deployment"></span>
+            <span class="debug-label">Deployment ID:</span>
+            <span class="debug-value" id="debug-deployment">-</span>
         </div>
-
+        <div class="debug-row">
+            <span class="debug-label">Theme Sync:</span>
+            <span class="debug-value pending" id="debug-status">Pending...</span>
+        </div>
         <div class="debug-instructions">
-
+            📋 Open browser DevTools (F12) and check the Console tab for detailed debug logs prefixed with [Playproof
+            Debug]
         </div>
     </div>
 

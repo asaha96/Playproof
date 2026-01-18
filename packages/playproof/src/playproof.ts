@@ -66,20 +66,6 @@ const themeCSS = `
 .playproof-footer { display: flex; align-items: center; justify-content: space-between; margin-top: calc(var(--playproof-spacing) * 0.5); padding-top: calc(var(--playproof-spacing) * 0.5); border-top: 1px solid var(--playproof-border); }
 .playproof-branding { font-size: 10px; color: var(--playproof-text-muted); opacity: 0.8; }
 .playproof-branding a { color: var(--playproof-accent); text-decoration: none; }
-.playproof-status { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; transition: all 0.3s ease; position: relative; overflow: hidden; }
-.playproof-status::before { content: ''; position: absolute; inset: 0; border-radius: 20px; opacity: 0.15; z-index: 0; }
-.playproof-status::after { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent); z-index: 1; }
-.playproof-status.success { color: var(--playproof-success); background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.25); box-shadow: 0 0 12px rgba(16, 185, 129, 0.15), inset 0 1px 0 rgba(255,255,255,0.05); }
-.playproof-status.success::before { background: linear-gradient(135deg, var(--playproof-success), #34d399); }
-.playproof-status.success::after { animation: statusShimmer 2s ease-in-out infinite; }
-.playproof-status.warning { color: #fbbf24; background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.25); box-shadow: 0 0 12px rgba(251, 191, 36, 0.15), inset 0 1px 0 rgba(255,255,255,0.05); }
-.playproof-status.warning::before { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
-.playproof-status.error { color: var(--playproof-error); background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.25); box-shadow: 0 0 12px rgba(239, 68, 68, 0.15), inset 0 1px 0 rgba(255,255,255,0.05); }
-.playproof-status.error::before { background: linear-gradient(135deg, var(--playproof-error), #f87171); }
-.playproof-status-icon { width: 14px; height: 14px; position: relative; z-index: 2; flex-shrink: 0; }
-.playproof-status-icon svg { width: 100%; height: 100%; fill: currentColor; filter: drop-shadow(0 0 2px currentColor); }
-.playproof-status-text { position: relative; z-index: 2; text-shadow: 0 0 8px currentColor; }
-@keyframes statusShimmer { 0%, 100% { left: -100%; } 50% { left: 100%; } }
 .playproof-result { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--playproof-surface); animation: fadeIn 0.3s ease; border-radius: calc(var(--playproof-border-radius) * 0.67); }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 .playproof-result-icon { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: calc(var(--playproof-spacing) * 0.875); }
@@ -501,14 +487,6 @@ export class Playproof {
         reason: effectiveAgentDecision.reason,
       });
 
-      // Report session to analytics backend using agent's confidence
-      // Agent decision "human" = high suspectScore (human), "bot" = low suspectScore (bot)
-      const suspectScore = effectiveAgentDecision.decision === "human"
-        ? effectiveAgentDecision.confidence
-        : 1 - effectiveAgentDecision.confidence;
-      const agentPassed = effectiveAgentDecision.decision === "human";
-      await this.reportSession(behaviorData, suspectScore, agentPassed);
-
       this.showResult({
         ...finalResult,
         score: agentResult.anomalyScore,
@@ -530,10 +508,12 @@ export class Playproof {
       behaviorData
     );
 
+    const sessionResult: "human" | "bot" = woodwideResult
+      ? (woodwideResult.decision === "pass" ? "human" : "bot")
+      : (result.passed ? "human" : "bot");
+
     // Report session to analytics backend
-    // Use woodwide decision if available, otherwise use standard verification result
-    const sessionPassed = woodwideResult ? woodwideResult.decision === "pass" : result.passed;
-    await this.reportSession(behaviorData, score, sessionPassed);
+    await this.reportSession(behaviorData, sessionResult);
 
     // Use Woodwide result if available, otherwise use game's own result
     if (woodwideResult) {
@@ -581,13 +561,15 @@ export class Playproof {
   /**
    * Report session to the analytics backend
    */
-  private async reportSession(behaviorData: BehaviorData, suspectScore: number, passed?: boolean): Promise<void> {
+  private async reportSession(behaviorData: BehaviorData, result: "human" | "bot"): Promise<void> {
     try {
       const { PLAYPROOF_API_URL } = await import('./config');
 
-      const endAt = Date.now();
-      const durationMs = behaviorData.durationMs || 10000;
-      const startAt = endAt - durationMs;
+      const fallbackDuration = this.config.gameDuration ?? 10000;
+      const endAt = behaviorData.endTime ?? Date.now();
+      const startAt = behaviorData.startTime
+        ?? (behaviorData.durationMs ? endAt - behaviorData.durationMs : endAt - fallbackDuration);
+      const durationMs = behaviorData.durationMs ?? Math.max(0, endAt - startAt);
 
       const requestBody = {
         path: 'sessions:createWithApiKey',
@@ -598,8 +580,7 @@ export class Playproof {
           startAt,
           endAt,
           durationMs,
-          suspectScore,
-          passed, // LLM's actual human/bot decision
+          result,
         },
       };
 
@@ -618,10 +599,10 @@ export class Playproof {
         return;
       }
 
-      const result = await response.json();
+      const responseBody = await response.json();
 
-      if (result.errorMessage) {
-        console.warn('[Playproof] Failed to report session:', result.errorMessage);
+      if (responseBody.errorMessage) {
+        console.warn('[Playproof] Failed to report session:', responseBody.errorMessage);
         return;
       }
 
@@ -678,17 +659,15 @@ export class Playproof {
       </div>
     `;
 
-    // Update footer status with beautiful badge
+    // Update footer status
     const status = this.container.querySelector('.playproof-status');
     if (status) {
       status.className = `playproof-status ${statusClass}`;
-      const statusIcon = decision === "pass"
-        ? '<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>'
+      status.innerHTML = decision === "pass"
+        ? `${icon} Verified`
         : decision === "review"
-          ? '<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>'
-          : '<svg viewBox="0 0 24 24"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg>';
-      const statusText = decision === "pass" ? 'Verified' : decision === "review" ? 'Review' : 'Not Verified';
-      status.innerHTML = `<span class="playproof-status-icon">${statusIcon}</span><span class="playproof-status-text">${statusText}</span>`;
+          ? `${icon} Review`
+          : `${icon} Not Verified`;
     }
   }
 

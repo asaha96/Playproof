@@ -37,6 +37,11 @@ const verificationDecision = v.union(
   v.literal("fail")
 );
 
+const sessionResult = v.union(
+  v.literal("human"),
+  v.literal("bot")
+);
+
 export default defineSchema({
   // Active verification attempts (for LiveKit telemetry)
   activeAttempts: defineTable({
@@ -122,12 +127,11 @@ export default defineSchema({
   // Sessions table - stores verification sessions for a deployment
   sessions: defineTable({
     deploymentId: v.id("deployments"),
+    deploymentName: v.string(),
     startAt: v.number(),
     endAt: v.number(),
     durationMs: v.number(),
-    suspectScore: v.number(),
-    // LLM's actual human/bot decision (true = human, false = bot)
-    passed: v.optional(v.boolean()),
+    result: sessionResult,
     clientInfo: v.optional(
       v.object({
         deviceType: v.optional(v.string()),
