@@ -227,11 +227,11 @@ export default function EditDeploymentPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col gap-6 p-6 lg:grid lg:grid-cols-[400px_1fr] lg:gap-8">
+    <div className="flex h-screen flex-col p-6 lg:grid lg:grid-cols-[400px_1fr]">
       {/* Form Panel */}
       <form
         onSubmit={handleSubmit}
-        className="flex flex-col gap-5 overflow-y-auto pb-6"
+        className="flex flex-col gap-5 overflow-y-auto p-6"
       >
         <div className="flex items-center gap-3">
           <Button
@@ -254,7 +254,7 @@ export default function EditDeploymentPage() {
         </div>
 
         {/* Basic Settings */}
-        <Card>
+        <Card className="overflow-visible ring-0">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Settings2 className="size-4" />
@@ -287,7 +287,9 @@ export default function EditDeploymentPage() {
                   }
                 >
                   <SelectTrigger className="h-9">
-                    <SelectValue />
+                    <SelectValue>
+                      {deploymentTypes.find((t) => t.value === formState.type)?.label}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {deploymentTypes.map((option) => (
@@ -316,7 +318,7 @@ export default function EditDeploymentPage() {
         </Card>
 
         {/* Typography */}
-        <Card>
+        <Card className="overflow-visible ring-0">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Type className="size-4" />
@@ -348,7 +350,7 @@ export default function EditDeploymentPage() {
         </Card>
 
         {/* Core Colors */}
-        <Card>
+        <Card className="overflow-visible ring-0">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Palette className="size-4" />
@@ -394,7 +396,7 @@ export default function EditDeploymentPage() {
         </Card>
 
         {/* Text Colors */}
-        <Card>
+        <Card className="overflow-visible ring-0">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Type className="size-4" />
@@ -424,7 +426,7 @@ export default function EditDeploymentPage() {
         </Card>
 
         {/* UI Colors */}
-        <Card>
+        <Card className="overflow-visible ring-0">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Gamepad2 className="size-4" />
@@ -549,12 +551,12 @@ export default function EditDeploymentPage() {
             </Button>
           </div>
 
-          <div className="flex-1 rounded-xl border bg-muted/30 p-8 flex items-center justify-center relative overflow-hidden">
+          <div className="flex-1 rounded-xl border bg-muted/30 p-8 flex items-center justify-center relative">
             <div className="absolute inset-0 bg-grid-slate-200/50 [mask-image:linear-gradient(0deg,white,rgba(255,255,255,0.6))] dark:bg-grid-slate-700/25 pointer-events-none" />
 
             <TabsContent
               value="desktop"
-              className="m-0 w-full max-w-[420px] rounded-2xl overflow-hidden mt-0"
+              className="m-0 w-full max-w-[420px] rounded-2xl mt-0"
             >
               <PlayproofCaptcha
                 key={`desktop-${resetKey}`}
@@ -577,7 +579,7 @@ export default function EditDeploymentPage() {
 
             <TabsContent
               value="mobile"
-              className="m-0 w-[320px] rounded-2xl overflow-hidden mt-0"
+              className="m-0 w-[320px] rounded-2xl mt-0"
             >
               <PlayproofCaptcha
                 key={`mobile-${resetKey}`}
