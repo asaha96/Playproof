@@ -6,10 +6,20 @@
  * in real-time.
  */
 
-import { Room, RoomEvent, ConnectionQuality } from 'livekit-client';
+import type { Room as RoomType, RoomEvent as RoomEventType, ConnectionQuality as ConnectionQualityType } from 'livekit-client';
 import type { PointerTelemetryEvent } from '../types';
 import type { TelemetrySink } from './sink';
 import { PLAYPROOF_API_URL } from '../config';
+
+// Dynamic import of livekit-client to avoid SSR issues
+let livekitModule: typeof import('livekit-client') | null = null;
+
+async function getLivekitModule() {
+  if (!livekitModule) {
+    livekitModule = await import('livekit-client');
+  }
+  return livekitModule;
+}
 
 // Telemetry topic for pointer events (versioned for future compatibility)
 export const POINTER_TOPIC = 'playproof.pointer.v1';
@@ -30,7 +40,7 @@ export interface LiveKitSinkConfig {
  */
 export class LiveKitSink implements TelemetrySink {
   private config: LiveKitSinkConfig;
-  private room: Room | null = null;
+  private room: RoomType | null = null;
   private connected = false;
   private attemptId: string | null = null;
   private roomName: string | null = null;
@@ -57,6 +67,9 @@ export class LiveKitSink implements TelemetrySink {
         throw new Error(tokenResponse.error || 'Failed to get LiveKit token');
       }
 
+      // Dynamically import livekit-client to avoid SSR issues
+      const { Room, RoomEvent } = await getLivekitModule();
+
       // Create and connect room
       this.room = new Room();
       
@@ -72,7 +85,7 @@ export class LiveKitSink implements TelemetrySink {
         this.config.onDisconnected?.();
       });
 
-      this.room.on(RoomEvent.ConnectionQualityChanged, (quality: ConnectionQuality) => {
+      this.room.on(RoomEvent.ConnectionQualityChanged, (quality) => {
         console.log('[LiveKitSink] Connection quality:', quality);
       });
 

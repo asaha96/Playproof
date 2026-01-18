@@ -146,7 +146,16 @@ export default function ObservabilityPage() {
         cleanup();
 
         // Dynamic import to avoid SSR issues
-        const { Playproof } = await import("playproof");
+        const playproofModule = await import("playproof");
+        console.log("[Observability] Playproof module loaded:", playproofModule);
+        
+        // Handle both default and named exports
+        const Playproof = playproofModule.Playproof || playproofModule.default;
+        
+        if (!Playproof) {
+          console.error("[Observability] Playproof class not found in module:", Object.keys(playproofModule));
+          return;
+        }
 
         if (!mounted || !containerRef.current) return;
 
