@@ -169,7 +169,7 @@ export function PlayproofCaptcha({
     } as React.CSSProperties
 
     return (
-        <div className="playproof-captcha-wrapper">
+        <>
             {error ? (
                 <div className="flex items-center justify-center min-h-[320px] bg-slate-900/50 rounded-lg border border-red-500/20 text-red-400 text-sm">
                     {error}
@@ -182,7 +182,7 @@ export function PlayproofCaptcha({
                     className="w-full"
                 />
             )}
-        </div>
+        </>
     )
 }
 

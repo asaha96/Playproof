@@ -265,7 +265,7 @@ export default function PlaygroundPage() {
                     <div className="flex-1 rounded-xl border bg-muted/30 p-8 flex items-center justify-center relative overflow-hidden">
                         <div className="absolute inset-0 bg-grid-slate-200/50 [mask-image:linear-gradient(0deg,white,rgba(255,255,255,0.6))] dark:bg-grid-slate-700/25 pointer-events-none" />
 
-                        <TabsContent value="desktop" className="m-0 w-full max-w-[420px] shadow-2xl rounded-2xl overflow-hidden mt-0">
+                        <TabsContent value="desktop" className="m-0 w-full max-w-[420px] rounded-2xl overflow-hidden mt-0">
                             <PlayproofCaptcha
                                 key={`desktop-${resetKey}`}
                                 resetKey={resetKey}
@@ -283,7 +283,7 @@ export default function PlaygroundPage() {
                             />
                         </TabsContent>
 
-                        <TabsContent value="mobile" className="m-0 w-[320px] shadow-2xl rounded-2xl overflow-hidden mt-0">
+                        <TabsContent value="mobile" className="m-0 w-[320px] rounded-2xl overflow-hidden mt-0">
                             <PlayproofCaptcha
                                 key={`mobile-${resetKey}`}
                                 resetKey={resetKey}
