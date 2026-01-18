@@ -123,11 +123,12 @@ export const stats = query({
  * Get time series data for the analytics component
  */
 export const timeSeries = query({
-  args: { days: v.number() },
+  args: { days: v.optional(v.number()) },
   handler: async (ctx, args) => {
+    const days = args.days ?? 14;
     const now = Date.now();
     const msPerDay = 24 * 60 * 60 * 1000;
-    const startTime = now - args.days * msPerDay;
+    const startTime = now - days * msPerDay;
 
     const sessions = await ctx.db
       .query("sessions")
@@ -139,7 +140,7 @@ export const timeSeries = query({
     const daysMap = new Map<string, { humans: number; bots: number; total: number }>();
 
     // Initialize all days to 0 to ensure continuous line
-    for (let i = 0; i < args.days; i++) {
+    for (let i = 0; i < days; i++) {
       const date = new Date(now - i * msPerDay);
       const dateStr = date.toISOString().split("T")[0];
       daysMap.set(dateStr, { humans: 0, bots: 0, total: 0 });

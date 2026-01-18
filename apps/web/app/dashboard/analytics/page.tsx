@@ -171,16 +171,16 @@ export default function AnalyticsPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
-        <Card>
+        <Card className="flex flex-col">
           <CardHeader>
             <CardTitle>Verification trends</CardTitle>
             <CardDescription>
               Human vs bot detection over the last 14 days.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1 flex flex-col min-h-0">
             {chartData.length === 0 ? (
-              <div className="h-64 flex items-center justify-center rounded-lg border border-dashed bg-muted/30">
+              <div className="flex-1 flex items-center justify-center rounded-lg border border-dashed bg-muted/30 min-h-[400px]">
                 <div className="text-center text-sm text-muted-foreground">
                   <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-50" />
                   <p>No data yet</p>
@@ -188,7 +188,7 @@ export default function AnalyticsPage() {
                 </div>
               </div>
             ) : (
-              <ChartContainer config={chartConfig} className="h-64">
+              <ChartContainer config={chartConfig} className="flex-1 min-h-[400px] w-full">
                 <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis
