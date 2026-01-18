@@ -21,3 +21,5 @@ export * from './telemetry.js';
 export * from './physics.js';
 export * from './mini-golf-grid.js';
 export * from './mini-golf-levels.js';
+export * from './basketball-grid.js';
+export * from './archery-grid.js';

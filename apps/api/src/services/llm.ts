@@ -8,26 +8,70 @@
  * 2-stage pipeline:
  * 1. Generate intent (design brief) with higher temperature for creativity
  * 2. Generate level based on intent with controlled temperature
+ * 
+ * Supports multiple games: mini-golf, basketball, archery
  */
 
 import OpenAI from 'openai';
 import Groq from 'groq-sdk';
 import type { GridLevel, GridLevelDifficulty, GridLevelIssue } from '@playproof/shared';
+
+// Mini-golf prompts (default)
 import {
-  getSystemPrompt,
-  getGenerationPrompt,
-  getRetryPrompt,
-  parseGridLevelFromLLM,
-  GRID_LEVEL_JSON_SCHEMA,
-  // New intent-related imports
-  getIntentSystemPrompt,
-  getIntentGenerationPrompt,
-  getGenerationPromptWithIntent,
-  getRetryPromptWithIntent,
-  parseIntentFromLLM,
-  LEVEL_INTENT_JSON_SCHEMA,
+  getSystemPrompt as getMiniGolfSystemPrompt,
+  getGenerationPrompt as getMiniGolfGenerationPrompt,
+  getRetryPrompt as getMiniGolfRetryPrompt,
+  parseGridLevelFromLLM as parseMiniGolfGridLevelFromLLM,
+  GRID_LEVEL_JSON_SCHEMA as MINI_GOLF_GRID_LEVEL_JSON_SCHEMA,
+  getIntentSystemPrompt as getMiniGolfIntentSystemPrompt,
+  getIntentGenerationPrompt as getMiniGolfIntentGenerationPrompt,
+  getGenerationPromptWithIntent as getMiniGolfGenerationPromptWithIntent,
+  getRetryPromptWithIntent as getMiniGolfRetryPromptWithIntent,
+  parseIntentFromLLM as parseMiniGolfIntentFromLLM,
+  LEVEL_INTENT_JSON_SCHEMA as MINI_GOLF_INTENT_JSON_SCHEMA,
   type LevelIntent
 } from '../prompts/mini-golf.js';
+
+// Basketball prompts
+import {
+  getBasketballSystemPrompt,
+  getBasketballGenerationPrompt,
+  parseBasketballGridLevelFromLLM,
+  BASKETBALL_GRID_LEVEL_JSON_SCHEMA,
+  getBasketballIntentSystemPrompt,
+  getBasketballIntentGenerationPrompt,
+  getBasketballGenerationPromptWithIntent,
+  getBasketballRetryPromptWithIntent,
+  parseBasketballIntentFromLLM,
+  BASKETBALL_INTENT_JSON_SCHEMA,
+  type BasketballLevelIntent
+} from '../prompts/basketball.js';
+
+// Archery prompts
+import {
+  getArcherySystemPrompt,
+  getArcheryGenerationPrompt,
+  parseArcheryGridLevelFromLLM,
+  ARCHERY_GRID_LEVEL_JSON_SCHEMA,
+  getArcheryIntentSystemPrompt,
+  getArcheryIntentGenerationPrompt,
+  getArcheryGenerationPromptWithIntent,
+  getArcheryRetryPromptWithIntent,
+  parseArcheryIntentFromLLM,
+  ARCHERY_INTENT_JSON_SCHEMA,
+  type ArcheryLevelIntent
+} from '../prompts/archery.js';
+
+// Supported game types
+export type GameId = 'mini-golf' | 'basketball' | 'archery';
+
+// Union type for all intent types
+export type GameLevelIntent = LevelIntent | BasketballLevelIntent | ArcheryLevelIntent;
+
+// Re-export LevelIntent for backward compatibility
+export type { LevelIntent } from '../prompts/mini-golf.js';
+export type { BasketballLevelIntent } from '../prompts/basketball.js';
+export type { ArcheryLevelIntent } from '../prompts/archery.js';
 
 // Model configurations
 export type ModelProvider = 'azure' | 'groq';
@@ -112,15 +156,17 @@ export interface LLMGenerationResult {
   latencyMs?: number;
   model?: string;
   temperature?: number;  // Track what temperature was used
+  gameId?: GameId;
 }
 
 export interface IntentGenerationResult {
-  intent: LevelIntent | null;
+  intent: GameLevelIntent | null;
   rawResponse: string;
   error?: string;
   latencyMs?: number;
   model?: string;
   temperature?: number;
+  gameId?: GameId;
 }
 
 // Logger interface (injected from route)
@@ -162,22 +208,97 @@ export function getRandomTemperature(stage: 'intent' | 'generation' | 'retry'): 
 }
 
 // ============================================================================
+// GAME-SPECIFIC PROMPT HELPERS
+// ============================================================================
+
+// Generic JSON schema type for structured outputs
+interface JsonSchema {
+  name: string;
+  strict?: boolean;
+  schema: Record<string, unknown>;
+}
+
+interface GamePromptPack {
+  getSystemPrompt: () => string;
+  getGenerationPrompt: (difficulty: GridLevelDifficulty, seed?: string) => string;
+  parseGridLevelFromLLM: (response: string) => GridLevel | null;
+  gridLevelJsonSchema: JsonSchema;
+  getIntentSystemPrompt: () => string;
+  getIntentGenerationPrompt: (difficulty: GridLevelDifficulty) => string;
+  getGenerationPromptWithIntent: (difficulty: GridLevelDifficulty, intent: any) => string;
+  getRetryPromptWithIntent: (issues: GridLevelIssue[], previousAttempt: string, intent: any) => string;
+  parseIntentFromLLM: (response: string) => GameLevelIntent | null;
+  intentJsonSchema: JsonSchema;
+}
+
+function getPromptPackForGame(gameId: GameId): GamePromptPack {
+  switch (gameId) {
+    case 'basketball':
+      return {
+        getSystemPrompt: getBasketballSystemPrompt,
+        getGenerationPrompt: getBasketballGenerationPrompt,
+        parseGridLevelFromLLM: parseBasketballGridLevelFromLLM,
+        gridLevelJsonSchema: BASKETBALL_GRID_LEVEL_JSON_SCHEMA,
+        getIntentSystemPrompt: getBasketballIntentSystemPrompt,
+        getIntentGenerationPrompt: getBasketballIntentGenerationPrompt,
+        getGenerationPromptWithIntent: getBasketballGenerationPromptWithIntent,
+        getRetryPromptWithIntent: getBasketballRetryPromptWithIntent,
+        parseIntentFromLLM: parseBasketballIntentFromLLM,
+        intentJsonSchema: BASKETBALL_INTENT_JSON_SCHEMA
+      };
+    case 'archery':
+      return {
+        getSystemPrompt: getArcherySystemPrompt,
+        getGenerationPrompt: getArcheryGenerationPrompt,
+        parseGridLevelFromLLM: parseArcheryGridLevelFromLLM,
+        gridLevelJsonSchema: ARCHERY_GRID_LEVEL_JSON_SCHEMA,
+        getIntentSystemPrompt: getArcheryIntentSystemPrompt,
+        getIntentGenerationPrompt: getArcheryIntentGenerationPrompt,
+        getGenerationPromptWithIntent: getArcheryGenerationPromptWithIntent,
+        getRetryPromptWithIntent: getArcheryRetryPromptWithIntent,
+        parseIntentFromLLM: parseArcheryIntentFromLLM,
+        intentJsonSchema: ARCHERY_INTENT_JSON_SCHEMA
+      };
+    case 'mini-golf':
+    default:
+      return {
+        getSystemPrompt: getMiniGolfSystemPrompt,
+        getGenerationPrompt: getMiniGolfGenerationPrompt,
+        parseGridLevelFromLLM: parseMiniGolfGridLevelFromLLM,
+        gridLevelJsonSchema: MINI_GOLF_GRID_LEVEL_JSON_SCHEMA,
+        getIntentSystemPrompt: getMiniGolfIntentSystemPrompt,
+        getIntentGenerationPrompt: getMiniGolfIntentGenerationPrompt,
+        getGenerationPromptWithIntent: getMiniGolfGenerationPromptWithIntent,
+        getRetryPromptWithIntent: getMiniGolfRetryPromptWithIntent,
+        parseIntentFromLLM: parseMiniGolfIntentFromLLM,
+        intentJsonSchema: MINI_GOLF_INTENT_JSON_SCHEMA
+      };
+  }
+}
+
+// ============================================================================
 // INTENT GENERATION (Stage 1 of 2-stage pipeline)
 // ============================================================================
 
 /**
  * Generate a design intent/brief for a level
  * This is Stage 1 of the 2-stage pipeline
+ * 
+ * @param gameId - Game type (mini-golf, basketball, archery)
+ * @param difficulty - Level difficulty
+ * @param modelId - Optional model ID override
  */
 export async function generateLevelIntent(
+  gameId: GameId,
   difficulty: GridLevelDifficulty,
   modelId?: string
 ): Promise<IntentGenerationResult> {
   const modelConfig = AVAILABLE_MODELS[modelId || DEFAULT_MODEL] || AVAILABLE_MODELS[DEFAULT_MODEL];
   const startTime = Date.now();
   const temperature = getRandomTemperature('intent');
+  const pack = getPromptPackForGame(gameId);
   
-  log('info', 'Generating level intent', { difficulty, model: modelConfig.name, temperature });
+  log('info', 'Generating level intent', { gameId, difficulty, model: modelConfig.name, temperature });
   
   try {
     let rawResponse: string;
@@ -188,13 +309,13 @@ export async function generateLevelIntent(
       const response = await client.chat.completions.create({
         model: modelConfig.model,
         messages: [
-          { role: 'system', content: getIntentSystemPrompt() },
-          { role: 'user', content: getIntentGenerationPrompt(difficulty) }
+          { role: 'system', content: pack.getIntentSystemPrompt() },
+          { role: 'user', content: pack.getIntentGenerationPrompt(difficulty) }
         ],
         max_completion_tokens: 1000,
         response_format: {
           type: 'json_schema',
-          json_schema: LEVEL_INTENT_JSON_SCHEMA
+          json_schema: pack.intentJsonSchema
         }
       } as Parameters<typeof client.chat.completions.create>[0]);
       rawResponse = (response as any).choices[0]?.message?.content || '';
@@ -206,17 +327,17 @@ export async function generateLevelIntent(
         const response = await client.chat.completions.create({
           model: modelConfig.model,
           messages: [
-            { role: 'system', content: getIntentSystemPrompt() },
-            { role: 'user', content: getIntentGenerationPrompt(difficulty) }
+            { role: 'system', content: pack.getIntentSystemPrompt() },
+            { role: 'user', content: pack.getIntentGenerationPrompt(difficulty) }
           ],
           temperature,
           max_tokens: 1000,
           response_format: {
             type: 'json_schema',
             json_schema: {
-              name: LEVEL_INTENT_JSON_SCHEMA.name,
+              name: pack.intentJsonSchema.name,
               strict: false,
-              schema: LEVEL_INTENT_JSON_SCHEMA.schema
+              schema: pack.intentJsonSchema.schema
             }
           }
         } as any);
@@ -226,8 +347,8 @@ export async function generateLevelIntent(
         const response = await client.chat.completions.create({
           model: modelConfig.model,
           messages: [
-            { role: 'system', content: getIntentSystemPrompt() },
-            { role: 'user', content: getIntentGenerationPrompt(difficulty) }
+            { role: 'system', content: pack.getIntentSystemPrompt() },
+            { role: 'user', content: pack.getIntentGenerationPrompt(difficulty) }
           ],
           temperature,
           max_tokens: 1000,
@@ -240,6 +361,7 @@ export async function generateLevelIntent(
     const latencyMs = Date.now() - startTime;
     
     log('info', 'Intent raw response received', {
+      gameId,
       model: modelConfig.name,
       latencyMs,
       temperature,
@@ -247,15 +369,17 @@ export async function generateLevelIntent(
       responsePreview: rawResponse.slice(0, 500)
     });
     
-    const intent = parseIntentFromLLM(rawResponse);
+    const intent = pack.parseIntentFromLLM(rawResponse);
     
     if (!intent) {
       log('warn', 'Failed to parse intent', {
+        gameId,
         model: modelConfig.name,
         rawResponse: rawResponse.slice(0, 1000)
       });
     } else {
       log('info', 'Intent parsed successfully', {
+        gameId,
         intent: intent.intent,
         layoutDirective: intent.layoutDirective
       });
@@ -267,12 +391,14 @@ export async function generateLevelIntent(
       error: intent ? undefined : 'Failed to parse intent from response',
       latencyMs,
       model: modelConfig.name,
-      temperature
+      temperature,
+      gameId
     };
   } catch (err) {
     const latencyMs = Date.now() - startTime;
     const errorMsg = err instanceof Error ? err.message : 'Unknown error';
     log('warn', 'Intent generation API error', {
+      gameId,
       model: modelConfig.name,
       error: errorMsg,
       latencyMs
@@ -283,7 +409,8 @@ export async function generateLevelIntent(
       error: `LLM API error: ${errorMsg}`,
       latencyMs,
       model: modelConfig.name,
-      temperature
+      temperature,
+      gameId
     };
   }
 }
@@ -296,25 +423,29 @@ export async function generateLevelIntent(
  * Generate a new GridLevel using the specified model
  * Uses structured outputs (JSON schema) for reliable parsing
  * 
+ * @param gameId - Game type (mini-golf, basketball, archery)
  * @param difficulty - Level difficulty
- * @param intent - Optional LevelIntent from stage 1 (if provided, uses intent-based prompt)
+ * @param intent - Optional GameLevelIntent from stage 1 (if provided, uses intent-based prompt)
  * @param modelId - Optional model ID override
  */
 export async function generateLevel(
+  gameId: GameId,
   difficulty: GridLevelDifficulty,
-  intent?: LevelIntent | null,
+  intent?: GameLevelIntent | null,
   modelId?: string
 ): Promise<LLMGenerationResult> {
   const modelConfig = AVAILABLE_MODELS[modelId || DEFAULT_MODEL] || AVAILABLE_MODELS[DEFAULT_MODEL];
   const startTime = Date.now();
   const temperature = getRandomTemperature('generation');
+  const pack = getPromptPackForGame(gameId);
   
   // Choose prompt based on whether we have an intent
   const userPrompt = intent 
-    ? getGenerationPromptWithIntent(difficulty, intent)
-    : getGenerationPrompt(difficulty);
+    ? pack.getGenerationPromptWithIntent(difficulty, intent)
+    : pack.getGenerationPrompt(difficulty);
   
   log('info', 'Generating level', { 
+    gameId,
     difficulty, 
     model: modelConfig.name, 
     temperature,
@@ -330,14 +461,14 @@ export async function generateLevel(
       const response = await client.chat.completions.create({
         model: modelConfig.model,
         messages: [
-          { role: 'system', content: getSystemPrompt() },
+          { role: 'system', content: pack.getSystemPrompt() },
           { role: 'user', content: userPrompt }
         ],
         // GPT-5 Mini only supports temperature=1, so omit it to use default
         max_completion_tokens: 2000,
         response_format: {
           type: 'json_schema',
-          json_schema: GRID_LEVEL_JSON_SCHEMA
+          json_schema: pack.gridLevelJsonSchema
         }
       } as Parameters<typeof client.chat.completions.create>[0]);
       rawResponse = (response as any).choices[0]?.message?.content || '';
@@ -349,7 +480,7 @@ export async function generateLevel(
         const response = await client.chat.completions.create({
           model: modelConfig.model,
           messages: [
-            { role: 'system', content: getSystemPrompt() },
+            { role: 'system', content: pack.getSystemPrompt() },
             { role: 'user', content: userPrompt }
           ],
           temperature,
@@ -357,9 +488,9 @@ export async function generateLevel(
           response_format: {
             type: 'json_schema',
             json_schema: {
-              name: GRID_LEVEL_JSON_SCHEMA.name,
+              name: pack.gridLevelJsonSchema.name,
               strict: false,
-              schema: GRID_LEVEL_JSON_SCHEMA.schema
+              schema: pack.gridLevelJsonSchema.schema
             }
           }
         } as any);
@@ -369,7 +500,7 @@ export async function generateLevel(
         const response = await client.chat.completions.create({
           model: modelConfig.model,
           messages: [
-            { role: 'system', content: getSystemPrompt() },
+            { role: 'system', content: pack.getSystemPrompt() },
             { role: 'user', content: userPrompt }
           ],
           temperature,
@@ -383,6 +514,7 @@ export async function generateLevel(
     const latencyMs = Date.now() - startTime;
     
     log('info', 'LLM raw response received', {
+      gameId,
       model: modelConfig.name,
       latencyMs,
       temperature,
@@ -391,7 +523,7 @@ export async function generateLevel(
       isEmpty: rawResponse.trim() === ''
     });
     
-    let level = parseGridLevelFromLLM(rawResponse);
+    let level = pack.parseGridLevelFromLLM(rawResponse);
     
     // If we have an intent, forcibly set the design object to match it
     if (level && intent) {
@@ -405,6 +537,7 @@ export async function generateLevel(
     
     if (!level) {
       log('warn', 'Failed to parse GridLevel', {
+        gameId,
         model: modelConfig.name,
         responseLength: rawResponse.length,
         rawResponseFull: rawResponse.length < 2000 ? rawResponse : rawResponse.slice(0, 2000) + '...[truncated]'
@@ -417,12 +550,14 @@ export async function generateLevel(
       error: level ? undefined : 'Failed to parse GridLevel from response',
       latencyMs,
       model: modelConfig.name,
-      temperature
+      temperature,
+      gameId
     };
   } catch (err) {
     const latencyMs = Date.now() - startTime;
     const errorMsg = err instanceof Error ? err.message : 'Unknown error';
     log('warn', 'LLM API error', {
+      gameId,
       model: modelConfig.name,
       error: errorMsg,
       latencyMs
@@ -433,7 +568,8 @@ export async function generateLevel(
       error: `LLM API error: ${errorMsg}`,
       latencyMs,
       model: modelConfig.name,
-      temperature
+      temperature,
+      gameId
     };
   }
 }
@@ -442,32 +578,34 @@ export async function generateLevel(
  * Retry generation with validation feedback
  * Uses structured outputs (JSON schema) for reliable parsing
  * 
+ * @param gameId - Game type (mini-golf, basketball, archery)
  * @param issues - Validation issues from previous attempt
  * @param previousAttempt - Raw response from previous attempt
  * @param difficulty - Level difficulty
- * @param intent - Optional LevelIntent to maintain consistency across retries
+ * @param intent - Optional GameLevelIntent to maintain consistency across retries
  * @param modelId - Optional model ID override
  */
 export async function retryWithFeedback(
+  gameId: GameId,
   issues: GridLevelIssue[],
   previousAttempt: string,
   difficulty: GridLevelDifficulty,
-  intent?: LevelIntent | null,
+  intent?: GameLevelIntent | null,
   modelId?: string
 ): Promise<LLMGenerationResult> {
   const modelConfig = AVAILABLE_MODELS[modelId || DEFAULT_MODEL] || AVAILABLE_MODELS[DEFAULT_MODEL];
   const startTime = Date.now();
   const temperature = getRandomTemperature('retry');
+  const pack = getPromptPackForGame(gameId);
   
   // Choose prompt based on whether we have an intent
   const initialPrompt = intent 
-    ? getGenerationPromptWithIntent(difficulty, intent)
-    : getGenerationPrompt(difficulty);
-  const retryPrompt = intent
-    ? getRetryPromptWithIntent(issues, previousAttempt, intent)
-    : getRetryPrompt(issues, previousAttempt);
+    ? pack.getGenerationPromptWithIntent(difficulty, intent)
+    : pack.getGenerationPrompt(difficulty);
+  const retryPrompt = pack.getRetryPromptWithIntent(issues, previousAttempt, intent);
   
   log('info', 'Retrying level generation', { 
+    gameId,
     difficulty, 
     model: modelConfig.name, 
     temperature,
@@ -483,7 +621,7 @@ export async function retryWithFeedback(
       const response = await client.chat.completions.create({
         model: modelConfig.model,
         messages: [
-          { role: 'system', content: getSystemPrompt() },
+          { role: 'system', content: pack.getSystemPrompt() },
           { role: 'user', content: initialPrompt },
           { role: 'assistant', content: previousAttempt },
           { role: 'user', content: retryPrompt }
@@ -491,7 +629,7 @@ export async function retryWithFeedback(
         max_completion_tokens: 2000,
         response_format: {
           type: 'json_schema',
-          json_schema: GRID_LEVEL_JSON_SCHEMA
+          json_schema: pack.gridLevelJsonSchema
         }
       } as Parameters<typeof client.chat.completions.create>[0]);
       rawResponse = (response as any).choices[0]?.message?.content || '';
@@ -503,7 +641,7 @@ export async function retryWithFeedback(
         const response = await client.chat.completions.create({
           model: modelConfig.model,
           messages: [
-            { role: 'system', content: getSystemPrompt() },
+            { role: 'system', content: pack.getSystemPrompt() },
             { role: 'user', content: initialPrompt },
             { role: 'assistant', content: previousAttempt },
             { role: 'user', content: retryPrompt }
@@ -513,9 +651,9 @@ export async function retryWithFeedback(
           response_format: {
             type: 'json_schema',
             json_schema: {
-              name: GRID_LEVEL_JSON_SCHEMA.name,
+              name: pack.gridLevelJsonSchema.name,
               strict: false,
-              schema: GRID_LEVEL_JSON_SCHEMA.schema
+              schema: pack.gridLevelJsonSchema.schema
             }
           }
         } as any);
@@ -525,7 +663,7 @@ export async function retryWithFeedback(
         const response = await client.chat.completions.create({
           model: modelConfig.model,
           messages: [
-            { role: 'system', content: getSystemPrompt() },
+            { role: 'system', content: pack.getSystemPrompt() },
             { role: 'user', content: initialPrompt },
             { role: 'assistant', content: previousAttempt },
             { role: 'user', content: retryPrompt }
@@ -541,6 +679,7 @@ export async function retryWithFeedback(
     const latencyMs = Date.now() - startTime;
     
     log('info', 'LLM retry raw response received', {
+      gameId,
       model: modelConfig.name,
       latencyMs,
       temperature,
@@ -548,7 +687,7 @@ export async function retryWithFeedback(
       responsePreview: rawResponse.slice(0, 500) + (rawResponse.length > 500 ? '...' : '')
     });
     
-    let level = parseGridLevelFromLLM(rawResponse);
+    let level = pack.parseGridLevelFromLLM(rawResponse);
     
     // If we have an intent, forcibly set the design object to match it
     if (level && intent) {
@@ -562,6 +701,7 @@ export async function retryWithFeedback(
     
     if (!level) {
       log('warn', 'Failed to parse GridLevel from retry', {
+        gameId,
         model: modelConfig.name,
         rawResponse: rawResponse.slice(0, 1000)
       });
@@ -573,12 +713,14 @@ export async function retryWithFeedback(
       error: level ? undefined : 'Failed to parse GridLevel from retry response',
       latencyMs,
       model: modelConfig.name,
-      temperature
+      temperature,
+      gameId
     };
   } catch (err) {
     const latencyMs = Date.now() - startTime;
     const errorMsg = err instanceof Error ? err.message : 'Unknown error';
     log('warn', 'LLM retry API error', {
+      gameId,
       model: modelConfig.name,
       error: errorMsg,
       latencyMs
@@ -589,7 +731,8 @@ export async function retryWithFeedback(
       error: `LLM API error: ${errorMsg}`,
       latencyMs,
       model: modelConfig.name,
-      temperature
+      temperature,
+      gameId
     };
   }
 }
