@@ -86,8 +86,9 @@ export const createAttemptAndPublisherToken = action({
       };
     }
 
-    // Verify deployment belongs to the user (security check)
-    if (deployment.userId && deployment.userId !== user._id) {
+    // Verify deployment belongs to the user (security check - fail-closed)
+    // If deployment.userId is not set, deny access as a safety measure
+    if (!deployment.userId || deployment.userId !== user._id) {
       return {
         success: false,
         // Use generic message to avoid leaking existence of other users' deployments

@@ -179,9 +179,9 @@ export default function AttemptsPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    attempts.map((attempt) => (
+                      attempts.map((attempt) => (
                       <TableRow key={attempt._id}>
-                        <TableCell className="font-mono text-xs">
+                        <TableCell className="font-mono text-xs" title={attempt.attemptId}>
                           {attempt.attemptId.substring(0, 20)}...
                         </TableCell>
                         <TableCell>{attempt.deploymentName}</TableCell>

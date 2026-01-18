@@ -98,14 +98,19 @@ export class LiveKitSink implements TelemetrySink {
    * Disconnect from LiveKit room
    */
   disconnect(): void {
-    if (this.room) {
-      this.room.disconnect();
-      this.room = null;
+    try {
+      if (this.room) {
+        this.room.disconnect();
+        this.room = null;
+      }
+    } catch (error) {
+      console.warn('[LiveKitSink] Error during disconnect:', error);
+    } finally {
+      this.connected = false;
+      this.attemptId = null;
+      this.roomName = null;
+      this.seq = 0;
     }
-    this.connected = false;
-    this.attemptId = null;
-    this.roomName = null;
-    this.seq = 0;
   }
 
   /**
@@ -164,7 +169,7 @@ export class LiveKitSink implements TelemetrySink {
   }
 
   /**
-   * Request a publisher token from Convex
+   * Request a publisher token from the Next.js API
    */
   private async requestPublisherToken(): Promise<{
     success: boolean;
@@ -175,35 +180,26 @@ export class LiveKitSink implements TelemetrySink {
     attemptId?: string;
   }> {
     try {
-      const response = await fetch(`${PLAYPROOF_API_URL}/api/action`, {
+      const response = await fetch(`${PLAYPROOF_API_URL}/api/livekit/token`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          path: 'livekit:createAttemptAndPublisherToken',
-          args: {
-            apiKey: this.config.apiKey,
-            deploymentId: this.config.deploymentId,
-          },
+          apiKey: this.config.apiKey,
+          deploymentId: this.config.deploymentId,
         }),
       });
 
       if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
         return {
           success: false,
-          error: `HTTP ${response.status}: ${response.statusText}`,
+          error: errorData.error || `HTTP ${response.status}: ${response.statusText}`,
         };
       }
 
-      const result = await response.json();
-      
-      // Convex action returns { value: {...} } format
-      if (result.value) {
-        return result.value;
-      }
-      
-      return result;
+      return await response.json();
     } catch (error) {
       return {
         success: false,

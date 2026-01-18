@@ -93,6 +93,12 @@ export abstract class ThreeBaseGame extends ThreeEngine implements BaseGame {
                 },
             });
             sinks.push(this.livekitSink);
+        } else if (livekitEnabled && !hasCredentials) {
+            // Warn when LiveKit is enabled but credentials are missing
+            console.warn(
+                '[Playproof] LiveKit telemetry is enabled but apiKey or deploymentId is missing. ' +
+                'Falling back to hook-only telemetry. To enable LiveKit, provide both apiKey and deploymentId in the config.'
+            );
         }
 
         // Use composite sink if multiple sinks, otherwise just return the hook sink

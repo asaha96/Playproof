@@ -270,3 +270,39 @@ export const cleanupExpiredAttempts = mutation({
     return { deleted };
   },
 });
+
+/**
+ * Public mutation to update attempt result (for server-to-server calls)
+ * This validates an internal API key instead of user auth.
+ */
+export const updateAttemptResultPublic = mutation({
+  args: {
+    attemptId: v.string(),
+    result: v.union(v.literal("pass"), v.literal("review"), v.literal("fail")),
+    anomalyScore: v.number(),
+    internalApiKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Validate internal API key
+    const expectedKey = process.env.PLAYPROOF_INTERNAL_API_KEY;
+    if (!expectedKey || args.internalApiKey !== expectedKey) {
+      throw new Error("Unauthorized");
+    }
+
+    // Find the attempt
+    const attempt = await ctx.db
+      .query("activeAttempts")
+      .withIndex("by_attemptId", (q) => q.eq("attemptId", args.attemptId))
+      .first();
+
+    if (!attempt) {
+      throw new Error("Attempt not found");
+    }
+
+    // Update with result
+    await ctx.db.patch(attempt._id, {
+      result: args.result,
+      anomalyScore: args.anomalyScore,
+    });
+  },
+});
