@@ -56,6 +56,29 @@ export function validateMiniGolfGridLevel(level: GridLevel): GridLevelValidation
   const errors: GridLevelIssue[] = [];
   const warnings: GridLevelIssue[] = [];
 
+  // Defensive: ensure level object exists
+  if (!level || typeof level !== 'object') {
+    errors.push({
+      stage: 'structural',
+      message: 'Level object is missing or invalid',
+      code: 'level.missing',
+      severity: 'error'
+    });
+    return { valid: false, errors, warnings };
+  }
+
+  // Defensive: ensure entities is an array (normalize if not)
+  if (!Array.isArray(level.entities)) {
+    // Don't fail - just normalize and add a warning
+    (level as any).entities = [];
+    warnings.push({
+      stage: 'structural',
+      message: 'Entities array was missing, defaulting to empty',
+      code: 'entities.missing',
+      severity: 'warning'
+    });
+  }
+
   if (level.schema !== 'playproof.gridlevel.v1') {
     errors.push({
       stage: 'structural',

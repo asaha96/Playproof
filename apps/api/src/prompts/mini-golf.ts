@@ -29,6 +29,10 @@ export const GRID_LEVEL_JSON_SCHEMA = {
         type: "integer",
         description: "Level version number"
       },
+      seed: {
+        type: "string",
+        description: "Optional seed identifier for the level"
+      },
       grid: {
         type: "object",
         properties: {
@@ -131,7 +135,7 @@ export const GRID_LEVEL_JSON_SCHEMA = {
         additionalProperties: false
       }
     },
-    required: ["schema", "gameId", "version", "grid", "entities", "rules", "design"],
+    required: ["schema", "gameId", "version", "seed", "grid", "entities", "rules", "design"],
     additionalProperties: false
   }
 } as const;
@@ -359,24 +363,66 @@ export function parseGridLevelFromLLM(response: string): GridLevel | null {
     
     const parsed = JSON.parse(jsonStr);
     
-    // Basic shape validation
-    if (
-      parsed.schema === 'playproof.gridlevel.v1' &&
-      parsed.gameId === 'mini-golf' &&
-      parsed.grid?.tiles &&
-      Array.isArray(parsed.grid.tiles)
-    ) {
-      // Post-process: fix grid dimensions (LLMs often get character counts wrong)
-      const fixedTiles = fixGridDimensions(parsed.grid.tiles);
-      parsed.grid.tiles = fixedTiles;
-      parsed.grid.cols = 20;
-      parsed.grid.rows = 14;
-      
-      return parsed as GridLevel;
+    // Basic shape validation with detailed logging
+    const hasSchema = parsed.schema === 'playproof.gridlevel.v1';
+    const hasGameId = parsed.gameId === 'mini-golf';
+    const hasGrid = !!parsed.grid?.tiles;
+    const hasTilesArray = Array.isArray(parsed.grid?.tiles);
+    
+    if (!hasSchema || !hasGameId || !hasGrid || !hasTilesArray) {
+      console.log('[parseGridLevelFromLLM] Validation failed:', {
+        hasSchema,
+        hasGameId, 
+        hasGrid,
+        hasTilesArray,
+        actualSchema: parsed.schema,
+        actualGameId: parsed.gameId,
+        keys: Object.keys(parsed)
+      });
+      return null;
     }
     
-    return null;
-  } catch {
+    // Post-process: fix grid dimensions (LLMs often get character counts wrong)
+    const fixedTiles = fixGridDimensions(parsed.grid.tiles);
+    parsed.grid.tiles = fixedTiles;
+    parsed.grid.cols = 20;
+    parsed.grid.rows = 14;
+    
+    // Normalize entities - ensure it's always an array
+    if (!Array.isArray(parsed.entities)) {
+      parsed.entities = [];
+    }
+    
+    // Normalize rules - ensure it exists with at least difficulty
+    if (!parsed.rules || typeof parsed.rules !== 'object') {
+      parsed.rules = { difficulty: 'medium' };
+    }
+    
+    // Normalize design - ensure required fields exist
+    if (!parsed.design || typeof parsed.design !== 'object') {
+      parsed.design = {
+        intent: 'Generated level',
+        playerHint: 'Aim for the hole',
+        solutionSketch: ['Find a path to the hole'],
+        aestheticNotes: 'Procedurally generated'
+      };
+    } else {
+      // Fill in missing design fields
+      if (!parsed.design.intent) parsed.design.intent = 'Generated level';
+      if (!parsed.design.playerHint) parsed.design.playerHint = 'Aim for the hole';
+      if (!Array.isArray(parsed.design.solutionSketch)) parsed.design.solutionSketch = ['Find a path to the hole'];
+      if (!parsed.design.aestheticNotes) parsed.design.aestheticNotes = 'Procedurally generated';
+    }
+    
+    // IMPORTANT: Strip seed from LLM-generated levels
+    // Seeds should only exist on golden/fallback levels or user-provided seeds
+    // This ensures LLM levels are always recognized as unique/nondeterministic
+    delete parsed.seed;
+    
+    return parsed as GridLevel;
+  } catch (err) {
+    console.log('[parseGridLevelFromLLM] Parse error:', err instanceof Error ? err.message : err);
+    console.log('[parseGridLevelFromLLM] Response preview:', response.slice(0, 500));
     return null;
   }
 }

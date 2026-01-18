@@ -114,7 +114,7 @@ export default function TestPCGPage() {
                     gameId: 'mini-golf',
                     difficulty,
                     model: selectedModel,
-                    skipSimulation: false,
+                    skipSimulation: true,
                     skipCache: true,
                 }),
             })

@@ -16,7 +16,7 @@ import {
   MINI_GOLF_LEVELS
 } from '@playproof/shared';
 
-import { generateLevel, retryWithFeedback, getAvailableModels, AVAILABLE_MODELS } from '../services/llm.js';
+import { generateLevel, retryWithFeedback, getAvailableModels, AVAILABLE_MODELS, setLogger } from '../services/llm.js';
 import { simulateMiniGolfLevel, quickSolvabilityCheck } from '../services/simulation.js';
 import { signLevel } from '../services/signing.js';
 import { getCacheKey, getCached, setCache } from '../services/cache.js';
@@ -53,6 +53,9 @@ interface BenchmarkResult {
 }
 
 export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
+  // Inject logger into LLM service
+  setLogger(fastify.log);
+  
   /**
    * POST /pcg/level
    * Generate a procedurally generated level
@@ -181,13 +184,21 @@ export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       // Fallback to golden level if all retries failed
+      let debugInfo: { fellBack: boolean; reason: string; lastValidationErrors: string[] } | undefined;
       if (!level) {
-        fastify.log.warn({ attempts, totalLatencyMs }, 'All retries failed, using fallback level');
+        fastify.log.warn({ attempts, totalLatencyMs, lastError }, 'All retries failed, using fallback level');
         
         const fallbackLevels = MINI_GOLF_LEVELS.filter(
           l => l.rules?.difficulty === difficulty
         );
         level = fallbackLevels[0] || MINI_GOLF_LEVELS[0];
+        
+        // Add debug info about why we fell back
+        debugInfo = {
+          fellBack: true,
+          reason: lastError,
+          lastValidationErrors: validationResult?.errors?.slice(0, 5).map(e => e.message) || []
+        };
       }
 
       // Final validation and lint
@@ -202,7 +213,7 @@ export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
       // Sign the level
       const signature = signLevel(level);
 
-      const response: PcgLevelResponse & { meta?: { model: string; latencyMs: number; attempts: number } } = {
+      const response: PcgLevelResponse & { meta?: { model: string; latencyMs: number; attempts: number }; debug?: typeof debugInfo } = {
         gridLevel: level,
         validationReport: validation,
         lintReport: lint,
@@ -218,6 +229,11 @@ export async function pcgRoutes(fastify: FastifyInstance): Promise<void> {
           latencyMs: totalLatencyMs,
           attempts
         };
+      }
+      
+      // Add debug info if we fell back
+      if (debugInfo) {
+        (response as any).debug = debugInfo;
       }
 
       // Cache the result

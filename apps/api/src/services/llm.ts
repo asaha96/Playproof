@@ -101,6 +101,21 @@ export interface LLMGenerationResult {
   model?: string;
 }
 
+// Logger interface (injected from route)
+let logger: { info: (msg: string, data?: object) => void; warn: (msg: string, data?: object) => void } | null = null;
+
+export function setLogger(l: typeof logger) {
+  logger = l;
+}
+
+function log(level: 'info' | 'warn', msg: string, data?: object) {
+  if (logger) {
+    logger[level](msg, data);
+  } else {
+    console[level](`[LLM] ${msg}`, data ? JSON.stringify(data, null, 2) : '');
+  }
+}
+
 /**
  * Generate a new GridLevel using the specified model
  * Uses structured outputs (JSON schema) for reliable parsing
@@ -174,7 +189,25 @@ export async function generateLevel(
     }
 
     const latencyMs = Date.now() - startTime;
+    
+    // Log raw response for debugging
+    log('info', 'LLM raw response received', {
+      model: modelConfig.name,
+      latencyMs,
+      responseLength: rawResponse.length,
+      responsePreview: rawResponse.slice(0, 800) + (rawResponse.length > 800 ? '...' : ''),
+      isEmpty: rawResponse.trim() === ''
+    });
+    
     const level = parseGridLevelFromLLM(rawResponse);
+    
+    if (!level) {
+      log('warn', 'Failed to parse GridLevel', {
+        model: modelConfig.name,
+        responseLength: rawResponse.length,
+        rawResponseFull: rawResponse.length < 2000 ? rawResponse : rawResponse.slice(0, 2000) + '...[truncated]'
+      });
+    }
 
     return {
       level,
@@ -186,6 +219,11 @@ export async function generateLevel(
   } catch (err) {
     const latencyMs = Date.now() - startTime;
     const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+    log('warn', 'LLM API error', {
+      model: modelConfig.name,
+      error: errorMsg,
+      latencyMs
+    });
     return {
       level: null,
       rawResponse: '',
@@ -276,7 +314,23 @@ export async function retryWithFeedback(
     }
 
     const latencyMs = Date.now() - startTime;
+    
+    // Log raw response for debugging
+    log('info', 'LLM retry raw response received', {
+      model: modelConfig.name,
+      latencyMs,
+      responseLength: rawResponse.length,
+      responsePreview: rawResponse.slice(0, 500) + (rawResponse.length > 500 ? '...' : '')
+    });
+    
     const level = parseGridLevelFromLLM(rawResponse);
+    
+    if (!level) {
+      log('warn', 'Failed to parse GridLevel from retry', {
+        model: modelConfig.name,
+        rawResponse: rawResponse.slice(0, 1000)
+      });
+    }
 
     return {
       level,
@@ -288,6 +342,11 @@ export async function retryWithFeedback(
   } catch (err) {
     const latencyMs = Date.now() - startTime;
     const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+    log('warn', 'LLM retry API error', {
+      model: modelConfig.name,
+      error: errorMsg,
+      latencyMs
+    });
     return {
       level: null,
       rawResponse: '',
