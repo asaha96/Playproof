@@ -1,3 +1,4 @@
+
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
@@ -9,79 +10,85 @@ const brandingFields = {
   brandingType: v.optional(v.string()),
 };
 
+const deploymentType = v.union(
+  v.literal("bubble-pop"),
+  v.literal("golf"),
+  v.literal("basketball"),
+  v.literal("archery")
+);
+
 export default defineSchema({
   // Users table - stores authenticated users from Clerk
   users: defineTable({
-    // Clerk subject ID (unique identifier from Clerk)
-    clerkSubject: v.string(),
+    // Clerk identifiers (support both for migration compatibility)
+    clerkId: v.optional(v.string()),
+    clerkSubject: v.optional(v.string()),
     // User email
-    email: v.string(),
+    email: v.optional(v.string()),
     // Display name
     name: v.optional(v.string()),
     // Profile image URL (from Clerk or custom)
     imageUrl: v.optional(v.string()),
     // Timestamps
-    createdAt: v.number(),
-    updatedAt: v.number(),
+    createdAt: v.optional(v.number()),
+    updatedAt: v.optional(v.number()),
+    // Branding fields (user-level customization)
     ...brandingFields,
   })
+    .index("by_clerkId", ["clerkId"])
     .index("by_clerkSubject", ["clerkSubject"])
     .index("by_email", ["email"]),
-
-  // Minigames table - stores PlayProof minigame configs
-  minigames: defineTable({
+  // Deployments table - stores PlayProof deployment configs
+  deployments: defineTable({
     name: v.string(),
+    type: deploymentType,
     createdAt: v.number(),
     updatedAt: v.number(),
-    isReady: v.boolean(),
+    isActive: v.boolean(),
     sessionIds: v.optional(v.array(v.id("sessions"))),
     ...brandingFields,
   })
     .index("by_name", ["name"])
     .index("by_updatedAt", ["updatedAt"])
-    .index("by_ready", ["isReady"]),
-
-  // Sessions table - stores verification sessions for a minigame
+    .index("by_active", ["isActive"]),
+  // Sessions table - stores verification sessions for a deployment
   sessions: defineTable({
-    minigameId: v.id("minigames"),
-    
-    // Core metrics (ESSENTIAL)
+    deploymentId: v.id("deployments"),
     startAt: v.number(),
     endAt: v.number(),
     durationMs: v.number(),
-    suspectScore: v.number(), // 0-1, bot likelihood
-    
-    // Game details (ESSENTIAL)
-    gameId: v.optional(v.string()), // 'mini-golf', 'basketball', 'archery', 'bubble-pop'
-    gameResult: v.optional(v.union(v.literal('success'), v.literal('failure'), v.literal('timeout'))),
-    confidenceScore: v.optional(v.number()), // 0-1, how confident in result
-    attemptDetails: v.optional(v.any()), // Game-specific JSON
-    
-    // Behavioral signals (ESSENTIAL)
-    mouseMovements: v.optional(v.number()),
-    clickCount: v.optional(v.number()),
-    trajectoryCount: v.optional(v.number()),
-    accuracy: v.optional(v.number()),
-    
-    // User experience (ESSENTIAL)
-    completionRate: v.optional(v.number()), // 0-1
-    retryCount: v.optional(v.number()),
-    
-    // Risk signals (ESSENTIAL)
-    riskFlags: v.optional(v.array(v.string())), // ['synthetic_cursor', 'repeat_latency', etc.]
-    
-    // Simplified client info (SIMPLIFIED - removed redundant fields)
+    suspectScore: v.number(),
     clientInfo: v.optional(
       v.object({
-        userAgent: v.optional(v.string()), // Parse when needed
+        deviceType: v.optional(v.string()),
+        deviceVendor: v.optional(v.string()),
+        deviceModel: v.optional(v.string()),
+        browserName: v.optional(v.string()),
+        browserVersion: v.optional(v.string()),
+        osName: v.optional(v.string()),
+        osVersion: v.optional(v.string()),
+        userAgent: v.optional(v.string()),
         ipAddress: v.optional(v.string()),
-        country: v.optional(v.string()), // From location
         language: v.optional(v.string()),
+        location: v.optional(
+          v.object({
+            country: v.optional(v.string()),
+            region: v.optional(v.string()),
+            city: v.optional(v.string()),
+            timezone: v.optional(v.string()),
+            latitude: v.optional(v.number()),
+            longitude: v.optional(v.number()),
+          })
+        ),
+        requestHeaders: v.optional(
+          v.array(v.object({ name: v.string(), value: v.string() }))
+        ),
+        cookies: v.optional(
+          v.array(v.object({ name: v.string(), value: v.string() }))
+        ),
       })
     ),
   })
-    .index("by_minigameId", ["minigameId"])
-    .index("by_startAt", ["startAt"])
-    .index("by_gameId", ["gameId"])
-    .index("by_suspectScore", ["suspectScore"]),
+    .index("by_deploymentId", ["deploymentId"])
+    .index("by_startAt", ["startAt"]),
 });
