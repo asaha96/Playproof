@@ -180,7 +180,7 @@ export default function ObservabilityPage() {
               }
               
               // When game completes, batch will be BehaviorData (not an array)
-              // Use Woodwide to classify bot vs human
+              // Use heuristic model to classify bot vs human
               if (batch && !Array.isArray(batch)) {
                 try {
                   const behaviorData = batch as any;
@@ -189,63 +189,128 @@ export default function ObservabilityPage() {
                     setIsScoring(true);
                     setWoodwideResult(null);
                     
-                    // Convert BehaviorData to telemetry format
-                    const startTime = behaviorData.mouseMovements[0]?.timestamp || Date.now();
-                    const endTime = behaviorData.mouseMovements[behaviorData.mouseMovements.length - 1]?.timestamp || Date.now();
+                    // Import Playproof SDK to access verification functions
+                    // Note: We'll calculate confidence directly using the SDK's internal logic
+                    const { Playproof } = await import("playproof");
                     
-                    // Map click timings to click events
-                    const clicks = behaviorData.clickTimings?.map((timestamp: number, index: number) => {
-                      const movement = behaviorData.mouseMovements.find((m: any) => 
-                        Math.abs(m.timestamp - timestamp) < 100
-                      ) || behaviorData.mouseMovements[Math.floor(index * behaviorData.mouseMovements.length / (behaviorData.clickTimings.length || 1))];
+                    // Create a temporary instance to access verification methods
+                    // The SDK uses calculateConfidence internally, so we'll replicate the logic
+                    // or use the SDK's evaluateResult method indirectly
+                    
+                    // For now, use a simplified heuristic calculation
+                    // Based on the SDK's calculateConfidence logic
+                    const calculateHeuristicScore = (data: any): number => {
+                      let totalScore = 0;
+                      let weightSum = 0;
                       
-                      return {
-                        x: movement?.x || 0,
-                        y: movement?.y || 0,
-                        timestamp: timestamp - startTime,
-                        targetHit: index < (behaviorData.hits || 0),
-                      };
-                    }) || [];
-
-                    const telemetry = {
-                      sessionId: `obs_${Date.now()}`,
-                      gameType: "bubble-pop",
-                      deviceType: "mouse",
-                      durationMs: endTime - startTime,
-                      movements: behaviorData.mouseMovements.map((m: any) => ({
-                        x: m.x,
-                        y: m.y,
-                        timestamp: m.timestamp - startTime,
-                      })),
-                      clicks,
-                      hits: behaviorData.hits || 0,
-                      misses: behaviorData.misses || 0,
+                      // Mouse movement analysis (30% weight)
+                      if (data.mouseMovements && data.mouseMovements.length > 0) {
+                        const movements = data.mouseMovements;
+                        let variance = 0;
+                        let speed = 0;
+                        
+                        for (let i = 1; i < movements.length; i++) {
+                          const dx = movements[i].x - movements[i - 1].x;
+                          const dy = movements[i].y - movements[i - 1].y;
+                          const dt = movements[i].timestamp - movements[i - 1].timestamp;
+                          
+                          if (dt > 0) {
+                            speed += Math.sqrt(dx * dx + dy * dy) / dt;
+                            if (i > 1) {
+                              const prevDx = movements[i - 1].x - movements[i - 2].x;
+                              const prevDy = movements[i - 1].y - movements[i - 2].y;
+                              const angleChange = Math.abs(Math.atan2(dy, dx) - Math.atan2(prevDy, prevDx));
+                              variance += angleChange;
+                            }
+                          }
+                        }
+                        
+                        const avgVariance = variance / Math.max(1, movements.length - 2);
+                        const avgSpeed = speed / Math.max(1, movements.length - 1);
+                        const varianceScore = Math.min(1, avgVariance / 0.5);
+                        const speedScore = avgSpeed > 0.01 && avgSpeed < 5 ? 0.8 : 0.3;
+                        const movementScore = varianceScore * 0.6 + speedScore * 0.4;
+                        totalScore += movementScore * 0.3;
+                        weightSum += 0.3;
+                      }
+                      
+                      // Click timing analysis (30% weight)
+                      if (data.clickTimings && data.clickTimings.length > 1) {
+                        const intervals: number[] = [];
+                        for (let i = 1; i < data.clickTimings.length; i++) {
+                          intervals.push(data.clickTimings[i] - data.clickTimings[i - 1]);
+                        }
+                        const mean = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+                        const variance = intervals.reduce((sum, t) => sum + Math.pow(t - mean, 2), 0) / intervals.length;
+                        const stdDev = Math.sqrt(variance);
+                        const cv = mean > 0 ? stdDev / mean : 0;
+                        
+                        let timingScore = 0.6;
+                        if (cv < 0.1) timingScore = 0.2;
+                        else if (cv > 1.5) timingScore = 0.4;
+                        else if (cv >= 0.2 && cv <= 0.8) timingScore = 0.9;
+                        
+                        totalScore += timingScore * 0.3;
+                        weightSum += 0.3;
+                      }
+                      
+                      // Click accuracy analysis (20% weight)
+                      if (data.clickAccuracy !== undefined) {
+                        let accuracyScore = 0.6;
+                        if (data.clickAccuracy >= 0.98) accuracyScore = 0.5;
+                        else if (data.clickAccuracy < 0.3) accuracyScore = 0.3;
+                        else if (data.clickAccuracy >= 0.6 && data.clickAccuracy <= 0.95) accuracyScore = 0.9;
+                        
+                        totalScore += accuracyScore * 0.2;
+                        weightSum += 0.2;
+                      }
+                      
+                      return weightSum > 0 ? totalScore / weightSum : 0;
                     };
-
-                    // Call Woodwide scoring API
-                    const response = await fetch(apiUrl("/api/v1/score"), {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
+                    
+                    const calculateConfidence = calculateHeuristicScore;
+                    const createVerificationResult = (score: number, threshold: number, data: any) => ({
+                      passed: score >= threshold,
+                      score,
+                      threshold,
+                      timestamp: Date.now(),
+                      details: {
+                        mouseMovementCount: data.mouseMovements?.length || 0,
+                        clickCount: data.clickTimings?.length || 0,
+                        accuracy: data.clickAccuracy || 0,
                       },
-                      body: JSON.stringify(telemetry),
                     });
-
-                    if (response.ok) {
-                      const data: WoodwideResult = await response.json();
-                      setWoodwideResult(data);
-                      console.log("[Observability] Woodwide classification:", {
-                        decision: data.decision,
-                        anomalyScore: data.anomaly.anomalyScore,
-                        isAnomaly: data.anomaly.isAnomaly,
-                        classification: data.decision === "pass" ? "HUMAN" : "BOT",
-                      });
-                    } else {
-                      console.error("[Observability] Woodwide scoring failed:", response.status);
-                    }
+                    
+                    // Calculate confidence score using heuristic model
+                    const confidenceScore = calculateConfidence(behaviorData);
+                    const threshold = 0.7; // Default confidence threshold
+                    const result = createVerificationResult(confidenceScore, threshold, behaviorData);
+                    
+                    // Convert to WoodwideResult format for display consistency
+                    const heuristicResult: WoodwideResult = {
+                      sessionId: `obs_${Date.now()}`,
+                      decision: result.passed ? "pass" : "fail",
+                      confidence: confidenceScore,
+                      anomaly: {
+                        modelId: "heuristic_fallback",
+                        anomalyScore: null,
+                        isAnomaly: !result.passed,
+                      },
+                      featureSummary: {},
+                      scoredAt: new Date().toISOString(),
+                      latencyMs: 0, // Heuristic is instant
+                    };
+                    
+                    setWoodwideResult(heuristicResult);
+                    console.log("[Observability] Heuristic classification:", {
+                      decision: heuristicResult.decision,
+                      confidence: confidenceScore,
+                      passed: result.passed,
+                      classification: heuristicResult.decision === "pass" ? "HUMAN" : "BOT",
+                    });
                   }
                 } catch (error) {
-                  console.error("[Observability] Error classifying with Woodwide:", error);
+                  console.error("[Observability] Error classifying with heuristic model:", error);
                 } finally {
                   setIsScoring(false);
                 }
@@ -504,7 +569,7 @@ export default function ObservabilityPage() {
         {isScoring && (
           <Alert>
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>Classifying with Woodwide anomaly detection model...</AlertDescription>
+            <AlertDescription>Classifying with heuristic model...</AlertDescription>
           </Alert>
         )}
 
@@ -512,7 +577,7 @@ export default function ObservabilityPage() {
           <Card className="border-2">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                Woodwide Classification
+                Heuristic Classification
                 {woodwideResult.decision === "pass" ? (
                   <CheckCircle2 className="h-5 w-5 text-green-500" />
                 ) : woodwideResult.decision === "review" ? (
@@ -522,7 +587,7 @@ export default function ObservabilityPage() {
                 )}
               </CardTitle>
               <CardDescription>
-                Anomaly detection model classification result
+                Heuristic model classification result (no Woodwide API call)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -538,9 +603,9 @@ export default function ObservabilityPage() {
                   </p>
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm text-muted-foreground mb-1">Anomaly Score</p>
+                  <p className="text-sm text-muted-foreground mb-1">Confidence Score</p>
                   <p className="text-2xl font-bold">
-                    {woodwideResult.anomaly.anomalyScore?.toFixed(2) ?? "N/A"}
+                    {(woodwideResult.confidence * 100).toFixed(1)}%
                   </p>
                 </div>
                 <div className="flex-1">
@@ -572,12 +637,12 @@ export default function ObservabilityPage() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Confidence</p>
-                  <p className="font-semibold">{(woodwideResult.confidence * 100).toFixed(1)}%</p>
+                  <p className="text-muted-foreground">Threshold</p>
+                  <p className="font-semibold">70%</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Latency</p>
-                  <p className="font-semibold">{woodwideResult.latencyMs.toFixed(0)}ms</p>
+                  <p className="font-semibold">&lt;1ms (instant)</p>
                 </div>
               </div>
             </CardContent>
@@ -594,8 +659,8 @@ export default function ObservabilityPage() {
                 that extends <code className="bg-muted px-1 rounded">ThreeBaseGame</code> - completely game-agnostic.
               </div>
               <div>
-                <strong className="text-foreground">Woodwide Classification:</strong> When the game completes, telemetry is 
-                automatically sent to Woodwide's anomaly detection model to classify the session as <strong>HUMAN</strong> or <strong>BOT</strong>.
+                <strong className="text-foreground">Heuristic Classification:</strong> When the game completes, telemetry is 
+                analyzed using the built-in heuristic model (no API calls) to classify the session as <strong>HUMAN</strong> or <strong>BOT</strong>.
               </div>
             </div>
           </CardContent>
