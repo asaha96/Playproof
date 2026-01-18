@@ -845,7 +845,7 @@ export class SnakeGame extends ThreeBaseGame {
         this.particleMesh.geometry.attributes.position.needsUpdate = true;
         this.particleMesh.geometry.attributes.color.needsUpdate = true;
         if (sizes) {
-            (this.particleMesh.geometry.attributes.size as InstanceType<typeof THREE.BufferAttribute>).needsUpdate = true;
+            (this.particleMesh.geometry.attributes.size as { needsUpdate: boolean }).needsUpdate = true;
         }
     }
 

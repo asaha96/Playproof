@@ -38,55 +38,55 @@ import { api } from "@/convex/_generated/api";
 export default function AnalyticsPage() {
   const stats = useQuery(api.sessions.stats);
   const sessions = useQuery(api.sessions.recent, { limit: 10 });
-  const timeSeriesData = useQuery(api.sessions.timeSeries, { days: 14 });
+  const timeSeriesData = useQuery(api.sessions.timeSeries, { hours: 24 });
 
   const statCards = stats
     ? [
-        {
-          label: "Human pass rate",
-          value: `${(stats.humanPassRate * 100).toFixed(1)}%`,
-          note: `${stats.totalSessions} sessions`,
-          icon: UserCheck,
-          trend: stats.humanPassRate > 0.8 ? "positive" : "neutral",
-        },
-        {
-          label: "Bot detections",
-          value: stats.botDetections.toLocaleString(),
-          note: `of ${stats.totalSessions} sessions`,
-          icon: Bot,
-          trend: stats.botDetections < stats.totalSessions * 0.1 ? "positive" : "neutral",
-        },
-        {
-          label: "Avg. session time",
-          value: `${(stats.avgSessionMs / 1000).toFixed(1)}s`,
-          note: `${stats.totalSessions} sessions`,
-          icon: TrendingUp,
-          trend: stats.avgSessionMs < 5000 ? "positive" : "neutral",
-        },
-        {
-          label: "Completion rate",
-          value: `${((stats.completionRate ?? 0) * 100).toFixed(1)}%`,
-          note: `${stats.totalSessions} sessions`,
-          icon: Target,
-          trend: (stats.completionRate ?? 0) > 0.9 ? "positive" : "neutral",
-        },
-      ]
+      {
+        label: "Human pass rate",
+        value: `${(stats.humanPassRate * 100).toFixed(1)}%`,
+        note: `${stats.totalSessions} sessions`,
+        icon: UserCheck,
+        trend: stats.humanPassRate > 0.8 ? "positive" : "neutral",
+      },
+      {
+        label: "Bot detections",
+        value: stats.botDetections.toLocaleString(),
+        note: `of ${stats.totalSessions} sessions`,
+        icon: Bot,
+        trend: stats.botDetections < stats.totalSessions * 0.1 ? "positive" : "neutral",
+      },
+      {
+        label: "Avg. session time",
+        value: `${(stats.avgSessionMs / 1000).toFixed(1)}s`,
+        note: `${stats.totalSessions} sessions`,
+        icon: TrendingUp,
+        trend: stats.avgSessionMs < 5000 ? "positive" : "neutral",
+      },
+      {
+        label: "Completion rate",
+        value: `${((stats.completionRate ?? 0) * 100).toFixed(1)}%`,
+        note: `${stats.totalSessions} sessions`,
+        icon: Target,
+        trend: (stats.completionRate ?? 0) > 0.9 ? "positive" : "neutral",
+      },
+    ]
     : [
-        { label: "Human pass rate", value: "--", note: "Loading sessions", icon: UserCheck },
-        { label: "Bot detections", value: "--", note: "Loading sessions", icon: Bot },
-        {
-          label: "Avg. session time",
-          value: "--",
-          note: "Loading sessions",
-          icon: TrendingUp,
-        },
-        {
-          label: "Completion rate",
-          value: "--",
-          note: "Loading sessions",
-          icon: Target,
-        },
-      ];
+      { label: "Human pass rate", value: "--", note: "Loading sessions", icon: UserCheck },
+      { label: "Bot detections", value: "--", note: "Loading sessions", icon: Bot },
+      {
+        label: "Avg. session time",
+        value: "--",
+        note: "Loading sessions",
+        icon: TrendingUp,
+      },
+      {
+        label: "Completion rate",
+        value: "--",
+        note: "Loading sessions",
+        icon: Target,
+      },
+    ];
 
   const formatSessionId = (id: string) => {
     if (id.length <= 8) {
@@ -95,23 +95,27 @@ export default function AnalyticsPage() {
     return `${id.slice(0, 4)}...${id.slice(-4)}`;
   };
 
-  // Prepare time series chart data
+  // Prepare time series chart data (hourly for last 24 hours)
   const chartData = timeSeriesData
-    ? timeSeriesData.map((day) => ({
-        date: new Date(day.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-        humans: day.humans,
-        bots: day.bots,
-        passRate: day.total > 0 ? (day.humans / day.total) * 100 : 0,
-      }))
+    ? timeSeriesData.map((hour) => {
+      // Parse ISO string like "2026-01-18T07" to get hour
+      const date = new Date(hour.date + ":00:00Z");
+      return {
+        date: date.toLocaleTimeString("en-US", { hour: "numeric", hour12: true }),
+        humans: hour.humans,
+        bots: hour.bots,
+        passRate: hour.total > 0 ? (hour.humans / hour.total) * 100 : 0,
+      };
+    })
     : [];
 
   // Prepare deployment breakdown data
   const deploymentBreakdown = stats && 'byDeployment' in stats && stats.byDeployment
     ? Object.entries(stats.byDeployment as Record<string, { count: number; passRate: number }>).map(([deploymentId, data]) => ({
-        deployment: deploymentId.slice(-8),
-        passRate: data.passRate * 100,
-        count: data.count,
-      }))
+      deployment: deploymentId.slice(-8),
+      passRate: data.passRate * 100,
+      count: data.count,
+    }))
     : [];
 
   const chartConfig = {
@@ -148,7 +152,7 @@ export default function AnalyticsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="secondary">Last 14 days</Badge>
+          <Badge variant="secondary">Last 24 hours</Badge>
           <Button size="sm" variant="outline">
             Export
           </Button>
@@ -175,7 +179,7 @@ export default function AnalyticsPage() {
           <CardHeader>
             <CardTitle>Verification trends</CardTitle>
             <CardDescription>
-              Human vs bot detection over the last 14 days.
+              Human vs bot detection over the last 24 hours.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex-1 flex flex-col min-h-0">
@@ -190,13 +194,23 @@ export default function AnalyticsPage() {
             ) : (
               <ChartContainer config={chartConfig} className="flex-1 min-h-[400px] w-full">
                 <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    className="stroke-muted"
+                    vertical={true}
+                    horizontal={true}
+                  />
                   <XAxis
                     dataKey="date"
                     className="text-xs"
-                    tickLine={false}
-                    axisLine={false}
+                    tickLine={true}
+                    axisLine={true}
                     tickMargin={8}
+                    interval={0}
+                    tick={{ fontSize: 10 }}
+                    angle={-45}
+                    textAnchor="end"
+                    height={60}
                   />
                   <YAxis
                     className="text-xs"
@@ -208,16 +222,19 @@ export default function AnalyticsPage() {
                   <Line
                     type="monotone"
                     dataKey="humans"
-                    stroke="var(--color-humans)"
+                    stroke="#ef4444"
                     strokeWidth={2}
-                    dot={false}
+                    strokeDasharray="5 5"
+                    dot={{ r: 3, fill: "#ef4444" }}
+                    activeDot={{ r: 5, fill: "#ef4444" }}
                   />
                   <Line
                     type="monotone"
                     dataKey="bots"
                     stroke="var(--color-bots)"
                     strokeWidth={2}
-                    dot={false}
+                    dot={{ r: 3, fill: "var(--color-bots)" }}
+                    activeDot={{ r: 5 }}
                   />
                 </LineChart>
               </ChartContainer>
@@ -283,42 +300,6 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
       </div>
-
-      {deploymentBreakdown.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Performance by deployment</CardTitle>
-            <CardDescription>Human pass rate across different deployments.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer config={chartConfig} className="h-64">
-              <BarChart data={deploymentBreakdown}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis
-                  dataKey="deployment"
-                  className="text-xs"
-                  tickLine={false}
-                  axisLine={false}
-                  tickMargin={8}
-                />
-                <YAxis
-                  className="text-xs"
-                  tickLine={false}
-                  axisLine={false}
-                  tickMargin={8}
-                  domain={[0, 100]}
-                />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar
-                  dataKey="passRate"
-                  fill="var(--color-passRate)"
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-      )}
 
       <Card>
         <CardHeader>
