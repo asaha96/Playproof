@@ -148,6 +148,32 @@ export function Playproof({
   const [error, setError] = useState<string | null>(null);
   const [config, setConfig] = useState<DeploymentConfig | null>(null);
 
+  // Store callbacks in refs to avoid triggering re-initialization when they change
+  // This is critical because parent components often pass inline callbacks
+  const onSuccessRef = useRef(onSuccess);
+  const onFailureRef = useRef(onFailure);
+  const onStartRef = useRef(onStart);
+  const onProgressRef = useRef(onProgress);
+  const onTelemetryBatchRef = useRef(onTelemetryBatch);
+  const onTelemetryRef = useRef(onTelemetry);
+  
+  // Stable theme reference - serialize to compare by value, not reference
+  const themeKey = JSON.stringify(themeOverride ?? {});
+  const stableThemeRef = useRef(themeOverride);
+  useEffect(() => {
+    stableThemeRef.current = themeOverride;
+  }, [themeKey]); // Only update when serialized value changes
+
+  // Keep refs in sync with latest props
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+    onFailureRef.current = onFailure;
+    onStartRef.current = onStart;
+    onProgressRef.current = onProgress;
+    onTelemetryBatchRef.current = onTelemetryBatch;
+    onTelemetryRef.current = onTelemetry;
+  }, [onSuccess, onFailure, onStart, onProgress, onTelemetryBatch, onTelemetry]);
+
   // Check if we're in preview mode (no deployment ID, using overrides)
   const isPreviewMode = !deploymentId && !!gameIdOverride;
 
@@ -276,10 +302,10 @@ export function Playproof({
         return;
       }
 
-      // Merge theme with overrides
+      // Merge theme with overrides (use stableThemeRef for consistent reference)
       const finalTheme: PlayproofTheme = {
         ...(deploymentConfig?.theme || DEFAULT_THEME),
-        ...themeOverride,
+        ...stableThemeRef.current,
       };
 
       const finalGameId = gameIdOverride || deploymentConfig?.gameId || 'bubble-pop';
@@ -292,7 +318,7 @@ export function Playproof({
       }
 
       // Convert BehaviorData to telemetry format for onTelemetry callback
-      const convertBehaviorDataToTelemetry = (behaviorData: BehaviorData, startTime: number, endTime: number) => {
+      const convertBehaviorDataToTelemetry = (behaviorData: BehaviorData, startTime: number, durationMs: number) => {
         const movements = behaviorData.mouseMovements.map(m => ({
           x: m.x,
           y: m.y,
@@ -318,7 +344,7 @@ export function Playproof({
           clicks,
           hits: behaviorData.hits || 0,
           misses: behaviorData.misses || 0,
-          durationMs: endTime - startTime,
+          durationMs,
         };
       };
 
@@ -338,16 +364,16 @@ export function Playproof({
           apiKey: client_key || undefined,
           deploymentId: deploymentId || undefined,
           onSuccess: (result: VerificationResult) => {
-            onSuccess?.(result);
+            onSuccessRef.current?.(result);
           },
           onFailure: (result: VerificationResult) => {
-            onFailure?.(result);
+            onFailureRef.current?.(result);
           },
           onStart: () => {
-            onStart?.();
+            onStartRef.current?.();
           },
           onProgress: (progress: number) => {
-            onProgress?.(progress);
+            onProgressRef.current?.(progress);
           },
           hooks: {
             // Handle telemetry batches during gameplay and after completion
@@ -356,20 +382,24 @@ export function Playproof({
               if (Array.isArray(batch) && batch.length > 0) {
                 // Check if it's PointerTelemetryEvent[] (has eventType property)
                 if (batch[0]?.eventType) {
-                  onTelemetryBatch?.(batch as PointerTelemetryEvent[]);
+                  onTelemetryBatchRef.current?.(batch as PointerTelemetryEvent[]);
                 }
               }
               // After game completes: batch is BehaviorData (not an array, has mouseMovements)
               else if (batch && !Array.isArray(batch) && batch.mouseMovements) {
                 const behaviorData = batch as BehaviorData;
                 if (behaviorData.mouseMovements && behaviorData.mouseMovements.length > 0) {
-                  const startTime = behaviorData.mouseMovements[0]?.timestamp || Date.now();
-                  const endTime = behaviorData.mouseMovements[behaviorData.mouseMovements.length - 1]?.timestamp || Date.now();
-                  const telemetry = convertBehaviorDataToTelemetry(behaviorData, startTime, endTime);
+                  // Use actual game timing from BehaviorData, fall back to movement timestamps
+                  const startTime = behaviorData.startTime || behaviorData.mouseMovements[0]?.timestamp || Date.now();
+                  const endTime = behaviorData.endTime || behaviorData.mouseMovements[behaviorData.mouseMovements.length - 1]?.timestamp || Date.now();
+                  const durationMs = behaviorData.durationMs || (endTime - startTime);
+                  
+                  const telemetry = convertBehaviorDataToTelemetry(behaviorData, startTime, durationMs);
                   
                   // Call onTelemetry with converted data
-                  if (onTelemetry) {
-                    const result = onTelemetry(telemetry);
+                  const onTelemetryCurrent = onTelemetryRef.current;
+                  if (onTelemetryCurrent) {
+                    const result = onTelemetryCurrent(telemetry);
                     // If onTelemetry returns a promise, handle it (for Woodwide integration)
                     if (result && typeof result === 'object' && 'then' in result) {
                       result.then(woodwideResult => {
@@ -418,22 +448,20 @@ export function Playproof({
       mounted = false;
       cleanup();
     };
+    // Note: Callbacks are intentionally excluded from deps and stored in refs
+    // to prevent game re-initialization when parent re-renders with new callback refs.
+    // themeKey is used instead of themeOverride for stable object comparison.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     containerId,
     client_key,
     deploymentId,
     gameIdOverride,
     isPreviewMode,
-    themeOverride,
+    themeKey,
     confidenceThreshold,
     gameDuration,
     resetKey,
-    onSuccess,
-    onFailure,
-    onStart,
-    onProgress,
-    onTelemetryBatch,
-    onTelemetry,
     fetchConfig,
     cleanup,
   ]);
