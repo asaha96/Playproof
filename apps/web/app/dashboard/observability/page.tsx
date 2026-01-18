@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect, useId } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +14,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Eye, Pause, Play, Trash2, ArrowUp, RotateCcw, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
-import type { PointerTelemetryEvent } from "playproof";
+import { Playproof, type PointerTelemetryEvent } from "playproof/react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const MAX_EVENTS = 1000; // Cap to prevent memory issues
@@ -36,11 +36,6 @@ interface WoodwideResult {
 }
 
 export default function ObservabilityPage() {
-  const uniqueId = useId();
-  const containerId = `playproof-observability-${uniqueId.replace(/:/g, "-")}`;
-  const containerRef = useRef<HTMLDivElement>(null);
-  const playproofInstanceRef = useRef<any>(null);
-  
   // Authoritative event list (not triggering re-renders)
   const eventsRef = useRef<PointerTelemetryEvent[]>([]);
   
@@ -50,7 +45,6 @@ export default function ObservabilityPage() {
   // Controls
   const [isPaused, setIsPaused] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
-  const [isLoaded, setIsLoaded] = useState(false);
   const [resetKey, setResetKey] = useState(0);
   
   // Stats - track raw counts to avoid capping issues
@@ -124,173 +118,64 @@ export default function ObservabilityPage() {
     setDisplayEvents([...eventsRef.current].slice(-100).reverse());
   }, []);
 
-  // Cleanup function
-  const cleanup = useCallback(() => {
-    if (playproofInstanceRef.current) {
-      try {
-        playproofInstanceRef.current.destroy();
-      } catch (e) {
-        // Ignore cleanup errors
-      }
-      playproofInstanceRef.current = null;
+  // Handle telemetry data when game completes
+  const handleTelemetry = useCallback(async (telemetry: {
+    movements: Array<{ x: number; y: number; timestamp: number }>;
+    clicks: Array<{ x: number; y: number; timestamp: number; targetHit: boolean }>;
+    hits: number;
+    misses: number;
+    durationMs: number;
+  }) => {
+    if (!telemetry.movements || telemetry.movements.length === 0) {
+      return null;
     }
-    setIsLoaded(false);
-  }, []);
 
-  // Initialize SDK with telemetry hooks
-  useEffect(() => {
-    let mounted = true;
+    setIsScoring(true);
+    setWoodwideResult(null);
 
-    const initPlayproof = async () => {
-      try {
-        cleanup();
+    try {
+      const response = await fetch(apiUrl("/api/v1/score"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          sessionId: `obs_${Date.now()}`,
+          gameType: "bubble-pop",
+          deviceType: "mouse",
+          durationMs: telemetry.durationMs,
+          movements: telemetry.movements,
+          clicks: telemetry.clicks,
+          hits: telemetry.hits,
+          misses: telemetry.misses,
+        }),
+      });
 
-        // Dynamic import to avoid SSR issues
-        const playproofModule = await import("playproof");
-        console.log("[Observability] Playproof module loaded:", playproofModule);
-        
-        // Handle both default and named exports
-        const Playproof = playproofModule.Playproof || playproofModule.default;
-        
-        if (!Playproof) {
-          console.error("[Observability] Playproof class not found in module:", Object.keys(playproofModule));
-          return;
-        }
-
-        if (!mounted || !containerRef.current) return;
-
-        // Ensure container has the ID
-        containerRef.current.id = containerId;
-
-        // Create Playproof instance with telemetry hooks
-        const instance = new Playproof({
-          containerId,
-          confidenceThreshold: 0.7,
-          gameId: "bubble-pop",
-          gameDuration: 30000, // 30 seconds for observability testing
-          logTelemetry: false, // Set to true for console debugging
-          theme: {
-            primary: "#6366f1",
-            secondary: "#8b5cf6",
-            background: "#1a1a2e",
-            surface: "#2a2a3e",
-            text: "#f5f5f5",
-            textMuted: "#a1a1aa",
-            accent: "#22d3ee",
-            success: "#10b981",
-            error: "#ef4444",
-            border: "#3f3f5a",
-          },
-          hooks: {
-            onTelemetryBatch: async (batch: any) => {
-              // Handle pointer telemetry events during gameplay
-              if (Array.isArray(batch) && batch.length > 0 && batch[0]?.eventType) {
-                handleTelemetryBatch(batch);
-              }
-              
-              // When game completes, batch will be BehaviorData (not an array)
-              // Use Woodwide to classify bot vs human
-              if (batch && !Array.isArray(batch)) {
-                try {
-                  const behaviorData = batch as any;
-                  
-                  if (behaviorData.mouseMovements && behaviorData.mouseMovements.length > 0) {
-                    setIsScoring(true);
-                    setWoodwideResult(null);
-                    
-                    // Convert BehaviorData to telemetry format
-                    const startTime = behaviorData.mouseMovements[0]?.timestamp || Date.now();
-                    const endTime = behaviorData.mouseMovements[behaviorData.mouseMovements.length - 1]?.timestamp || Date.now();
-                    
-                    // Map click timings to click events
-                    const clicks = behaviorData.clickTimings?.map((timestamp: number, index: number) => {
-                      const movement = behaviorData.mouseMovements.find((m: any) => 
-                        Math.abs(m.timestamp - timestamp) < 100
-                      ) || behaviorData.mouseMovements[Math.floor(index * behaviorData.mouseMovements.length / (behaviorData.clickTimings.length || 1))];
-                      
-                      return {
-                        x: movement?.x || 0,
-                        y: movement?.y || 0,
-                        timestamp: timestamp - startTime,
-                        targetHit: index < (behaviorData.hits || 0),
-                      };
-                    }) || [];
-
-                    const telemetry = {
-                      sessionId: `obs_${Date.now()}`,
-                      gameType: "bubble-pop",
-                      deviceType: "mouse",
-                      durationMs: endTime - startTime,
-                      movements: behaviorData.mouseMovements.map((m: any) => ({
-                        x: m.x,
-                        y: m.y,
-                        timestamp: m.timestamp - startTime,
-                      })),
-                      clicks,
-                      hits: behaviorData.hits || 0,
-                      misses: behaviorData.misses || 0,
-                    };
-
-                    // Call Woodwide scoring API
-                    const response = await fetch(apiUrl("/api/v1/score"), {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                      },
-                      body: JSON.stringify(telemetry),
-                    });
-
-                    if (response.ok) {
-                      const data: WoodwideResult = await response.json();
-                      setWoodwideResult(data);
-                      console.log("[Observability] Woodwide classification:", {
-                        decision: data.decision,
-                        anomalyScore: data.anomaly.anomalyScore,
-                        isAnomaly: data.anomaly.isAnomaly,
-                        classification: data.decision === "pass" ? "HUMAN" : "BOT",
-                      });
-                    } else {
-                      console.error("[Observability] Woodwide scoring failed:", response.status);
-                    }
-                  }
-                } catch (error) {
-                  console.error("[Observability] Error classifying with Woodwide:", error);
-                } finally {
-                  setIsScoring(false);
-                }
-              }
-            },
-            onAttemptEnd: null,
-            regenerate: null,
-          },
-          onSuccess: (result) => {
-            console.log("[Observability] Verification passed:", result);
-          },
-          onFailure: (result) => {
-            console.log("[Observability] Verification failed:", result);
-          },
+      if (response.ok) {
+        const data: WoodwideResult = await response.json();
+        setWoodwideResult(data);
+        console.log("[Observability] Woodwide classification:", {
+          decision: data.decision,
+          anomalyScore: data.anomaly.anomalyScore,
+          isAnomaly: data.anomaly.isAnomaly,
+          classification: data.decision === "pass" ? "HUMAN" : "BOT",
         });
-
-        playproofInstanceRef.current = instance;
-
-        // Start verification UI
-        await instance.verify();
-
-        if (mounted) {
-          setIsLoaded(true);
-        }
-      } catch (err) {
-        console.error("Failed to initialize Playproof:", err);
+        
+        return {
+          decision: data.decision,
+          anomalyScore: data.anomaly.anomalyScore || 0,
+        };
+      } else {
+        console.error("[Observability] Woodwide scoring failed:", response.status);
+        return null;
       }
-    };
-
-    initPlayproof();
-
-    return () => {
-      mounted = false;
-      cleanup();
-    };
-  }, [containerId, handleTelemetryBatch, cleanup, resetKey]);
+    } catch (error) {
+      console.error("[Observability] Error classifying with Woodwide:", error);
+      return null;
+    } finally {
+      setIsScoring(false);
+    }
+  }, []);
 
   // Auto-scroll effect (scroll to top for newest events)
   useEffect(() => {
@@ -313,6 +198,7 @@ export default function ObservabilityPage() {
       dragDistance: 0,
     });
     lastPosRef.current = null;
+    setWoodwideResult(null);
   };
 
   // Reset the entire SDK
@@ -431,20 +317,38 @@ export default function ObservabilityPage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-lg">PlayProof SDK</CardTitle>
               <CardDescription>
-                Telemetry is captured via hooks.onTelemetryBatch - game-agnostic
+                Telemetry is captured via onTelemetryBatch - game-agnostic
               </CardDescription>
             </CardHeader>
             <CardContent className="p-4">
-              <div
-                ref={containerRef}
-                id={containerId}
-                className="w-full min-h-[500px]"
-              />
-              {!isLoaded && (
-                <div className="flex items-center justify-center h-[500px] text-muted-foreground">
-                  Loading SDK...
-                </div>
-              )}
+              <div className="w-full min-h-[500px] border rounded-lg p-4 bg-slate-50 dark:bg-slate-900">
+                <Playproof
+                  key={resetKey}
+                  gameId="bubble-pop"
+                  gameDuration={30000}
+                  confidenceThreshold={0.7}
+                  theme={{
+                    primary: "#6366f1",
+                    secondary: "#8b5cf6",
+                    background: "#1a1a2e",
+                    surface: "#2a2a3e",
+                    text: "#f5f5f5",
+                    textMuted: "#a1a1aa",
+                    accent: "#22d3ee",
+                    success: "#10b981",
+                    error: "#ef4444",
+                    border: "#3f3f5a",
+                  }}
+                  onTelemetryBatch={handleTelemetryBatch}
+                  onTelemetry={handleTelemetry}
+                  onSuccess={(result) => {
+                    console.log("[Observability] Verification passed:", result);
+                  }}
+                  onFailure={(result) => {
+                    console.log("[Observability] Verification failed:", result);
+                  }}
+                />
+              </div>
             </CardContent>
           </Card>
 
@@ -599,12 +503,12 @@ export default function ObservabilityPage() {
             <div className="flex items-start gap-4 text-sm text-muted-foreground">
               <div>
                 <strong className="text-foreground">How it works:</strong> The SDK automatically captures pointer telemetry 
-                via <code className="bg-muted px-1 rounded">hooks.onTelemetryBatch</code>. This works on top of ANY game 
+                via <code className="bg-muted px-1 rounded">onTelemetryBatch</code>. This works on top of ANY game 
                 that extends <code className="bg-muted px-1 rounded">ThreeBaseGame</code> - completely game-agnostic.
               </div>
               <div>
                 <strong className="text-foreground">Woodwide Classification:</strong> When the game completes, telemetry is 
-                automatically sent to Woodwide's anomaly detection model to classify the session as <strong>HUMAN</strong> or <strong>BOT</strong>.
+                automatically sent to Woodwide&apos;s anomaly detection model to classify the session as <strong>HUMAN</strong> or <strong>BOT</strong>.
               </div>
             </div>
           </CardContent>
