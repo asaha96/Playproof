@@ -11,6 +11,11 @@ const convex = new ConvexReactClient(
   process.env.NEXT_PUBLIC_CONVEX_URL as string
 );
 
+// TODO: Replace this inlined PlayproofProvider with the package import once 
+// the playproof/react module resolution issue is fixed in the monorepo.
+// See: https://github.com/asaha96/Playproof/pull/10
+// Original import: import { PlayproofProvider, usePlayproof, PlayproofContext } from 'playproof/react';
+//
 // Inline PlayproofContext to avoid module resolution issues with playproof/react
 // This is a workaround until the playproof package export issue is resolved
 export interface PlayproofContextValue {

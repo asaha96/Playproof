@@ -1,5 +1,3 @@
-"use client";
-
 /**
  * Playproof React Components
  * 
