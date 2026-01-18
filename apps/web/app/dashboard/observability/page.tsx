@@ -13,10 +13,26 @@ import {
 } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Eye, Pause, Play, Trash2, ArrowUp, RotateCcw } from "lucide-react";
+import { Eye, Pause, Play, Trash2, ArrowUp, RotateCcw, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 import type { PointerTelemetryEvent } from "playproof";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const MAX_EVENTS = 1000; // Cap to prevent memory issues
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+
+interface WoodwideResult {
+  sessionId: string;
+  decision: "pass" | "review" | "fail";
+  confidence: number;
+  anomaly: {
+    modelId: string | null;
+    anomalyScore: number | null;
+    isAnomaly: boolean | null;
+  };
+  featureSummary: Record<string, number>;
+  scoredAt: string;
+  latencyMs: number;
+}
 
 export default function ObservabilityPage() {
   const uniqueId = useId();
@@ -43,6 +59,10 @@ export default function ObservabilityPage() {
     clickEvents: 0,
     dragDistance: 0,
   });
+
+  // Woodwide classification result
+  const [woodwideResult, setWoodwideResult] = useState<WoodwideResult | null>(null);
+  const [isScoring, setIsScoring] = useState(false);
   
   // Refs for scroll and drag calculation
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -152,7 +172,84 @@ export default function ObservabilityPage() {
             border: "#3f3f5a",
           },
           hooks: {
-            onTelemetryBatch: handleTelemetryBatch,
+            onTelemetryBatch: async (batch: any) => {
+              // Handle pointer telemetry events during gameplay
+              if (Array.isArray(batch) && batch.length > 0 && batch[0]?.eventType) {
+                handleTelemetryBatch(batch);
+              }
+              
+              // When game completes, batch will be BehaviorData (not an array)
+              // Use Woodwide to classify bot vs human
+              if (batch && !Array.isArray(batch)) {
+                try {
+                  const behaviorData = batch as any;
+                  
+                  if (behaviorData.mouseMovements && behaviorData.mouseMovements.length > 0) {
+                    setIsScoring(true);
+                    setWoodwideResult(null);
+                    
+                    // Convert BehaviorData to telemetry format
+                    const startTime = behaviorData.mouseMovements[0]?.timestamp || Date.now();
+                    const endTime = behaviorData.mouseMovements[behaviorData.mouseMovements.length - 1]?.timestamp || Date.now();
+                    
+                    // Map click timings to click events
+                    const clicks = behaviorData.clickTimings?.map((timestamp: number, index: number) => {
+                      const movement = behaviorData.mouseMovements.find((m: any) => 
+                        Math.abs(m.timestamp - timestamp) < 100
+                      ) || behaviorData.mouseMovements[Math.floor(index * behaviorData.mouseMovements.length / (behaviorData.clickTimings.length || 1))];
+                      
+                      return {
+                        x: movement?.x || 0,
+                        y: movement?.y || 0,
+                        timestamp: timestamp - startTime,
+                        targetHit: index < (behaviorData.hits || 0),
+                      };
+                    }) || [];
+
+                    const telemetry = {
+                      sessionId: `obs_${Date.now()}`,
+                      gameType: "bubble-pop",
+                      deviceType: "mouse",
+                      durationMs: endTime - startTime,
+                      movements: behaviorData.mouseMovements.map((m: any) => ({
+                        x: m.x,
+                        y: m.y,
+                        timestamp: m.timestamp - startTime,
+                      })),
+                      clicks,
+                      hits: behaviorData.hits || 0,
+                      misses: behaviorData.misses || 0,
+                    };
+
+                    // Call Woodwide scoring API
+                    const response = await fetch(`${API_URL}/api/v1/score`, {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify(telemetry),
+                    });
+
+                    if (response.ok) {
+                      const data: WoodwideResult = await response.json();
+                      setWoodwideResult(data);
+                      console.log("[Observability] Woodwide classification:", {
+                        decision: data.decision,
+                        anomalyScore: data.anomaly.anomalyScore,
+                        isAnomaly: data.anomaly.isAnomaly,
+                        classification: data.decision === "pass" ? "HUMAN" : "BOT",
+                      });
+                    } else {
+                      console.error("[Observability] Woodwide scoring failed:", response.status);
+                    }
+                  }
+                } catch (error) {
+                  console.error("[Observability] Error classifying with Woodwide:", error);
+                } finally {
+                  setIsScoring(false);
+                }
+              }
+            },
             onAttemptEnd: null,
             regenerate: null,
           },
@@ -402,6 +499,90 @@ export default function ObservabilityPage() {
           </Card>
         </div>
 
+        {/* Woodwide Classification Result */}
+        {isScoring && (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>Classifying with Woodwide anomaly detection model...</AlertDescription>
+          </Alert>
+        )}
+
+        {woodwideResult && (
+          <Card className="border-2">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                Woodwide Classification
+                {woodwideResult.decision === "pass" ? (
+                  <CheckCircle2 className="h-5 w-5 text-green-500" />
+                ) : woodwideResult.decision === "review" ? (
+                  <AlertCircle className="h-5 w-5 text-yellow-500" />
+                ) : (
+                  <XCircle className="h-5 w-5 text-red-500" />
+                )}
+              </CardTitle>
+              <CardDescription>
+                Anomaly detection model classification result
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <p className="text-sm text-muted-foreground mb-1">Classification</p>
+                  <p className="text-2xl font-bold">
+                    {woodwideResult.decision === "pass" ? (
+                      <span className="text-green-500">HUMAN</span>
+                    ) : (
+                      <span className="text-red-500">BOT</span>
+                    )}
+                  </p>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-muted-foreground mb-1">Anomaly Score</p>
+                  <p className="text-2xl font-bold">
+                    {woodwideResult.anomaly.anomalyScore?.toFixed(2) ?? "N/A"}
+                  </p>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-muted-foreground mb-1">Decision</p>
+                  <Badge 
+                    variant={woodwideResult.decision === "pass" ? "default" : "destructive"}
+                    className="text-lg px-3 py-1"
+                  >
+                    {woodwideResult.decision.toUpperCase()}
+                  </Badge>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Model ID</p>
+                  <p className="font-mono text-xs">
+                    {woodwideResult.anomaly.modelId ?? "heuristic_fallback"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Is Anomaly</p>
+                  <p className="font-semibold">
+                    {woodwideResult.anomaly.isAnomaly === null
+                      ? "N/A"
+                      : woodwideResult.anomaly.isAnomaly
+                      ? "Yes (Bot-like)"
+                      : "No (Human-like)"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Confidence</p>
+                  <p className="font-semibold">{(woodwideResult.confidence * 100).toFixed(1)}%</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Latency</p>
+                  <p className="font-semibold">{woodwideResult.latencyMs.toFixed(0)}ms</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Instructions */}
         <Card>
           <CardContent className="py-4">
@@ -412,8 +593,8 @@ export default function ObservabilityPage() {
                 that extends <code className="bg-muted px-1 rounded">ThreeBaseGame</code> - completely game-agnostic.
               </div>
               <div>
-                <strong className="text-foreground">Raw data access:</strong> All telemetry events are stored and can be 
-                included in the final <code className="bg-muted px-1 rounded">VerificationResult</code> for server-side analysis.
+                <strong className="text-foreground">Woodwide Classification:</strong> When the game completes, telemetry is 
+                automatically sent to Woodwide's anomaly detection model to classify the session as <strong>HUMAN</strong> or <strong>BOT</strong>.
               </div>
             </div>
           </CardContent>

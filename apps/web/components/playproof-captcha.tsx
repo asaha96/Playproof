@@ -81,6 +81,29 @@ export interface PlayproofCaptchaProps {
         misses: number;
         durationMs: number;
     }) => Promise<{ decision: "pass" | "review" | "fail"; anomalyScore: number } | null>
+    /** Called with real-time telemetry events during gameplay */
+    onRealTimeTelemetry?: (events: Array<{
+        x: number;
+        y: number;
+        timestamp: number;
+        eventType: string;
+    }>) => void
+    /** Called with batched pointer telemetry events (same as observability page) */
+    onTelemetryBatch?: (batch: Array<{
+        timestampMs: number;
+        tMs: number;
+        x: number;
+        y: number;
+        clientX: number;
+        clientY: number;
+        isDown: boolean;
+        eventType: 'move' | 'down' | 'up' | 'enter' | 'leave';
+        pointerType: string;
+        pointerId: number;
+        isTrusted: boolean;
+    }>) => void
+    /** Callback to get SDK instance reference */
+    onInstanceReady?: (instance: any) => void
     /** Unique key to force re-render/reset */
     resetKey?: number
 }
@@ -115,6 +138,9 @@ export function PlayproofCaptcha({
     onSuccess,
     onFailure,
     onTelemetry,
+    onRealTimeTelemetry,
+    onTelemetryBatch: onTelemetryBatchHook,
+    onInstanceReady,
     resetKey = 0,
 }: PlayproofCaptchaProps) {
     const uniqueId = useId()
@@ -183,53 +209,63 @@ export function PlayproofCaptcha({
                     },
                     hooks: {
                         onTelemetryBatch: async (batch: any) => {
-                            // Process telemetry and get Woodwide result before showing game result
-                            if (batch && onTelemetry) {
-                                try {
-                                    const behaviorData = batch as any;
-                                    console.log("Processing telemetry batch:", {
-                                        movements: behaviorData.mouseMovements?.length || 0,
-                                        clicks: behaviorData.clickTimings?.length || 0,
-                                        hits: behaviorData.hits || 0,
-                                        misses: behaviorData.misses || 0,
-                                    });
-                                    
-                                    if (behaviorData.mouseMovements && behaviorData.mouseMovements.length > 0) {
-                                        // Convert BehaviorData to telemetry format
-                                        const startTime = behaviorData.mouseMovements[0]?.timestamp || Date.now();
-                                        const endTime = behaviorData.mouseMovements[behaviorData.mouseMovements.length - 1]?.timestamp || Date.now();
-                                        
-                                        // Map click timings to click events
-                                        const clicks = behaviorData.clickTimings?.map((timestamp: number, index: number) => {
-                                            // Find nearest movement for click position
-                                            const movement = behaviorData.mouseMovements.find((m: any) => 
-                                                Math.abs(m.timestamp - timestamp) < 100
-                                            ) || behaviorData.mouseMovements[Math.floor(index * behaviorData.mouseMovements.length / (behaviorData.clickTimings.length || 1))];
-                                            
-                                            return {
-                                                x: movement?.x || 0,
-                                                y: movement?.y || 0,
-                                                timestamp: timestamp - startTime,
-                                                targetHit: index < (behaviorData.hits || 0),
-                                            };
-                                        }) || [];
-
-                                        const telemetry = {
-                                            movements: behaviorData.mouseMovements.map((m: any) => ({
-                                                x: m.x,
-                                                y: m.y,
-                                                timestamp: m.timestamp - startTime,
-                                            })),
-                                            clicks,
+                            // First, handle pointer telemetry events if hook is provided (for observability-style tracking)
+                            // The SDK calls this with PointerTelemetryEvent[] during gameplay
+                            if (onTelemetryBatchHook && Array.isArray(batch) && batch.length > 0 && batch[0]?.eventType) {
+                                // This is a batch of PointerTelemetryEvent[] from the pointer tracker
+                                onTelemetryBatchHook(batch);
+                                return; // Don't process arrays as BehaviorData
+                            }
+                            
+                            // When game completes, batch will be BehaviorData (not an array)
+                            // SDK waits 100ms for Woodwide result, so we need to process quickly
+                            if (batch && onTelemetry && !Array.isArray(batch)) {
+                                    try {
+                                        const behaviorData = batch as any;
+                                        console.log("Processing telemetry batch:", {
+                                            movements: behaviorData.mouseMovements?.length || 0,
+                                            clicks: behaviorData.clickTimings?.length || 0,
                                             hits: behaviorData.hits || 0,
                                             misses: behaviorData.misses || 0,
-                                            durationMs: endTime - startTime,
-                                        };
+                                        });
+                                        
+                                        if (behaviorData.mouseMovements && behaviorData.mouseMovements.length > 0) {
+                                            // Convert BehaviorData to telemetry format
+                                            const startTime = behaviorData.mouseMovements[0]?.timestamp || Date.now();
+                                            const endTime = behaviorData.mouseMovements[behaviorData.mouseMovements.length - 1]?.timestamp || Date.now();
+                                            
+                                            // Map click timings to click events
+                                            const clicks = behaviorData.clickTimings?.map((timestamp: number, index: number) => {
+                                                // Find nearest movement for click position
+                                                const movement = behaviorData.mouseMovements.find((m: any) => 
+                                                    Math.abs(m.timestamp - timestamp) < 100
+                                                ) || behaviorData.mouseMovements[Math.floor(index * behaviorData.mouseMovements.length / (behaviorData.clickTimings.length || 1))];
+                                                
+                                                return {
+                                                    x: movement?.x || 0,
+                                                    y: movement?.y || 0,
+                                                    timestamp: timestamp - startTime,
+                                                    targetHit: index < (behaviorData.hits || 0),
+                                                };
+                                            }) || [];
+
+                                            const telemetry = {
+                                                movements: behaviorData.mouseMovements.map((m: any) => ({
+                                                    x: m.x,
+                                                    y: m.y,
+                                                    timestamp: m.timestamp - startTime,
+                                                })),
+                                                clicks,
+                                                hits: behaviorData.hits || 0,
+                                                misses: behaviorData.misses || 0,
+                                                durationMs: endTime - startTime,
+                                            };
 
                                         // Get Woodwide result and store it for the SDK to use
+                                        // SDK will wait up to 100ms and then check config.woodwideResult
                                         const woodwideResult = await onTelemetry(telemetry);
                                         if (woodwideResult && instance) {
-                                            // Store result in config so SDK can access it
+                                            // Store result in config - SDK will use it in evaluateResult
                                             (instance as any).config.woodwideResult = woodwideResult;
                                         }
                                     }
@@ -250,6 +286,36 @@ export function PlayproofCaptcha({
                 })
 
                 playproofInstanceRef.current = instance
+
+                // Expose instance to parent
+                if (onInstanceReady) {
+                    onInstanceReady(instance);
+                }
+
+                // Hook into real-time telemetry via the SDK's onTelemetryBatch hook
+                // This will be called in real-time as events come in
+                if (onRealTimeTelemetry) {
+                    const originalOnTelemetryBatch = instance.config.hooks?.onTelemetryBatch;
+                    instance.config.hooks = instance.config.hooks || {};
+                    instance.config.hooks.onTelemetryBatch = (batch: any) => {
+                        // Call original hook if it exists
+                        if (originalOnTelemetryBatch) {
+                            originalOnTelemetryBatch(batch);
+                        }
+                        // Only process if batch is an array of PointerTelemetryEvent (during gameplay)
+                        // When game completes, batch will be BehaviorData (not an array)
+                        if (Array.isArray(batch) && batch.length > 0 && batch[0]?.eventType) {
+                            // Convert PointerTelemetryEvent[] to simplified format
+                            const simplified = batch.map((e: any) => ({
+                                x: e.x,
+                                y: e.y,
+                                timestamp: e.timestampMs,
+                                eventType: e.eventType,
+                            }));
+                            onRealTimeTelemetry(simplified);
+                        }
+                    };
+                }
 
                 // Start verification UI
                 await instance.verify()
@@ -292,6 +358,9 @@ export function PlayproofCaptcha({
         borderColor,
         onSuccess,
         onFailure,
+        onRealTimeTelemetry,
+        onTelemetryBatchHook,
+        onInstanceReady,
         resetKey,
         cleanup,
     ])

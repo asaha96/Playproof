@@ -50,11 +50,6 @@ const navItems = [
     href: "/dashboard/developer",
     icon: Code,
   },
-  {
-    title: "Woodwide Test",
-    href: "/dashboard/woodwide-test",
-    icon: TestTube,
-  },
 ]
 
 export function AppSidebar() {
