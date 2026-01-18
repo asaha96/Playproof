@@ -1,9 +1,9 @@
 import Link from "next/link";
+import { auth } from "@clerk/nextjs/server";
 import {
   SignInButton,
   SignUpButton,
-  SignedIn,
-  SignedOut,
+  SignOutButton,
   UserButton,
 } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
@@ -17,11 +17,13 @@ function Shield(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
-export default function MarketingLayout({
+export default async function MarketingLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const { userId } = await auth();
+
   return (
     <div className="flex min-h-svh flex-col">
       <header className="sticky top-0 z-50 flex items-center justify-between border-b bg-background/80 backdrop-blur-sm px-6 py-4">
@@ -30,20 +32,26 @@ export default function MarketingLayout({
           PlayProof
         </Link>
         <div className="flex items-center gap-3">
-          <SignedOut>
-            <SignInButton mode="modal">
-              <Button variant="ghost" size="sm">Sign In</Button>
-            </SignInButton>
-            <SignUpButton mode="modal">
-              <Button size="sm">Get Started</Button>
-            </SignUpButton>
-          </SignedOut>
-          <SignedIn>
-            <Link href="/dashboard">
-              <Button variant="outline" size="sm">Dashboard</Button>
-            </Link>
-            <UserButton afterSignOutUrl="/" />
-          </SignedIn>
+          {!userId ? (
+            <>
+              <SignInButton mode="modal">
+                <Button variant="ghost" size="sm">Sign In</Button>
+              </SignInButton>
+              <SignUpButton mode="modal">
+                <Button size="sm">Get Started</Button>
+              </SignUpButton>
+            </>
+          ) : (
+            <>
+              <Link href="/dashboard">
+                <Button variant="outline" size="sm">Dashboard</Button>
+              </Link>
+              <UserButton />
+              <SignOutButton>
+                <Button variant="ghost" size="sm">Sign Out</Button>
+              </SignOutButton>
+            </>
+          )}
         </div>
       </header>
       <main className="flex-1">{children}</main>
