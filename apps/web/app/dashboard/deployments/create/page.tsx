@@ -154,8 +154,8 @@ export default function CreateDeploymentPage() {
   };
 
   // Map deployment type to game type for preview
-  const getGameType = (type: DeploymentType): "bubble-pop" | "archery" => {
-    if (type === "archery") return "archery";
+  const getGameType = (type: DeploymentType): "bubble-pop" | "snake" => {
+    if (type === "snake") return "snake";
     return "bubble-pop";
   };
 

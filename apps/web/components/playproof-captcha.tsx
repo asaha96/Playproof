@@ -34,8 +34,8 @@ export type PlayproofFontFamily = typeof PLAYPROOF_FONTS[number]
 export interface PlayproofCaptchaProps {
     /** Threshold for verification success (0-1) */
     confidenceThreshold?: number
-    /** Game type: 'bubble-pop', 'archery', or 'random' */
-    gameType?: "bubble-pop" | "archery" | "random"
+    /** Game type: 'bubble-pop', 'archery', 'snake', or 'random' */
+    gameType?: "bubble-pop" | "archery" | "snake" | "random"
     /** Difficulty level - affects game duration */
     difficulty?: "easy" | "normal" | "hard"
     /** Game timer in seconds */
