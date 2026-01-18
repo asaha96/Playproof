@@ -5,6 +5,11 @@
 
 import type { PlayproofTheme, PlayproofConfig, SDKHooks } from './types';
 
+/**
+ * Hardcoded Playproof API URL - end users don't need to configure this
+ */
+export const PLAYPROOF_API_URL = 'https://calculating-mockingbird-102.convex.cloud';
+
 export const DEFAULT_THEME: PlayproofTheme = {
   primary: '#6366f1',
   secondary: '#8b5cf6',
@@ -30,6 +35,9 @@ export const DEFAULT_CONFIG: PlayproofConfig = {
   confidenceThreshold: 0.7,
   gameDuration: null, // null = use game default, or specify ms
   gameId: 'bubble-pop', // 'bubble-pop', 'mini-golf', 'basketball', 'archery', or 'random'
+  // API credentials for fetching deployment branding
+  apiKey: null,
+  deploymentId: null,
   onSuccess: null,
   onFailure: null,
   onStart: null,
