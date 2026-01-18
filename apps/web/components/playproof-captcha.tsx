@@ -34,6 +34,22 @@ export interface PlayproofCaptchaProps {
     backgroundColor?: string
     /** Surface color for game area */
     surfaceColor?: string
+    /** Text color */
+    textColor?: string
+    /** Muted text color */
+    textMutedColor?: string
+    /** Accent color */
+    accentColor?: string
+    /** Success color */
+    successColor?: string
+    /** Error color */
+    errorColor?: string
+    /** Border color */
+    borderColor?: string
+    /** Spacing in pixels */
+    spacing?: number
+    /** Font family */
+    fontFamily?: string
     /** Called when verification passes */
     onSuccess?: (result: PlayproofCaptchaResult) => void
     /** Called when verification fails */
@@ -58,6 +74,14 @@ export function PlayproofCaptcha({
     secondaryColor = "#8b5cf6",
     backgroundColor = "#1e1e2e",
     surfaceColor = "#2a2a3e",
+    textColor = "#f5f5f5",
+    textMutedColor = "#a1a1aa",
+    accentColor = "#22d3ee",
+    successColor = "#10b981",
+    errorColor = "#ef4444",
+    borderColor = "#3f3f5a",
+    spacing = 10,
+    fontFamily = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
     onSuccess,
     onFailure,
     resetKey = 0,
@@ -116,6 +140,12 @@ export function PlayproofCaptcha({
                         secondary: secondaryColor,
                         background: backgroundColor,
                         surface: surfaceColor,
+                        text: textColor,
+                        textMuted: textMutedColor,
+                        accent: accentColor,
+                        success: successColor,
+                        error: errorColor,
+                        border: borderColor,
                     },
                     onSuccess: (result: PlayproofCaptchaResult) => {
                         onSuccess?.(result)
@@ -157,6 +187,12 @@ export function PlayproofCaptcha({
         secondaryColor,
         backgroundColor,
         surfaceColor,
+        textColor,
+        textMutedColor,
+        accentColor,
+        successColor,
+        errorColor,
+        borderColor,
         onSuccess,
         onFailure,
         resetKey,
@@ -166,6 +202,8 @@ export function PlayproofCaptcha({
     // Apply custom border radius via style
     const containerStyle: React.CSSProperties = {
         "--playproof-border-radius": `${borderRadius}px`,
+        "--playproof-spacing": `${spacing}px`,
+        "--playproof-font-family": fontFamily,
     } as React.CSSProperties
 
     return (

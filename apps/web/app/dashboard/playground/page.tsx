@@ -28,7 +28,15 @@ export default function PlaygroundPage() {
         secondaryColor: "#8b5cf6",
         backgroundColor: "#1e1e2e",
         surfaceColor: "#2a2a3e",
+        textColor: "#f5f5f5",
+        textMutedColor: "#a1a1aa",
+        accentColor: "#22d3ee",
+        successColor: "#10b981",
+        errorColor: "#ef4444",
+        borderColor: "#3f3f5a",
         borderRadius: 12,
+        spacing: 10,
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         timer: 10,
     })
 
@@ -63,14 +71,14 @@ export default function PlaygroundPage() {
                 </div>
 
                 {/* Game Configuration */}
-                <Card>
-                    <CardHeader className="pb-3">
+                <Card className="border-0 shadow-none ring-0 bg-transparent">
+                    <CardHeader className="pb-3 px-0">
                         <CardTitle className="flex items-center gap-2 text-base">
                             <Gamepad2 className="size-4" />
                             Game Settings
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4">
+                    <CardContent className="space-y-4 px-0">
                         <div className="space-y-2">
                             <Label className="text-xs font-medium">Game Type</Label>
                             <Select
@@ -130,28 +138,18 @@ export default function PlaygroundPage() {
                                 onValueChange={(v) => setConfig({ ...config, confidenceThreshold: Array.isArray(v) ? v[0] : v })}
                             />
                         </div>
-
-                        <div className="space-y-2">
-                            <Label className="text-xs font-medium">Border Radius ({config.borderRadius}px)</Label>
-                            <Slider
-                                value={[config.borderRadius]}
-                                max={24}
-                                step={1}
-                                onValueChange={(v) => setConfig({ ...config, borderRadius: Array.isArray(v) ? v[0] : v })}
-                            />
-                        </div>
                     </CardContent>
                 </Card>
 
                 {/* Appearance */}
-                <Card>
-                    <CardHeader className="pb-3">
+                <Card className="border-0 shadow-none ring-0 bg-transparent">
+                    <CardHeader className="pb-3 px-0">
                         <CardTitle className="flex items-center gap-2 text-base">
                             <Palette className="size-4" />
                             Appearance
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3">
+                    <CardContent className="space-y-4 px-0">
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
                                 <Label className="text-xs font-medium">Primary</Label>
@@ -217,6 +215,129 @@ export default function PlaygroundPage() {
                                     />
                                 </div>
                             </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-medium">Text</Label>
+                                <div className="flex gap-2">
+                                    <Input
+                                        type="color"
+                                        className="w-10 p-1 h-8 shrink-0"
+                                        value={config.textColor}
+                                        onChange={(e) => setConfig({ ...config, textColor: e.target.value })}
+                                    />
+                                    <Input
+                                        className="h-8 font-mono text-xs"
+                                        value={config.textColor}
+                                        onChange={(e) => setConfig({ ...config, textColor: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-medium">Text Muted</Label>
+                                <div className="flex gap-2">
+                                    <Input
+                                        type="color"
+                                        className="w-10 p-1 h-8 shrink-0"
+                                        value={config.textMutedColor}
+                                        onChange={(e) => setConfig({ ...config, textMutedColor: e.target.value })}
+                                    />
+                                    <Input
+                                        className="h-8 font-mono text-xs"
+                                        value={config.textMutedColor}
+                                        onChange={(e) => setConfig({ ...config, textMutedColor: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-medium">Accent</Label>
+                                <div className="flex gap-2">
+                                    <Input
+                                        type="color"
+                                        className="w-10 p-1 h-8 shrink-0"
+                                        value={config.accentColor}
+                                        onChange={(e) => setConfig({ ...config, accentColor: e.target.value })}
+                                    />
+                                    <Input
+                                        className="h-8 font-mono text-xs"
+                                        value={config.accentColor}
+                                        onChange={(e) => setConfig({ ...config, accentColor: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-medium">Success</Label>
+                                <div className="flex gap-2">
+                                    <Input
+                                        type="color"
+                                        className="w-10 p-1 h-8 shrink-0"
+                                        value={config.successColor}
+                                        onChange={(e) => setConfig({ ...config, successColor: e.target.value })}
+                                    />
+                                    <Input
+                                        className="h-8 font-mono text-xs"
+                                        value={config.successColor}
+                                        onChange={(e) => setConfig({ ...config, successColor: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-medium">Error</Label>
+                                <div className="flex gap-2">
+                                    <Input
+                                        type="color"
+                                        className="w-10 p-1 h-8 shrink-0"
+                                        value={config.errorColor}
+                                        onChange={(e) => setConfig({ ...config, errorColor: e.target.value })}
+                                    />
+                                    <Input
+                                        className="h-8 font-mono text-xs"
+                                        value={config.errorColor}
+                                        onChange={(e) => setConfig({ ...config, errorColor: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-medium">Border</Label>
+                                <div className="flex gap-2">
+                                    <Input
+                                        type="color"
+                                        className="w-10 p-1 h-8 shrink-0"
+                                        value={config.borderColor}
+                                        onChange={(e) => setConfig({ ...config, borderColor: e.target.value })}
+                                    />
+                                    <Input
+                                        className="h-8 font-mono text-xs"
+                                        value={config.borderColor}
+                                        onChange={(e) => setConfig({ ...config, borderColor: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 pt-2">
+                            <Label className="text-xs font-medium">Border Radius ({config.borderRadius}px)</Label>
+                            <Slider
+                                value={[config.borderRadius]}
+                                max={24}
+                                step={1}
+                                onValueChange={(v) => setConfig({ ...config, borderRadius: Array.isArray(v) ? v[0] : v })}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-xs font-medium">Spacing ({config.spacing}px)</Label>
+                            <Slider
+                                value={[config.spacing]}
+                                max={40}
+                                step={2}
+                                onValueChange={(v) => setConfig({ ...config, spacing: Array.isArray(v) ? v[0] : v })}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-xs font-medium">Font Family</Label>
+                            <Input
+                                className="h-8 text-xs"
+                                value={config.fontFamily}
+                                onChange={(e) => setConfig({ ...config, fontFamily: e.target.value })}
+                            />
                         </div>
                     </CardContent>
                 </Card>
@@ -249,7 +370,7 @@ export default function PlaygroundPage() {
             </div>
 
             {/* Preview Panel */}
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 h-full">
                 <Tabs defaultValue="desktop" className="flex-1 flex flex-col">
                     <div className="flex items-center justify-between pb-4">
                         <TabsList>
@@ -278,6 +399,14 @@ export default function PlaygroundPage() {
                                 secondaryColor={config.secondaryColor}
                                 backgroundColor={config.backgroundColor}
                                 surfaceColor={config.surfaceColor}
+                                textColor={config.textColor}
+                                textMutedColor={config.textMutedColor}
+                                accentColor={config.accentColor}
+                                successColor={config.successColor}
+                                errorColor={config.errorColor}
+                                borderColor={config.borderColor}
+                                spacing={config.spacing}
+                                fontFamily={config.fontFamily}
                                 onSuccess={handleSuccess}
                                 onFailure={handleFailure}
                             />
@@ -296,6 +425,14 @@ export default function PlaygroundPage() {
                                 secondaryColor={config.secondaryColor}
                                 backgroundColor={config.backgroundColor}
                                 surfaceColor={config.surfaceColor}
+                                textColor={config.textColor}
+                                textMutedColor={config.textMutedColor}
+                                accentColor={config.accentColor}
+                                successColor={config.successColor}
+                                errorColor={config.errorColor}
+                                borderColor={config.borderColor}
+                                spacing={config.spacing}
+                                fontFamily={config.fontFamily}
                                 onSuccess={handleSuccess}
                                 onFailure={handleFailure}
                             />
@@ -303,32 +440,7 @@ export default function PlaygroundPage() {
                     </div>
                 </Tabs>
 
-                {/* Code Example */}
-                <Card className="bg-slate-950 border-slate-800">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-xs font-medium text-slate-400">Integration Code</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <pre className="text-xs text-slate-300 overflow-x-auto">
-                            <code>{`<PlayproofCaptcha
-  confidenceThreshold={${config.confidenceThreshold}}
-  gameType="${config.gameType}"
-  difficulty="${config.difficulty}"
-  timer={${config.timer}}
-  borderRadius={${config.borderRadius}}
-  primaryColor="${config.primaryColor}"
-  secondaryColor="${config.secondaryColor}"
-  backgroundColor="${config.backgroundColor}"
-  onSuccess={(result) => {
-    // Handle verified user
-  }}
-  onFailure={(result) => {
-    // Handle verification failure
-  }}
-/>`}</code>
-                        </pre>
-                    </CardContent>
-                </Card>
+
             </div>
         </div>
     )
