@@ -32,21 +32,17 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import {
-  PlayproofCaptcha,
-  type PlayproofCaptchaResult,
-} from "@/components/playproof-captcha";
+import { Playproof, type VerificationResult } from "playproof/react";
 import { api } from "@/convex/_generated/api";
 import { useThemeColors, LIGHT_THEME_COLORS, PLAYPROOF_FONTS, type PlayproofFontFamily } from "@/hooks/useThemeColors";
 import type { Id } from "@/convex/_generated/dataModel";
 
-type DeploymentType = "bubble-pop" | "golf" | "basketball" | "archery";
+type DeploymentType = "bubble-pop" | "archery" | "osu";
 
 const deploymentTypes: Array<{ value: DeploymentType; label: string }> = [
   { value: "bubble-pop", label: "Bubble Pop" },
-  { value: "golf", label: "Golf" },
-  { value: "basketball", label: "Basketball" },
   { value: "archery", label: "Archery" },
+  { value: "osu", label: "Osu!" },
 ];
 
 type ColorFieldProps = {
@@ -129,14 +125,14 @@ export default function EditDeploymentPage() {
   const [resetKey, setResetKey] = React.useState(0);
   const [lastResult, setLastResult] = React.useState<{
     type: "success" | "failure";
-    result: PlayproofCaptchaResult;
+    result: VerificationResult;
   } | null>(null);
 
-  const handleSuccess = React.useCallback((result: PlayproofCaptchaResult) => {
+  const handleSuccess = React.useCallback((result: VerificationResult) => {
     setLastResult({ type: "success", result });
   }, []);
 
-  const handleFailure = React.useCallback((result: PlayproofCaptchaResult) => {
+  const handleFailure = React.useCallback((result: VerificationResult) => {
     setLastResult({ type: "failure", result });
   }, []);
 
@@ -178,11 +174,22 @@ export default function EditDeploymentPage() {
     }
   };
 
-  // Map deployment type to game type for preview
-  const getGameType = (type: DeploymentType): "bubble-pop" | "archery" => {
-    if (type === "archery") return "archery";
-    return "bubble-pop";
-  };
+  // Build theme for preview
+  const getPreviewTheme = () => ({
+    primary: formState.primaryColor,
+    secondary: formState.secondaryColor,
+    background: formState.backgroundColor,
+    surface: formState.surfaceColor,
+    text: formState.textColor,
+    textMuted: formState.textMutedColor,
+    accent: formState.accentColor,
+    success: formState.successColor,
+    error: formState.errorColor,
+    border: formState.borderColor,
+    borderRadius: formState.borderRadius,
+    spacing: formState.spacing,
+    fontFamily: formState.fontFamily,
+  });
 
   // Loading state
   if (deployment === undefined) {
@@ -583,23 +590,11 @@ export default function EditDeploymentPage() {
               value="desktop"
               className="m-0 w-full max-w-[420px] rounded-2xl mt-0"
             >
-              <PlayproofCaptcha
+              <Playproof
                 key={`desktop-${resetKey}`}
                 resetKey={resetKey}
-                gameType={getGameType(formState.type)}
-                borderRadius={formState.borderRadius}
-                spacing={formState.spacing}
-                fontFamily={formState.fontFamily}
-                primaryColor={formState.primaryColor}
-                secondaryColor={formState.secondaryColor}
-                backgroundColor={formState.backgroundColor}
-                surfaceColor={formState.surfaceColor}
-                textColor={formState.textColor}
-                textMutedColor={formState.textMutedColor}
-                accentColor={formState.accentColor}
-                successColor={formState.successColor}
-                errorColor={formState.errorColor}
-                borderColor={formState.borderColor}
+                gameId={formState.type}
+                theme={getPreviewTheme()}
                 onSuccess={handleSuccess}
                 onFailure={handleFailure}
               />
@@ -609,23 +604,11 @@ export default function EditDeploymentPage() {
               value="mobile"
               className="m-0 w-[320px] rounded-2xl mt-0"
             >
-              <PlayproofCaptcha
+              <Playproof
                 key={`mobile-${resetKey}`}
                 resetKey={resetKey}
-                gameType={getGameType(formState.type)}
-                borderRadius={formState.borderRadius}
-                spacing={formState.spacing}
-                fontFamily={formState.fontFamily}
-                primaryColor={formState.primaryColor}
-                secondaryColor={formState.secondaryColor}
-                backgroundColor={formState.backgroundColor}
-                surfaceColor={formState.surfaceColor}
-                textColor={formState.textColor}
-                textMutedColor={formState.textMutedColor}
-                accentColor={formState.accentColor}
-                successColor={formState.successColor}
-                errorColor={formState.errorColor}
-                borderColor={formState.borderColor}
+                gameId={formState.type}
+                theme={getPreviewTheme()}
                 onSuccess={handleSuccess}
                 onFailure={handleFailure}
               />

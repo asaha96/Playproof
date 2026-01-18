@@ -26,9 +26,8 @@ const brandingInput = v.object({
 
 const deploymentType = v.union(
   v.literal("bubble-pop"),
-  v.literal("golf"),
-  v.literal("basketball"),
-  v.literal("archery")
+  v.literal("archery"),
+  v.literal("osu")
 );
 
 export const list = query({
