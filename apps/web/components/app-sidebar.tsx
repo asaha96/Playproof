@@ -41,11 +41,6 @@ const navItems = [
     icon: Rocket,
   },
   {
-    title: "Observability",
-    href: "/dashboard/observability",
-    icon: Eye,
-  },
-  {
     title: "Developer",
     href: "/dashboard/developer",
     icon: Code,

@@ -32,7 +32,7 @@ export const DEFAULT_HOOKS: SDKHooks = {
 export const DEFAULT_CONFIG: PlayproofConfig = {
   containerId: 'playproof-container',
   theme: DEFAULT_THEME,
-  confidenceThreshold: 0.7,
+  confidenceThreshold: 0.3,
   gameDuration: null, // null = use game default, or specify ms
   gameId: 'bubble-pop', // 'bubble-pop', 'mini-golf', 'basketball', 'archery', or 'random'
   logTelemetry: false, // Set to true to console.log telemetry events (verbose)
