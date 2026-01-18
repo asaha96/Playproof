@@ -19,6 +19,7 @@ import { WoodwideClient, MockWoodwideClient } from "./woodwide.js";
 import { appConfig } from "../config.js";
 import { sessionQueue } from "./batch/queue.js";
 import { getSessionResult } from "./batch/inference.js";
+import { observability } from "./observability.js";
 
 // Initialize Woodwide client
 const woodwideClient = appConfig.woodwide.apiKey
@@ -226,20 +227,51 @@ export async function scoreSession(
         modelId: appConfig.woodwide.anomalyModelId,
         modelVersion: "v1",
       };
+      
+      // Log successful Woodwide inference
+      console.log(
+        JSON.stringify({
+          level: "INFO",
+          service: "scoring",
+          operation: "scoreSession",
+          sessionId: telemetry.sessionId,
+          modelId: appConfig.woodwide.anomalyModelId,
+          anomalyScore: result.anomalyScore,
+          isAnomaly: result.isAnomaly,
+          timestamp: new Date().toISOString(),
+          source: "woodwide",
+        })
+      );
     } catch (error) {
       // Fallback to heuristic-based scoring if Woodwide fails
-      // This is expected for single-session inference as Woodwide may require
-      // established datasets or batch processing
       const errorMessage = error instanceof Error ? error.message : String(error);
+      const isCreditError = errorMessage.includes("402") || errorMessage.includes("credit") || errorMessage.includes("token");
       
-      // Only log as warning (not error) since this is a known limitation
-      if (errorMessage.includes("Empty response")) {
-        console.warn(`[Scoring] Woodwide inference unavailable (dataset processing), using heuristic fallback`);
-      } else {
-        console.error("Woodwide inference failed, using fallback:", errorMessage);
-      }
+      // Track fallback with observability
+      const fallbackReason = isCreditError 
+        ? "woodwide_credits_exhausted"
+        : errorMessage.includes("Empty response")
+        ? "empty_response"
+        : "woodwide_api_error";
+      
+      observability.trackFallback(fallbackReason, error instanceof Error ? error : new Error(errorMessage));
       
       anomalyResult = createFallbackAnomalyResult(features, heuristics);
+      
+      // Log fallback with structured format
+      console.warn(
+        JSON.stringify({
+          level: "WARN",
+          service: "scoring",
+          operation: "scoreSession",
+          sessionId: telemetry.sessionId,
+          fallbackReason,
+          error: errorMessage,
+          timestamp: new Date().toISOString(),
+          source: "heuristic_fallback",
+          metrics: observability.getMetrics(),
+        })
+      );
     }
   } else {
     // Development: Use heuristic-based fallback

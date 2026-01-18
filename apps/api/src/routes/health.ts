@@ -1,9 +1,13 @@
 /**
  * Health check routes
+ * GET /health - Basic health check
+ * GET /ready - Readiness check
+ * GET /metrics - Woodwide observability metrics
  */
 
 import type { FastifyInstance } from "fastify";
 import { appConfig } from "../config.js";
+import { observability } from "../services/observability.js";
 
 export async function healthRoutes(fastify: FastifyInstance) {
   fastify.get("/health", async () => {
@@ -27,6 +31,17 @@ export async function healthRoutes(fastify: FastifyInstance) {
     return {
       ready: allReady,
       checks,
+    };
+  });
+
+  fastify.get("/metrics", async () => {
+    const metrics = observability.getMetrics();
+    return {
+      ...metrics,
+      successRate: observability.getSuccessRate(),
+      timestamp: new Date().toISOString(),
+      woodwideConfigured: !!appConfig.woodwide.anomalyModelId,
+      modelId: appConfig.woodwide.anomalyModelId || null,
     };
   });
 }

@@ -8,6 +8,7 @@
 import FormData from "form-data";
 import { request } from "undici";
 import type { TrainingStatus, DatasetUploadResult } from "@playproof/shared";
+import { observability } from "./observability.js";
 
 interface WoodwideConfig {
   apiKey: string;
@@ -114,8 +115,32 @@ export class WoodwideClient {
     const responseText = await body.text();
 
     if (statusCode < 200 || statusCode >= 300) {
-      throw new Error(`Dataset upload failed: ${statusCode} - ${responseText}`);
+      const error = new Error(`Dataset upload failed: ${statusCode} - ${responseText}`);
+      
+      // Track observability
+      const isCreditError = statusCode === 402 || responseText.includes("credit") || responseText.includes("token");
+      observability.trackCall(false, 0, error);
+      
+      // Log credit errors specifically
+      if (isCreditError) {
+        console.error(
+          JSON.stringify({
+            level: "ERROR",
+            service: "woodwide",
+            operation: "uploadDataset",
+            statusCode,
+            error: responseText,
+            timestamp: new Date().toISOString(),
+            message: "Woodwide credits exhausted - cannot upload dataset",
+          })
+        );
+      }
+      
+      throw error;
     }
+    
+    // Track successful upload
+    observability.trackCall(true, 0);
 
     const result = JSON.parse(responseText) as {
       id: string;
@@ -283,43 +308,84 @@ export class WoodwideClient {
     datasetName?: string,
     rowCount?: number
   ): Promise<InferenceResult[]> {
+    const startTime = performance.now();
+    
     // Try dataset_name first if provided, otherwise use dataset_id
     const queryParam = datasetName 
       ? `dataset_name=${encodeURIComponent(datasetName)}`
       : `dataset_id=${datasetId}`;
     const url = `${this.baseUrl}/api/models/anomaly/${modelId}/infer?${queryParam}&coerce_schema=${coerceSchema}`;
     
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "accept": "application/json",
-        "Authorization": `Bearer ${this.apiKey}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-    });
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "accept": "application/json",
+          "Authorization": `Bearer ${this.apiKey}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Inference failed: ${response.status} - ${errorText}`);
-    }
+      const responseTimeMs = performance.now() - startTime;
 
-    const responseText = await response.text();
+      if (!response.ok) {
+        const errorText = await response.text();
+        const error = new Error(`Inference failed: ${response.status} - ${errorText}`);
+        
+        // Track observability
+        const isCreditError = response.status === 402 || errorText.includes("credit") || errorText.includes("token");
+        observability.trackCall(false, responseTimeMs, error);
+        
+        // Log credit errors specifically
+        if (isCreditError) {
+          console.error(
+            JSON.stringify({
+              level: "ERROR",
+              service: "woodwide",
+              operation: "inferAnomaly",
+              statusCode: response.status,
+              error: errorText,
+              timestamp: new Date().toISOString(),
+              message: "Woodwide credits exhausted - cannot run inference",
+              modelId,
+              datasetName: datasetName || datasetId,
+            })
+          );
+        }
+        
+        throw error;
+      }
 
-    // Log for debugging (only in dev)
-    if (process.env.NODE_ENV === "development") {
-      console.log(`[Woodwide] Inference response: ${responseText.substring(0, 200)}`);
-    }
+      const responseText = await response.text();
 
-    // If empty response, this might mean:
-    // 1. Dataset is too small (Woodwide may require minimum rows)
-    // 2. Dataset needs more processing time
-    // 3. Dataset format doesn't match model expectations
-    if (!responseText || responseText.trim() === "") {
-      // For single-row or small datasets, return a neutral result instead of error
-      // This allows the system to fall back to heuristics gracefully
-      console.warn(`[Woodwide] Empty inference response - dataset may be too small or not yet processed`);
-      throw new Error(`Empty response from inference endpoint. This may indicate the dataset needs more rows or processing time.`);
-    }
+      // Log for debugging (only in dev)
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[Woodwide] Inference response: ${responseText.substring(0, 200)}`);
+      }
+
+      // If empty response, this might mean:
+      // 1. Dataset is too small (Woodwide may require minimum rows)
+      // 2. Dataset needs more processing time
+      // 3. Dataset format doesn't match model expectations
+      if (!responseText || responseText.trim() === "") {
+        // For single-row or small datasets, return a neutral result instead of error
+        // This allows the system to fall back to heuristics gracefully
+        const error = new Error(`Empty response from inference endpoint. This may indicate the dataset needs more rows or processing time.`);
+        observability.trackCall(false, responseTimeMs, error);
+        console.warn(
+          JSON.stringify({
+            level: "WARN",
+            service: "woodwide",
+            operation: "inferAnomaly",
+            message: "Empty inference response",
+            timestamp: new Date().toISOString(),
+            modelId,
+            datasetName: datasetName || datasetId,
+            rowCount,
+          })
+        );
+        throw error;
+      }
 
     // Parse response - Woodwide returns {anomalous_ids: number[]}
     let parsed: { anomalous_ids?: number[]; [key: string]: any };
@@ -357,27 +423,45 @@ export class WoodwideClient {
       
       // If no results (empty anomalous_ids and rowCount unknown), return single neutral result
       if (results.length === 0) {
-        return [{
+        const neutralResult = [{
           sessionId: "",
           anomalyScore: 1.0,
           isAnomaly: false,
         }];
+        observability.trackCall(true, responseTimeMs);
+        return neutralResult;
       }
+      
+      // Track successful inference
+      observability.trackCall(true, responseTimeMs);
       
       return results;
     }
 
     // Fallback: try to parse as array of results (if API changes format)
     if (Array.isArray(parsed)) {
-      return parsed.map((r: any) => ({
+      const results = parsed.map((r: any) => ({
         sessionId: r.session_id || r.sessionId || "",
         anomalyScore: r.anomaly_score || r.anomalyScore || 0,
         isAnomaly: r.is_anomaly || r.isAnomaly || false,
       }));
+      
+      // Track successful inference
+      observability.trackCall(true, responseTimeMs);
+      
+      return results;
     }
 
     // If we get here, the format is unexpected
-    throw new Error(`Unexpected inference response format: ${JSON.stringify(parsed).substring(0, 200)}`);
+    const error = new Error(`Unexpected inference response format: ${JSON.stringify(parsed).substring(0, 200)}`);
+    observability.trackCall(false, responseTimeMs, error);
+    throw error;
+    } catch (error) {
+      const responseTimeMs = performance.now() - startTime;
+      const err = error instanceof Error ? error : new Error(String(error));
+      observability.trackCall(false, responseTimeMs, err);
+      throw err;
+    }
   }
 
   /**

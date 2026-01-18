@@ -32,7 +32,6 @@ export async function batchRoutes(fastify: FastifyInstance) {
     try {
       const result = await processBatch();
       return {
-        success: true,
         ...result,
         message: `Processed ${result.processed} sessions`,
       };
