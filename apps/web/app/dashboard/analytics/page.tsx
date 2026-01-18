@@ -222,10 +222,11 @@ export default function AnalyticsPage() {
                   <Line
                     type="monotone"
                     dataKey="humans"
-                    stroke="var(--color-humans)"
+                    stroke="#ef4444"
                     strokeWidth={2}
-                    dot={{ r: 3, fill: "var(--color-humans)" }}
-                    activeDot={{ r: 5 }}
+                    strokeDasharray="5 5"
+                    dot={{ r: 3, fill: "#ef4444" }}
+                    activeDot={{ r: 5, fill: "#ef4444" }}
                   />
                   <Line
                     type="monotone"
