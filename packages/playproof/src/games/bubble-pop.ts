@@ -78,13 +78,17 @@ export class BubblePopGame {
   start(onComplete: (data: BehaviorData) => void): void {
     this.onComplete = onComplete;
     this.isRunning = true;
+    const startTime = Date.now();
     this.behaviorData = {
       mouseMovements: [],
       clickTimings: [],
       trajectories: [],
       hits: 0,
       misses: 0,
-      clickAccuracy: 0
+      clickAccuracy: 0,
+      startTime,
+      endTime: undefined,
+      durationMs: undefined,
     };
 
     // Clear game area
@@ -177,6 +181,12 @@ export class BubblePopGame {
     if (this.bubbleInterval) {
       clearInterval(this.bubbleInterval);
     }
+
+    const endTime = Date.now();
+    this.behaviorData.endTime = endTime;
+    this.behaviorData.durationMs = this.behaviorData.startTime
+      ? endTime - this.behaviorData.startTime
+      : 0;
 
     // Calculate click accuracy
     const totalClicks = this.behaviorData.hits + this.behaviorData.misses;

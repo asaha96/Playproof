@@ -95,6 +95,8 @@ export default function AnalyticsPage() {
     return `${id.slice(0, 4)}...${id.slice(-4)}`;
   };
 
+  const formatDuration = (durationMs: number) => `${(durationMs / 1000).toFixed(1)}s`;
+
   // Prepare time series chart data (hourly for last 24 hours)
   const chartData = timeSeriesData
     ? timeSeriesData.map((hour) => {
@@ -329,7 +331,7 @@ export default function AnalyticsPage() {
                 <TableRow>
                   <TableHead>Session</TableHead>
                   <TableHead>Deployment</TableHead>
-                  <TableHead>Score</TableHead>
+                  <TableHead>Duration</TableHead>
                   <TableHead>Result</TableHead>
                 </TableRow>
               </TableHeader>
@@ -341,19 +343,19 @@ export default function AnalyticsPage() {
                     </TableCell>
                     <TableCell>{session.deploymentName}</TableCell>
                     <TableCell>
-                      <span className="font-mono">{session.scorePercent}%</span>
+                      <span className="font-mono">{formatDuration(session.durationMs)}</span>
                     </TableCell>
                     <TableCell>
                       <Badge
-                        variant={session.result === "Human" ? "default" : "destructive"}
+                        variant={session.result === "human" ? "default" : "destructive"}
                         className="gap-1"
                       >
-                        {session.result === "Human" ? (
+                        {session.result === "human" ? (
                           <UserCheck className="size-3" />
                         ) : (
                           <Bot className="size-3" />
                         )}
-                        {session.result}
+                        {session.result === "human" ? "Human" : "Bot"}
                       </Badge>
                     </TableCell>
                   </TableRow>

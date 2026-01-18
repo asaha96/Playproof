@@ -1,10 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
-// Threshold for human classification - scores >= 60% are considered human
-// suspectScore represents human probability (0.0 = likely bot, 1.0 = likely human)
-const BOT_THRESHOLD = 0.6;
-
 const clientInfoInput = v.object({
   deviceType: v.optional(v.string()),
   deviceVendor: v.optional(v.string()),
@@ -34,6 +30,8 @@ const clientInfoInput = v.object({
   ),
 });
 
+const sessionResultInput = v.union(v.literal("human"), v.literal("bot"));
+
 export const recent = query({
   args: {
     limit: v.optional(v.number()),
@@ -52,13 +50,11 @@ export const recent = query({
         return {
           _id: session._id,
           deploymentId: session.deploymentId,
-          deploymentName: deployment?.name ?? "Unknown deployment",
-          suspectScore: session.suspectScore,
-          scorePercent: Math.round(session.suspectScore * 100),
+          deploymentName: session.deploymentName ?? deployment?.name ?? "Unknown deployment",
           startAt: session.startAt,
           endAt: session.endAt,
           durationMs: session.durationMs,
-          result: session.suspectScore < BOT_THRESHOLD ? "Bot" : "Human",
+          result: session.result,
         };
       })
     );
@@ -76,8 +72,8 @@ export const stats = query({
     const sessions = await ctx.db.query("sessions").collect();
 
     const totalSessions = sessions.length;
-    const humanSessions = sessions.filter((s) => s.suspectScore >= BOT_THRESHOLD).length;
-    const botDetections = sessions.filter((s) => s.suspectScore < BOT_THRESHOLD).length;
+    const humanSessions = sessions.filter((s) => s.result === "human").length;
+    const botDetections = sessions.filter((s) => s.result === "bot").length;
 
     const humanPassRate = totalSessions > 0 ? humanSessions / totalSessions : 0;
     const avgSessionMs =
@@ -96,7 +92,7 @@ export const stats = query({
         byDeployment[deploymentId] = { count: 0, passCount: 0 };
       }
       byDeployment[deploymentId].count++;
-      if (s.suspectScore >= BOT_THRESHOLD) {
+      if (s.result === "human") {
         byDeployment[deploymentId].passCount++;
       }
     }
@@ -125,9 +121,13 @@ export const stats = query({
  * Get time series data for the analytics component (24 hours, hourly granularity)
  */
 export const timeSeries = query({
-  args: { days: v.optional(v.float64()) },
+  args: { 
+    days: v.optional(v.float64()),
+    hours: v.optional(v.float64()), // Backwards compatibility
+  },
   handler: async (ctx, args) => {
-    const days = args.days ?? 1;
+    // Accept either days or hours (hours takes precedence if both provided)
+    const days = args.hours ? args.hours / 24 : (args.days ?? 1);
     const now = Date.now();
     const msPerHour = 60 * 60 * 1000;
     const hours = Math.round(days * 24);
@@ -156,7 +156,7 @@ export const timeSeries = query({
 
       const entry = hoursMap.get(hourStr)!;
       entry.total++;
-      if (s.suspectScore >= BOT_THRESHOLD) {
+      if (s.result === "human") {
         entry.humans++;
       } else {
         entry.bots++;
@@ -181,7 +181,7 @@ export const create = mutation({
     startAt: v.number(),
     endAt: v.number(),
     durationMs: v.number(),
-    suspectScore: v.number(),
+    result: sessionResultInput,
     clientInfo: v.optional(clientInfoInput),
   },
   handler: async (ctx, args) => {
@@ -192,10 +192,11 @@ export const create = mutation({
 
     const sessionId = await ctx.db.insert("sessions", {
       deploymentId: args.deploymentId,
+      deploymentName: deployment.name,
       startAt: args.startAt,
       endAt: args.endAt,
       durationMs: args.durationMs,
-      suspectScore: args.suspectScore,
+      result: args.result,
       clientInfo: args.clientInfo,
     });
 
@@ -220,7 +221,7 @@ export const createWithApiKey = mutation({
     startAt: v.number(),
     endAt: v.number(),
     durationMs: v.number(),
-    suspectScore: v.number(),
+    result: sessionResultInput,
   },
   handler: async (ctx, args) => {
     // Validate API key against users table
@@ -247,10 +248,11 @@ export const createWithApiKey = mutation({
     // Create the session
     const sessionId = await ctx.db.insert("sessions", {
       deploymentId: args.deploymentId,
+      deploymentName: deployment.name,
       startAt: args.startAt,
       endAt: args.endAt,
       durationMs: args.durationMs,
-      suspectScore: args.suspectScore,
+      result: args.result,
     });
 
     // Update deployment's session list
@@ -263,4 +265,3 @@ export const createWithApiKey = mutation({
     return { success: true, sessionId };
   },
 });
-

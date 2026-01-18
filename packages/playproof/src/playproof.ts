@@ -487,6 +487,9 @@ export class Playproof {
         reason: effectiveAgentDecision.reason,
       });
 
+      const sessionResult = agentResult.decision === "pass" ? "human" : "bot";
+      await this.reportSession(behaviorData, sessionResult);
+
       this.showResult({
         ...finalResult,
         score: agentResult.anomalyScore,
@@ -508,8 +511,12 @@ export class Playproof {
       behaviorData
     );
 
+    const sessionResult: "human" | "bot" = woodwideResult
+      ? (woodwideResult.decision === "pass" ? "human" : "bot")
+      : (result.passed ? "human" : "bot");
+
     // Report session to analytics backend
-    await this.reportSession(behaviorData, score);
+    await this.reportSession(behaviorData, sessionResult);
 
     // Use Woodwide result if available, otherwise use game's own result
     if (woodwideResult) {
@@ -557,13 +564,15 @@ export class Playproof {
   /**
    * Report session to the analytics backend
    */
-  private async reportSession(behaviorData: BehaviorData, suspectScore: number): Promise<void> {
+  private async reportSession(behaviorData: BehaviorData, result: "human" | "bot"): Promise<void> {
     try {
       const { PLAYPROOF_API_URL } = await import('./config');
 
-      const endAt = Date.now();
-      const durationMs = behaviorData.durationMs || 10000;
-      const startAt = endAt - durationMs;
+      const fallbackDuration = this.config.gameDuration ?? 10000;
+      const endAt = behaviorData.endTime ?? Date.now();
+      const startAt = behaviorData.startTime
+        ?? (behaviorData.durationMs ? endAt - behaviorData.durationMs : endAt - fallbackDuration);
+      const durationMs = behaviorData.durationMs ?? Math.max(0, endAt - startAt);
 
       const requestBody = {
         path: 'sessions:createWithApiKey',
@@ -574,7 +583,7 @@ export class Playproof {
           startAt,
           endAt,
           durationMs,
-          suspectScore,
+          result,
         },
       };
 
@@ -593,10 +602,10 @@ export class Playproof {
         return;
       }
 
-      const result = await response.json();
+      const responseBody = await response.json();
 
-      if (result.errorMessage) {
-        console.warn('[Playproof] Failed to report session:', result.errorMessage);
+      if (responseBody.errorMessage) {
+        console.warn('[Playproof] Failed to report session:', responseBody.errorMessage);
         return;
       }
 

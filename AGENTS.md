@@ -258,6 +258,7 @@ git pull --ff-only
   - `realtime.ts`: Active attempts registry, token minting queries/mutations
   - `livekit.ts`: LiveKit token minting actions (Node.js runtime)
   - `activeAttempts` table: Tracks verification attempts with results
+  - `sessions` table: Records verification sessions with start/end, duration, deployment name, and human/bot result
 
 ### LiveKit Telemetry Transport
 
@@ -278,4 +279,4 @@ LIVEKIT_API_SECRET=xxx
 
 ---
 
-*Last updated: Registry preserves null gameDuration for agent-controlled sessions*
+*Last updated: Sessions record human/bot result with start/end timing and deployment name*
