@@ -157,7 +157,7 @@ export default function TestPCGPage() {
                             <CardContent className="space-y-4">
                                 <div className="space-y-2">
                                     <Label>Model</Label>
-                                    <Select value={selectedModel} onValueChange={(v: string) => v && setSelectedModel(v)}>
+                                    <Select value={selectedModel} onValueChange={(v: string | null) => v && setSelectedModel(v)}>
                                         <SelectTrigger>
                                             <SelectValue placeholder="Select model" />
                                         </SelectTrigger>
@@ -178,7 +178,7 @@ export default function TestPCGPage() {
 
                                 <div className="space-y-2">
                                     <Label>Difficulty</Label>
-                                    <Select value={difficulty} onValueChange={(v: string) => v && setDifficulty(v)}>
+                                    <Select value={difficulty} onValueChange={(v: string | null) => v && setDifficulty(v)}>
                                         <SelectTrigger>
                                             <SelectValue />
                                         </SelectTrigger>
