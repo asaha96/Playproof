@@ -12,6 +12,10 @@ export const DEFAULT_BRANDING: Required<BrandingConfig> = {
   typography: "Nunito Sans",
 };
 
+/**
+ * Resolves the branding configuration by merging the user's custom settings
+ * with the default configuration.
+ */
 export function resolveBranding(
   overrides?: BrandingConfig
 ): Required<BrandingConfig> {

@@ -1,39 +1,8 @@
 import { mutation, query } from "./_generated/server";
 
 /**
- * Get the current authenticated user's data.
- * Returns null if not authenticated or user doesn't exist in DB yet.
- */
-export const viewer = query({
-  args: {},
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      return null;
-    }
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerkSubject", (q) => q.eq("clerkSubject", identity.subject))
-      .unique();
-
-    return user;
-  },
-});
-
-/**
- * Check if the current user is authenticated (has valid Clerk session).
- */
-export const isAuthenticated = query({
-  args: {},
-  handler: async (ctx) => {
-    return (await ctx.auth.getUserIdentity()) !== null;
-  },
-});
-
-/**
- * Upsert (create or update) the current user in the database.
- * Call this after sign-in to ensure the user exists in Convex.
+ * Upsert the current authenticated user into the users table.
+ * This is called when a user signs in via Clerk.
  */
 export const upsertViewer = mutation({
   args: {},
@@ -61,6 +30,9 @@ export const upsertViewer = mutation({
       if (identity.pictureUrl && identity.pictureUrl !== existingUser.imageUrl) {
         updates.imageUrl = identity.pictureUrl;
       }
+      if (identity.email && identity.email !== existingUser.email) {
+        updates.email = identity.email;
+      }
 
       if (Object.keys(updates).length > 1) {
         await ctx.db.patch(existingUser._id, updates);
@@ -80,5 +52,25 @@ export const upsertViewer = mutation({
     });
 
     return userId;
+  },
+});
+
+/**
+ * Get the current authenticated user
+ */
+export const viewer = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return null;
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkSubject", (q) => q.eq("clerkSubject", identity.subject))
+      .unique();
+
+    return user;
   },
 });

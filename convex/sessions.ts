@@ -65,36 +65,108 @@ export const recent = query({
   },
 });
 
+/**
+ * Get aggregated statistics for the analytics dashboard
+ */
 export const stats = query({
   args: {},
   handler: async (ctx) => {
     const sessions = await ctx.db.query("sessions").collect();
 
-    if (sessions.length === 0) {
-      return {
-        totalSessions: 0,
-        humanPassRate: 0,
-        botDetections: 0,
-        avgSessionMs: 0,
+    const totalSessions = sessions.length;
+    const humanSessions = sessions.filter((s) => s.suspectScore < BOT_THRESHOLD).length;
+    const botDetections = sessions.filter((s) => s.suspectScore >= BOT_THRESHOLD).length;
+
+    const humanPassRate = totalSessions > 0 ? humanSessions / totalSessions : 0;
+    const avgSessionMs =
+      totalSessions > 0
+        ? sessions.reduce((acc, s) => acc + s.durationMs, 0) / totalSessions
+        : 0;
+
+    const completionRate = humanPassRate;
+
+    // Aggregate by deployment
+    const byDeployment: Record<string, { count: number; passCount: number }> = {};
+
+    for (const s of sessions) {
+      const deploymentId = s.deploymentId.toString();
+      if (!byDeployment[deploymentId]) {
+        byDeployment[deploymentId] = { count: 0, passCount: 0 };
+      }
+      byDeployment[deploymentId].count++;
+      if (s.suspectScore < BOT_THRESHOLD) {
+        byDeployment[deploymentId].passCount++;
+      }
+    }
+
+    // Format byDeployment for frontend
+    const byDeploymentFormatted: Record<string, { count: number; passRate: number }> = {};
+    for (const [deploymentId, data] of Object.entries(byDeployment)) {
+      byDeploymentFormatted[deploymentId] = {
+        count: data.count,
+        passRate: data.count > 0 ? data.passCount / data.count : 0,
       };
     }
 
-    const botDetections = sessions.filter(
-      (session) => session.suspectScore >= BOT_THRESHOLD
-    ).length;
-    const humanPassRate =
-      (sessions.length - botDetections) / sessions.length;
-    const totalDuration = sessions.reduce(
-      (sum, session) => sum + session.durationMs,
-      0
-    );
-
     return {
-      totalSessions: sessions.length,
+      totalSessions,
       humanPassRate,
       botDetections,
-      avgSessionMs: totalDuration / sessions.length,
+      avgSessionMs,
+      completionRate,
+      byDeployment: byDeploymentFormatted,
     };
+  },
+});
+
+/**
+ * Get time series data for the analytics component
+ */
+export const timeSeries = query({
+  args: { days: v.number() },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const startTime = now - args.days * msPerDay;
+
+    const sessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_startAt")
+      .filter((q) => q.gte(q.field("startAt"), startTime))
+      .collect();
+
+    // Group by day
+    const daysMap = new Map<string, { humans: number; bots: number; total: number }>();
+
+    // Initialize all days to 0 to ensure continuous line
+    for (let i = 0; i < args.days; i++) {
+      const date = new Date(now - i * msPerDay);
+      const dateStr = date.toISOString().split("T")[0];
+      daysMap.set(dateStr, { humans: 0, bots: 0, total: 0 });
+    }
+
+    for (const s of sessions) {
+      const dateStr = new Date(s.startAt).toISOString().split("T")[0];
+      if (!daysMap.has(dateStr)) continue;
+
+      const entry = daysMap.get(dateStr)!;
+      entry.total++;
+      if (s.suspectScore < BOT_THRESHOLD) {
+        entry.humans++;
+      } else {
+        entry.bots++;
+      }
+    }
+
+    // Convert map to sorted array
+    const result = Array.from(daysMap.entries())
+      .map(([date, data]) => ({
+        date,
+        ...data,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return result;
   },
 });
 
