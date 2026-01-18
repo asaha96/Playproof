@@ -410,10 +410,8 @@ export class Playproof {
    * Evaluate game results
    */
   private async evaluateResult(behaviorData: BehaviorData): Promise<void> {
-    // Call telemetry hook if available
-    if (this.config.hooks?.onTelemetryBatch) {
-      this.config.hooks.onTelemetryBatch(behaviorData);
-    }
+    // Note: Telemetry is now sent via the TelemetrySink abstraction in base-game.ts
+    // The hook is called in real-time during the game, not here at the end
 
     // Wait a bit for Woodwide result if available
     let woodwideResult = this.config.woodwideResult;

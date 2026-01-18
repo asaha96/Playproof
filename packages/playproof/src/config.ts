@@ -3,7 +3,7 @@
  * Default values and configuration handling
  */
 
-import type { PlayproofTheme, PlayproofConfig, SDKHooks } from './types';
+import type { PlayproofTheme, PlayproofConfig, SDKHooks, TelemetryTransportConfig } from './types';
 
 /**
  * Hardcoded Playproof API URL - end users don't need to configure this
@@ -29,6 +29,16 @@ export const DEFAULT_HOOKS: SDKHooks = {
   regenerate: null
 };
 
+/**
+ * Default telemetry transport configuration
+ * LiveKit is enabled by default when apiKey and deploymentId are provided
+ */
+export const DEFAULT_TELEMETRY_TRANSPORT: TelemetryTransportConfig = {
+  livekit: {
+    enabled: true  // Default to true - use LiveKit when credentials are present
+  }
+};
+
 export const DEFAULT_CONFIG: PlayproofConfig = {
   containerId: 'playproof-container',
   theme: DEFAULT_THEME,
@@ -39,6 +49,8 @@ export const DEFAULT_CONFIG: PlayproofConfig = {
   // API credentials for fetching deployment branding
   apiKey: null,
   deploymentId: null,
+  // Telemetry transport - LiveKit enabled by default
+  telemetryTransport: DEFAULT_TELEMETRY_TRANSPORT,
   onSuccess: null,
   onFailure: null,
   onStart: null,
@@ -60,11 +72,19 @@ export function mergeConfig(userConfig: Partial<PlayproofConfig> = {}): Playproo
     ...(userConfig.hooks || {})
   };
 
+  const telemetryTransport: TelemetryTransportConfig = {
+    livekit: {
+      ...DEFAULT_TELEMETRY_TRANSPORT.livekit,
+      ...(userConfig.telemetryTransport?.livekit || {})
+    }
+  };
+
   return {
     ...DEFAULT_CONFIG,
     ...userConfig,
     theme,
-    hooks
+    hooks,
+    telemetryTransport
   };
 }
 

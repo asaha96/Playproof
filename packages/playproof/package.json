@@ -33,7 +33,8 @@
     "url": ""
   },
   "dependencies": {
-    "@playproof/shared": "*"
+    "@playproof/shared": "*",
+    "livekit-client": "^2.13.1"
   },
   "devDependencies": {
     "@types/three": "^0.182.0",

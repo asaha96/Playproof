@@ -140,12 +140,35 @@ export interface PlayproofConfig {
      * Copy this from the ID column in the Deployments table.
      */
     deploymentId: string | null;
+    /**
+     * Telemetry transport configuration.
+     * When livekit.enabled is true (default), telemetry is streamed to LiveKit in addition to hooks.
+     * When false, only the original hooks.onTelemetryBatch is used.
+     */
+    telemetryTransport: TelemetryTransportConfig;
     onSuccess: ((result: VerificationResult) => void) | null;
     onFailure: ((result: VerificationResult) => void) | null;
     onStart: (() => void) | null;
     onProgress: ((progress: number) => void) | null;
     hooks: SDKHooks;
     woodwideResult?: { decision: "pass" | "review" | "fail"; anomalyScore: number } | null;
+}
+
+/**
+ * Configuration for telemetry transport
+ */
+export interface TelemetryTransportConfig {
+    /**
+     * LiveKit transport configuration
+     */
+    livekit: {
+        /**
+         * Enable LiveKit telemetry streaming.
+         * When true, telemetry is published to LiveKit rooms for real-time observation.
+         * Default: true (when apiKey and deploymentId are provided)
+         */
+        enabled: boolean;
+    };
 }
 
 export interface SDKHooks {
