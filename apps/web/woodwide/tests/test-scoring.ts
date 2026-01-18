@@ -3,7 +3,7 @@
  * Run with: npx tsx test-scoring.ts
  */
 
-const API_URL = process.env.API_URL || "http://localhost:3002";
+const API_URL = process.env.API_URL || "http://localhost:3000";
 
 /**
  * Generate realistic human-like movement data

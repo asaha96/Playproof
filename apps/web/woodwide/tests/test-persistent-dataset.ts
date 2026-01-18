@@ -2,15 +2,24 @@
  * Test Persistent Dataset Implementation
  */
 
-import { WoodwideClient } from "./src/services/woodwide.js";
-import { appConfig } from "./src/config.js";
-import { extractFeatures, featuresToCsv } from "./src/lib/features.js";
 import type { SessionTelemetry } from "@playproof/shared";
+import { config } from "dotenv";
+import { WoodwideClient } from "../../server/services/woodwide";
+import { extractFeatures, featuresToCsv } from "../../server/lib/features";
 
-const woodwideClient = new WoodwideClient(
-  appConfig.woodwide.apiKey,
-  appConfig.woodwide.baseUrl
-);
+config({ path: "../../../../.env.local" });
+
+const API_KEY = process.env.WOODWIDE_API_KEY ?? "";
+const BASE_URL = process.env.WOODWIDE_BASE_URL ?? "https://beta.woodwide.ai";
+const MODEL_ID = process.env.ANOMALY_MODEL_ID ?? "";
+const PERSISTENT_DATASET = process.env.WOODWIDE_PERSISTENT_DATASET ?? "movement_live_inference";
+
+if (!API_KEY || !MODEL_ID) {
+  console.error("❌ Missing WOODWIDE_API_KEY or ANOMALY_MODEL_ID");
+  process.exit(1);
+}
+
+const woodwideClient = new WoodwideClient(API_KEY, BASE_URL);
 
 async function testPersistentDataset() {
   console.log("🧪 Testing Persistent Dataset Implementation\n");
@@ -39,7 +48,7 @@ async function testPersistentDataset() {
   console.log("1. Testing ensurePersistentDataset...");
   try {
     const dataset = await woodwideClient["ensurePersistentDataset"](
-      appConfig.woodwide.persistentDatasetName,
+      PERSISTENT_DATASET,
       csvData
     );
     console.log(`   ✅ Dataset: ${dataset.datasetName} (${dataset.rowCount} rows, ID: ${dataset.datasetId})`);
@@ -52,7 +61,7 @@ async function testPersistentDataset() {
   try {
     // Test inference on the training dataset directly (which we know exists)
     const results = await woodwideClient["inferAnomaly"](
-      appConfig.woodwide.anomalyModelId!,
+      MODEL_ID,
       "",
       true,
       "movement_human_train"
@@ -68,10 +77,10 @@ async function testPersistentDataset() {
   console.log("\n3. Testing scoreSession with persistent dataset...");
   try {
     const result = await woodwideClient.scoreSession(
-      appConfig.woodwide.anomalyModelId!,
+      MODEL_ID,
       telemetry.sessionId,
       csvData,
-      appConfig.woodwide.persistentDatasetName
+      PERSISTENT_DATASET
     );
     console.log(`   ✅ Result:`);
     console.log(`      - Anomaly Score: ${result.anomalyScore}`);

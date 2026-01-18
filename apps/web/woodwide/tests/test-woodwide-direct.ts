@@ -3,12 +3,12 @@
  * Tests if we can upload a dataset and run inference
  */
 
-import { WoodwideClient } from "./src/services/woodwide.js";
-import { extractFeatures, featuresToCsv } from "./src/lib/features.js";
+import { WoodwideClient } from "../../server/services/woodwide";
+import { extractFeatures, featuresToCsv } from "../../server/lib/features";
 import type { SessionTelemetry } from "@playproof/shared";
 import { config } from "dotenv";
 
-config({ path: "../../.env.local" });
+config({ path: "../../../../.env.local" });
 
 const API_KEY = process.env.WOODWIDE_API_KEY || "";
 const BASE_URL = process.env.WOODWIDE_BASE_URL || "https://beta.woodwide.ai";

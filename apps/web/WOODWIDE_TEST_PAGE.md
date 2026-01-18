@@ -35,13 +35,13 @@ Each test:
 ## API Configuration
 
 The page connects to the API at:
-- Default: `http://localhost:3002`
+- Default: same origin (`/api/v1/...`)
 - Configurable via `NEXT_PUBLIC_API_URL` environment variable
 
 To configure:
 ```bash
 # In apps/web/.env.local
-NEXT_PUBLIC_API_URL=http://localhost:3002
+NEXT_PUBLIC_API_URL=http://localhost:3000
 ```
 
 ## Usage

@@ -8,8 +8,8 @@
  * or use the Python SDK if available.
  */
 
-import { extractFeatures, featuresToCsv } from "./src/lib/features.js";
-import type { SessionTelemetry } from "@playproof/shared";
+import { extractFeatures, featuresToCsv } from "../../server/lib/features";
+import type { SessionTelemetry, TelemetryClick } from "@playproof/shared";
 import { writeFileSync } from "fs";
 import { join } from "path";
 
@@ -20,8 +20,8 @@ function generateHumanMovement(
   durationMs: number = 10000,
   startX: number = 100,
   startY: number = 100
-): Array<{ x: number; y: number; timestamp: number }> {
-  const movements: Array<{ x: number; y: number; timestamp: number }> = [];
+): Array<{ x: number; y: number; timestamp: number; isTrusted: boolean }> {
+  const movements: Array<{ x: number; y: number; timestamp: number; isTrusted: boolean }> = [];
   let x = startX;
   let y = startY;
   let timestamp = 0;
@@ -44,7 +44,7 @@ function generateHumanMovement(
     const timingVariation = (Math.random() - 0.5) * 5;
     timestamp += baseInterval + timingVariation + pause;
 
-    movements.push({ x, y, timestamp });
+    movements.push({ x, y, timestamp, isTrusted: true });
   }
 
   return movements;
@@ -58,7 +58,7 @@ function generateTrainingSession(
   const durationMs = 5000 + Math.random() * 10000;
   const movements = generateHumanMovement(durationMs);
 
-  const clicks = [];
+  const clicks: TelemetryClick[] = [];
   const numClicks = 3 + Math.floor(Math.random() * 7);
   let hits = 0;
   let misses = 0;
@@ -151,7 +151,7 @@ async function main() {
   console.log("   2. Or use the Python SDK:");
   console.log(`      python -c "from woodwide import WoodWide; import pandas as pd; client = WoodWide(api_key='YOUR_KEY'); df = pd.read_csv('${filename}'); client.api.datasets.upload(file=df, name='movement_human_train')"`);
   console.log("   3. Train the model:");
-  console.log(`      curl -X POST http://localhost:3002/api/v1/training/start \\`);
+  console.log(`      curl -X POST http://localhost:3000/api/v1/training/start \\`);
   console.log(`        -H "Content-Type: application/json" \\`);
   console.log(`        -d '{"datasetName": "movement_human_train", "modelName": "movement_anomaly_v1", "modelType": "anomaly"}'`);
   console.log("\n✨ Done!");

@@ -8,24 +8,24 @@ The batch inference system allows PlayProof to process multiple verification ses
 
 ### Components
 
-1. **Session Queue** (`src/services/batch/queue.ts`)
+1. **Session Queue** (`apps/web/server/services/batch/queue.ts`)
    - In-memory queue for sessions awaiting batch processing
    - Tracks processed/unprocessed sessions
    - Stores results for retrieval
 
-2. **Batch Inference Service** (`src/services/batch/inference.ts`)
+2. **Batch Inference Service** (`apps/web/server/services/batch/inference.ts`)
    - Collects queued sessions
    - Builds CSV dataset with multiple sessions
    - Uploads to Woodwide
    - Runs batch inference
    - Maps results back to session IDs
 
-3. **Batch Scheduler** (`src/services/batch/scheduler.ts`)
+3. **Batch Scheduler** (`apps/web/server/services/batch/scheduler.ts`)
    - Background job that periodically processes batches
    - Configurable intervals and batch sizes
    - Automatic cleanup of old processed sessions
 
-4. **API Routes** (`src/routes/batch.ts`)
+4. **API Routes** (`apps/web/app/api/v1/batch`)
    - `/api/v1/batch/stats` - Get queue and scheduler status
    - `/api/v1/batch/process` - Manually trigger batch processing
    - `/api/v1/batch/result/:sessionId` - Get result for a session
@@ -38,7 +38,7 @@ The batch inference system allows PlayProof to process multiple verification ses
 
 ### Automatic Batch Processing
 
-The scheduler starts automatically when the API server starts. It:
+The scheduler can be started via the API and then:
 - Checks every 30 seconds for queued sessions
 - Processes batches when:
   - At least 10 sessions are queued, OR
@@ -48,13 +48,16 @@ The scheduler starts automatically when the API server starts. It:
 
 ```bash
 # Trigger batch processing manually
-curl -X POST http://localhost:3002/api/v1/batch/process
+curl -X POST http://localhost:3000/api/v1/batch/process
+
+# Start the scheduler
+curl -X POST http://localhost:3000/api/v1/batch/scheduler/start
 
 # Check queue status
-curl http://localhost:3002/api/v1/batch/stats
+curl http://localhost:3000/api/v1/batch/stats
 
 # Get result for a session
-curl http://localhost:3002/api/v1/batch/result/test_session_123
+curl http://localhost:3000/api/v1/batch/result/test_session_123
 ```
 
 ### Using Batch Mode in Scoring
@@ -62,7 +65,7 @@ curl http://localhost:3002/api/v1/batch/result/test_session_123
 The scoring service supports batch mode:
 
 ```typescript
-import { scoreSession } from "./services/scoring.js";
+import { scoreSession } from "@/server/services/scoring";
 
 // Queue for batch processing (returns heuristic result immediately)
 const result = await scoreSession(telemetry, { useBatch: true });
@@ -73,7 +76,7 @@ const batchResult = getSessionResult(telemetry.sessionId);
 
 ## Configuration
 
-Default settings (in `src/services/batch/scheduler.ts`):
+Default settings (in `apps/web/server/services/batch/scheduler.ts`):
 - **Interval**: 30 seconds
 - **Min Batch Size**: 10 sessions
 - **Max Wait Time**: 5 minutes
@@ -105,7 +108,7 @@ Default settings (in `src/services/batch/scheduler.ts`):
 
 ```bash
 # Run batch inference test
-cd apps/api
+cd apps/web/woodwide/tests
 npx tsx test-batch.ts
 ```
 
