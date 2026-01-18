@@ -21,8 +21,10 @@ import { sessionQueue } from "@/server/services/batch/queue";
 import { getSessionResult } from "@/server/services/batch/inference";
 import { observability } from "@/server/services/observability";
 
-// Initialize Woodwide client
-const woodwideClient = appConfig.woodwide.apiKey
+// Initialize Woodwide client with rotating keys support
+const woodwideClient = appConfig.woodwide.apiKeys.length > 0
+  ? new WoodwideClient(appConfig.woodwide.apiKeys.length > 1 ? appConfig.woodwide.apiKeys : appConfig.woodwide.apiKeys[0], appConfig.woodwide.baseUrl)
+  : appConfig.woodwide.apiKey
   ? new WoodwideClient(appConfig.woodwide.apiKey, appConfig.woodwide.baseUrl)
   : new MockWoodwideClient();
 

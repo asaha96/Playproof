@@ -9,7 +9,7 @@ import type { SessionTelemetry, ScoringResponse } from "@playproof/shared";
 
 interface ScoreRequestBody {
   sessionId: string;
-  gameType: "bubble-pop" | "archery" | "mini-golf";
+  gameType: "bubble-pop" | "osu" | "snake";
   deviceType: "mouse" | "touch" | "trackpad";
   durationMs: number;
   movements: Array<{ x: number; y: number; timestamp: number }>;

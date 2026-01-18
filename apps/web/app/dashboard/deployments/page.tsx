@@ -36,13 +36,12 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { DEFAULT_BRANDING } from "@/convex/branding";
 
-type DeploymentType = "bubble-pop" | "golf" | "basketball" | "archery";
+type DeploymentType = "bubble-pop" | "osu" | "snake";
 
 const deploymentTypes: Array<{ value: DeploymentType; label: string }> = [
   { value: "bubble-pop", label: "Bubble Pop" },
-  { value: "golf", label: "Golf" },
-  { value: "basketball", label: "Basketball" },
-  { value: "archery", label: "Archery" },
+  { value: "osu", label: "OSU" },
+  { value: "snake", label: "Snake" },
 ];
 
 const getTypeLabel = (type: DeploymentType) =>
@@ -185,7 +184,7 @@ export default function DeploymentsPage() {
                 <span>ID</span>
                 <span>Name</span>
                 <span>Type</span>
-                <span>Branding</span>
+                <span>Colors</span>
                 <span>Updated</span>
                 <span className="sr-only">Actions</span>
               </div>
@@ -214,11 +213,10 @@ export default function DeploymentsPage() {
                   </div>
                   <div className="flex items-start gap-3">
                     <span
-                      className={`mt-1 size-2 rounded-full ${
-                        deployment.isActive
-                          ? "bg-primary"
-                          : "bg-muted-foreground"
-                      }`}
+                      className={`mt-1 size-2 rounded-full ${deployment.isActive
+                        ? "bg-primary"
+                        : "bg-muted-foreground"
+                        }`}
                       aria-hidden="true"
                     />
                     <div className="min-w-0 space-y-1">

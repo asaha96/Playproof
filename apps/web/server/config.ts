@@ -14,7 +14,9 @@ export const appConfig = {
 
   // Woodwide ML Platform
   woodwide: {
-    apiKey: process.env.WOODWIDE_API_KEY ?? "",
+    // Support rotating API keys (comma-separated) or single key
+    apiKeys: (process.env.WOODWIDE_API_KEYS || process.env.WOODWIDE_API_KEY || "").split(",").map(k => k.trim()).filter(k => k),
+    apiKey: process.env.WOODWIDE_API_KEY ?? "", // Fallback for single key
     baseUrl: process.env.WOODWIDE_BASE_URL ?? "https://beta.woodwide.ai",
     anomalyModelId: process.env.ANOMALY_MODEL_ID ?? "",
     persistentDatasetName: process.env.WOODWIDE_PERSISTENT_DATASET ?? "movement_live_inference",

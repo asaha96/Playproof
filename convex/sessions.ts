@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
-const BOT_THRESHOLD = 0.5;
+const BOT_THRESHOLD = 0.3;
 
 const clientInfoInput = v.object({
   deviceType: v.optional(v.string()),

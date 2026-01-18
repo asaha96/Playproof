@@ -97,7 +97,7 @@ export type PlayproofUserConfig = Partial<Omit<PlayproofConfig, 'theme'>> & {
 export type VerificationDecision = 'pass' | 'review' | 'fail';
 
 /** Game types for scoring */
-export type GameType = 'bubble-pop' | 'archery' | 'mini-golf' | 'unknown';
+export type GameType = 'bubble-pop' | 'osu' | 'snake' | 'unknown';
 
 /** Device types for scoring */
 export type DeviceType = 'mouse' | 'touch' | 'trackpad' | 'stylus' | 'unknown';

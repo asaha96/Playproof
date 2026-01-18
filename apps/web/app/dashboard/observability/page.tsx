@@ -18,10 +18,8 @@ import { Playproof, type PointerTelemetryEvent } from "playproof/react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const MAX_EVENTS = 1000; // Cap to prevent memory issues
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
-const apiUrl = (path: string) => `${API_BASE}${path}`;
 
-interface WoodwideResult {
+interface HeuristicResult {
   sessionId: string;
   decision: "pass" | "review" | "fail";
   confidence: number;
@@ -55,8 +53,8 @@ export default function ObservabilityPage() {
     dragDistance: 0,
   });
 
-  // Woodwide classification result
-  const [woodwideResult, setWoodwideResult] = useState<WoodwideResult | null>(null);
+  // Heuristic classification result
+  const [heuristicResult, setHeuristicResult] = useState<HeuristicResult | null>(null);
   const [isScoring, setIsScoring] = useState(false);
   
   // Refs for scroll and drag calculation
@@ -118,7 +116,81 @@ export default function ObservabilityPage() {
     setDisplayEvents([...eventsRef.current].slice(-100).reverse());
   }, []);
 
-  // Handle telemetry data when game completes
+  // Heuristic scoring function - runs locally without API calls
+  const calculateHeuristicScore = useCallback((data: {
+    mouseMovements: Array<{ x: number; y: number; timestamp: number }>;
+    clickTimings: number[];
+    clickAccuracy: number;
+  }): number => {
+    let totalScore = 0;
+    let weightSum = 0;
+    
+    // Mouse movement analysis (30% weight)
+    if (data.mouseMovements && data.mouseMovements.length > 0) {
+      const movements = data.mouseMovements;
+      let variance = 0;
+      let speed = 0;
+      
+      for (let i = 1; i < movements.length; i++) {
+        const dx = movements[i].x - movements[i - 1].x;
+        const dy = movements[i].y - movements[i - 1].y;
+        const dt = movements[i].timestamp - movements[i - 1].timestamp;
+        
+        if (dt > 0) {
+          speed += Math.sqrt(dx * dx + dy * dy) / dt;
+          if (i > 1) {
+            const prevDx = movements[i - 1].x - movements[i - 2].x;
+            const prevDy = movements[i - 1].y - movements[i - 2].y;
+            const angleChange = Math.abs(Math.atan2(dy, dx) - Math.atan2(prevDy, prevDx));
+            variance += angleChange;
+          }
+        }
+      }
+      
+      const avgVariance = variance / Math.max(1, movements.length - 2);
+      const avgSpeed = speed / Math.max(1, movements.length - 1);
+      const varianceScore = Math.min(1, avgVariance / 0.5);
+      const speedScore = avgSpeed > 0.01 && avgSpeed < 5 ? 0.8 : 0.3;
+      const movementScore = varianceScore * 0.6 + speedScore * 0.4;
+      totalScore += movementScore * 0.3;
+      weightSum += 0.3;
+    }
+    
+    // Click timing analysis (30% weight)
+    if (data.clickTimings && data.clickTimings.length > 1) {
+      const intervals: number[] = [];
+      for (let i = 1; i < data.clickTimings.length; i++) {
+        intervals.push(data.clickTimings[i] - data.clickTimings[i - 1]);
+      }
+      const mean = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+      const varianceVal = intervals.reduce((sum, t) => sum + Math.pow(t - mean, 2), 0) / intervals.length;
+      const stdDev = Math.sqrt(varianceVal);
+      const cv = mean > 0 ? stdDev / mean : 0;
+      
+      let timingScore = 0.6;
+      if (cv < 0.1) timingScore = 0.2;
+      else if (cv > 1.5) timingScore = 0.4;
+      else if (cv >= 0.2 && cv <= 0.8) timingScore = 0.9;
+      
+      totalScore += timingScore * 0.3;
+      weightSum += 0.3;
+    }
+    
+    // Click accuracy analysis (20% weight)
+    if (data.clickAccuracy !== undefined) {
+      let accuracyScore = 0.6;
+      if (data.clickAccuracy >= 0.98) accuracyScore = 0.5;
+      else if (data.clickAccuracy < 0.3) accuracyScore = 0.3;
+      else if (data.clickAccuracy >= 0.6 && data.clickAccuracy <= 0.95) accuracyScore = 0.9;
+      
+      totalScore += accuracyScore * 0.2;
+      weightSum += 0.2;
+    }
+    
+    return weightSum > 0 ? totalScore / weightSum : 0;
+  }, []);
+
+  // Handle telemetry data when game completes - use heuristic model (no API calls)
   const handleTelemetry = useCallback(async (telemetry: {
     movements: Array<{ x: number; y: number; timestamp: number }>;
     clicks: Array<{ x: number; y: number; timestamp: number; targetHit: boolean }>;
@@ -131,51 +203,55 @@ export default function ObservabilityPage() {
     }
 
     setIsScoring(true);
-    setWoodwideResult(null);
+    setHeuristicResult(null);
 
     try {
-      const response = await fetch(apiUrl("/api/v1/score"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          sessionId: `obs_${Date.now()}`,
-          gameType: "bubble-pop",
-          deviceType: "mouse",
-          durationMs: telemetry.durationMs,
-          movements: telemetry.movements,
-          clicks: telemetry.clicks,
-          hits: telemetry.hits,
-          misses: telemetry.misses,
-        }),
-      });
+      // Convert telemetry to format expected by heuristic scorer
+      const behaviorData = {
+        mouseMovements: telemetry.movements,
+        clickTimings: telemetry.clicks.map(c => c.timestamp),
+        clickAccuracy: telemetry.hits / Math.max(1, telemetry.hits + telemetry.misses),
+      };
 
-      if (response.ok) {
-        const data: WoodwideResult = await response.json();
-        setWoodwideResult(data);
-        console.log("[Observability] Woodwide classification:", {
-          decision: data.decision,
-          anomalyScore: data.anomaly.anomalyScore,
-          isAnomaly: data.anomaly.isAnomaly,
-          classification: data.decision === "pass" ? "HUMAN" : "BOT",
-        });
-        
-        return {
-          decision: data.decision,
-          anomalyScore: data.anomaly.anomalyScore || 0,
-        };
-      } else {
-        console.error("[Observability] Woodwide scoring failed:", response.status);
-        return null;
-      }
+      // Calculate confidence score using heuristic model
+      const confidenceScore = calculateHeuristicScore(behaviorData);
+      const threshold = 0.7; // Default confidence threshold
+      const passed = confidenceScore >= threshold;
+      
+      // Convert to HeuristicResult format for display consistency
+      const result: HeuristicResult = {
+        sessionId: `obs_${Date.now()}`,
+        decision: passed ? "pass" : "fail",
+        confidence: confidenceScore,
+        anomaly: {
+          modelId: "heuristic_fallback",
+          anomalyScore: null,
+          isAnomaly: !passed,
+        },
+        featureSummary: {},
+        scoredAt: new Date().toISOString(),
+        latencyMs: 0, // Heuristic is instant
+      };
+      
+      setHeuristicResult(result);
+      console.log("[Observability] Heuristic classification:", {
+        decision: result.decision,
+        confidence: confidenceScore,
+        passed,
+        classification: result.decision === "pass" ? "HUMAN" : "BOT",
+      });
+      
+      return {
+        decision: result.decision,
+        anomalyScore: 0,
+      };
     } catch (error) {
-      console.error("[Observability] Error classifying with Woodwide:", error);
+      console.error("[Observability] Error classifying with heuristic model:", error);
       return null;
     } finally {
       setIsScoring(false);
     }
-  }, []);
+  }, [calculateHeuristicScore]);
 
   // Auto-scroll effect (scroll to top for newest events)
   useEffect(() => {
@@ -198,7 +274,7 @@ export default function ObservabilityPage() {
       dragDistance: 0,
     });
     lastPosRef.current = null;
-    setWoodwideResult(null);
+    setHeuristicResult(null);
   };
 
   // Reset the entire SDK
@@ -413,29 +489,29 @@ export default function ObservabilityPage() {
           </Card>
         </div>
 
-        {/* Woodwide Classification Result */}
+        {/* Heuristic Classification Result */}
         {isScoring && (
           <Alert>
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>Classifying with Woodwide anomaly detection model...</AlertDescription>
+            <AlertDescription>Classifying with heuristic model...</AlertDescription>
           </Alert>
         )}
 
-        {woodwideResult && (
+        {heuristicResult && (
           <Card className="border-2">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                Woodwide Classification
-                {woodwideResult.decision === "pass" ? (
+                Heuristic Classification
+                {heuristicResult.decision === "pass" ? (
                   <CheckCircle2 className="h-5 w-5 text-green-500" />
-                ) : woodwideResult.decision === "review" ? (
+                ) : heuristicResult.decision === "review" ? (
                   <AlertCircle className="h-5 w-5 text-yellow-500" />
                 ) : (
                   <XCircle className="h-5 w-5 text-red-500" />
                 )}
               </CardTitle>
               <CardDescription>
-                Anomaly detection model classification result
+                Heuristic model classification result (no API call required)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -443,7 +519,7 @@ export default function ObservabilityPage() {
                 <div className="flex-1">
                   <p className="text-sm text-muted-foreground mb-1">Classification</p>
                   <p className="text-2xl font-bold">
-                    {woodwideResult.decision === "pass" ? (
+                    {heuristicResult.decision === "pass" ? (
                       <span className="text-green-500">HUMAN</span>
                     ) : (
                       <span className="text-red-500">BOT</span>
@@ -451,18 +527,18 @@ export default function ObservabilityPage() {
                   </p>
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm text-muted-foreground mb-1">Anomaly Score</p>
+                  <p className="text-sm text-muted-foreground mb-1">Confidence Score</p>
                   <p className="text-2xl font-bold">
-                    {woodwideResult.anomaly.anomalyScore?.toFixed(2) ?? "N/A"}
+                    {(heuristicResult.confidence * 100).toFixed(1)}%
                   </p>
                 </div>
                 <div className="flex-1">
                   <p className="text-sm text-muted-foreground mb-1">Decision</p>
                   <Badge 
-                    variant={woodwideResult.decision === "pass" ? "default" : "destructive"}
+                    variant={heuristicResult.decision === "pass" ? "default" : "destructive"}
                     className="text-lg px-3 py-1"
                   >
-                    {woodwideResult.decision.toUpperCase()}
+                    {heuristicResult.decision.toUpperCase()}
                   </Badge>
                 </div>
               </div>
@@ -471,26 +547,26 @@ export default function ObservabilityPage() {
                 <div>
                   <p className="text-muted-foreground">Model ID</p>
                   <p className="font-mono text-xs">
-                    {woodwideResult.anomaly.modelId ?? "heuristic_fallback"}
+                    {heuristicResult.anomaly.modelId ?? "heuristic_fallback"}
                   </p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Is Anomaly</p>
                   <p className="font-semibold">
-                    {woodwideResult.anomaly.isAnomaly === null
+                    {heuristicResult.anomaly.isAnomaly === null
                       ? "N/A"
-                      : woodwideResult.anomaly.isAnomaly
+                      : heuristicResult.anomaly.isAnomaly
                       ? "Yes (Bot-like)"
                       : "No (Human-like)"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Confidence</p>
-                  <p className="font-semibold">{(woodwideResult.confidence * 100).toFixed(1)}%</p>
+                  <p className="text-muted-foreground">Threshold</p>
+                  <p className="font-semibold">70%</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Latency</p>
-                  <p className="font-semibold">{woodwideResult.latencyMs.toFixed(0)}ms</p>
+                  <p className="font-semibold">&lt;1ms (instant)</p>
                 </div>
               </div>
             </CardContent>
@@ -507,8 +583,8 @@ export default function ObservabilityPage() {
                 that extends <code className="bg-muted px-1 rounded">ThreeBaseGame</code> - completely game-agnostic.
               </div>
               <div>
-                <strong className="text-foreground">Woodwide Classification:</strong> When the game completes, telemetry is 
-                automatically sent to Woodwide&apos;s anomaly detection model to classify the session as <strong>HUMAN</strong> or <strong>BOT</strong>.
+                <strong className="text-foreground">Heuristic Classification:</strong> When the game completes, telemetry is 
+                analyzed using the built-in heuristic model (no API calls) to classify the session as <strong>HUMAN</strong> or <strong>BOT</strong>.
               </div>
             </div>
           </CardContent>

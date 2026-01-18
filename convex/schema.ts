@@ -26,8 +26,8 @@ const brandingFields = {
 
 const deploymentType = v.union(
   v.literal("bubble-pop"),
-  v.literal("archery"),
-  v.literal("osu")
+  v.literal("osu"),
+  v.literal("snake")
 );
 
 // Verification result decision type
@@ -86,6 +86,10 @@ export default defineSchema({
     name: v.string(),
     type: deploymentType,
     userId: v.id("users"), // Owner of the deployment
+    // Unique deployment identifier for SDK lookup
+    deploymentId: v.optional(v.string()),
+    // API key for SDK authentication (format: pp_<32 chars>)
+    apiKey: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
     isActive: v.boolean(),
@@ -95,7 +99,9 @@ export default defineSchema({
     .index("by_name", ["name"])
     .index("by_userId", ["userId"])
     .index("by_updatedAt", ["updatedAt"])
-    .index("by_active", ["isActive"]),
+    .index("by_active", ["isActive"])
+    .index("by_apiKey", ["apiKey"])
+    .index("by_deploymentId", ["deploymentId"]),
   // Sessions table - stores verification sessions for a deployment
   sessions: defineTable({
     deploymentId: v.id("deployments"),
