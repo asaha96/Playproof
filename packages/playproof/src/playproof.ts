@@ -8,6 +8,11 @@ import { calculateConfidence, createVerificationResult } from './verification';
 import { createGame, getGameInfo, getGameInstructions, getRandomGameId } from './games/registry';
 import type { PlayproofConfig, BehaviorData, VerificationResult, SDKHooks, BaseGame } from './types';
 
+// Google Fonts import for all supported font families
+const fontImportCSS = `
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lato:wght@400;700&family=Montserrat:wght@400;500;600;700&family=Nunito+Sans:wght@400;600;700&family=Open+Sans:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Raleway:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Source+Sans+3:wght@400;500;600;700&family=Work+Sans:wght@400;500;600;700&display=swap');
+`;
+
 // Inline CSS as string
 const themeCSS = `
 .playproof-container {
@@ -21,8 +26,8 @@ const themeCSS = `
   --playproof-success: #10b981;
   --playproof-error: #ef4444;
   --playproof-border: #3f3f5a;
-  --playproof-border-radius: 10px;
-  --playproof-spacing: 10px;
+  --playproof-border-radius: 0px;
+  --playproof-spacing: 20px;
   --playproof-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-family: var(--playproof-font-family);
   background: var(--playproof-background);
@@ -34,32 +39,32 @@ const themeCSS = `
   box-sizing: border-box;
   overflow: hidden;
 }
-.playproof-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.playproof-title { color: var(--playproof-text); font-size: 13px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 8px; }
-.playproof-logo { width: 22px; height: 22px; background: linear-gradient(135deg, var(--playproof-primary), var(--playproof-secondary)); border-radius: 5px; display: flex; align-items: center; justify-content: center; }
+.playproof-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: calc(var(--playproof-spacing) * 0.5); }
+.playproof-title { color: var(--playproof-text); font-size: 13px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: calc(var(--playproof-spacing) * 0.5); }
+.playproof-logo { width: 22px; height: 22px; background: linear-gradient(135deg, var(--playproof-primary), var(--playproof-secondary)); border-radius: calc(var(--playproof-border-radius) * 0.4); display: flex; align-items: center; justify-content: center; }
 .playproof-logo svg { width: 12px; height: 12px; fill: white; }
-.playproof-timer { color: var(--playproof-text-muted); font-size: 11px; font-weight: 500; background: var(--playproof-surface); padding: 4px 8px; border-radius: 4px; }
-.playproof-game-area { background: var(--playproof-surface); border-radius: 8px; min-height: 280px; position: relative; overflow: hidden; cursor: crosshair; user-select: none; }
-.playproof-instructions { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: var(--playproof-text); padding: 24px; width: 85%; max-width: 300px; }
-.playproof-instructions-icon { width: 56px; height: 56px; margin: 0 auto 16px; background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15)); border-radius: 16px; display: flex; align-items: center; justify-content: center; animation: iconFloat 3s ease-in-out infinite; }
+.playproof-timer { color: var(--playproof-text-muted); font-size: 11px; font-weight: 500; background: var(--playproof-surface); padding: calc(var(--playproof-spacing) * 0.25) calc(var(--playproof-spacing) * 0.5); border-radius: calc(var(--playproof-border-radius) * 0.33); }
+.playproof-game-area { background: var(--playproof-surface); border-radius: calc(var(--playproof-border-radius) * 0.67); min-height: 280px; position: relative; overflow: hidden; cursor: crosshair; user-select: none; }
+.playproof-instructions { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: var(--playproof-text); padding: calc(var(--playproof-spacing) * 1.5); width: 85%; max-width: 300px; }
+.playproof-instructions-icon { width: 56px; height: 56px; margin: 0 auto var(--playproof-spacing); background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15)); border-radius: calc(var(--playproof-border-radius) * 1.33); display: flex; align-items: center; justify-content: center; animation: iconFloat 3s ease-in-out infinite; }
 @keyframes iconFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
 .playproof-instructions-icon svg { width: 28px; height: 28px; fill: url(#playproof-icon-gradient); }
-.playproof-instructions h3 { font-size: 18px; margin: 0 0 8px 0; font-weight: 700; background: linear-gradient(135deg, var(--playproof-text), var(--playproof-accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; letter-spacing: -0.02em; }
-.playproof-instructions p { font-size: 13px; color: var(--playproof-text-muted); margin: 0 0 20px 0; line-height: 1.5; }
-.playproof-start-btn { background: linear-gradient(135deg, var(--playproof-primary), var(--playproof-secondary)); color: white; border: none; padding: 12px 32px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 16px rgba(99, 102, 241, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1); position: relative; overflow: hidden; }
+.playproof-instructions h3 { font-size: 18px; margin: 0 0 calc(var(--playproof-spacing) * 0.5) 0; font-weight: 700; background: linear-gradient(135deg, var(--playproof-text), var(--playproof-accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; letter-spacing: -0.02em; }
+.playproof-instructions p { font-size: 13px; color: var(--playproof-text-muted); margin: 0 0 calc(var(--playproof-spacing) * 1.25) 0; line-height: 1.5; }
+.playproof-start-btn { background: linear-gradient(135deg, var(--playproof-primary), var(--playproof-secondary)); color: white; border: none; padding: calc(var(--playproof-spacing) * 0.75) calc(var(--playproof-spacing) * 2); border-radius: calc(var(--playproof-border-radius) * 0.83); font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 16px rgba(99, 102, 241, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1); position: relative; overflow: hidden; font-family: var(--playproof-font-family); }
 .playproof-start-btn::before { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent); transition: left 0.5s ease; }
 .playproof-start-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
 .playproof-start-btn:hover::before { left: 100%; }
 .playproof-start-btn:active { transform: translateY(0); }
-.playproof-progress { margin-top: 8px; }
-.playproof-progress-bar { height: 3px; background: var(--playproof-surface); border-radius: 2px; overflow: hidden; }
-.playproof-progress-fill { height: 100%; background: linear-gradient(90deg, var(--playproof-primary), var(--playproof-accent)); border-radius: 2px; transition: width 0.1s linear; width: 0%; }
-.playproof-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--playproof-border); }
+.playproof-progress { margin-top: calc(var(--playproof-spacing) * 0.5); }
+.playproof-progress-bar { height: 3px; background: var(--playproof-surface); border-radius: calc(var(--playproof-border-radius) * 0.17); overflow: hidden; }
+.playproof-progress-fill { height: 100%; background: linear-gradient(90deg, var(--playproof-primary), var(--playproof-accent)); border-radius: calc(var(--playproof-border-radius) * 0.17); transition: width 0.1s linear; width: 0%; }
+.playproof-footer { display: flex; align-items: center; justify-content: space-between; margin-top: calc(var(--playproof-spacing) * 0.5); padding-top: calc(var(--playproof-spacing) * 0.5); border-top: 1px solid var(--playproof-border); }
 .playproof-branding { font-size: 10px; color: var(--playproof-text-muted); opacity: 0.8; }
 .playproof-branding a { color: var(--playproof-accent); text-decoration: none; }
-.playproof-result { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--playproof-surface); animation: fadeIn 0.3s ease; }
+.playproof-result { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--playproof-surface); animation: fadeIn 0.3s ease; border-radius: calc(var(--playproof-border-radius) * 0.67); }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-.playproof-result-icon { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+.playproof-result-icon { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: calc(var(--playproof-spacing) * 0.875); }
 .playproof-result-icon.success { background: rgba(16, 185, 129, 0.15); color: var(--playproof-success); box-shadow: 0 0 24px rgba(16, 185, 129, 0.2); }
 .playproof-result-icon.warning { background: rgba(234, 179, 8, 0.15); color: #fbbf24; box-shadow: 0 0 24px rgba(234, 179, 8, 0.2); }
 .playproof-result-icon.error { background: rgba(239, 68, 68, 0.15); color: var(--playproof-error); box-shadow: 0 0 24px rgba(239, 68, 68, 0.2); }
@@ -117,7 +122,10 @@ export class Playproof {
       '--playproof-accent': theme.accent,
       '--playproof-success': theme.success,
       '--playproof-error': theme.error,
-      '--playproof-border': theme.border
+      '--playproof-border': theme.border,
+      '--playproof-border-radius': theme.borderRadius !== undefined ? `${theme.borderRadius}px` : undefined,
+      '--playproof-spacing': theme.spacing !== undefined ? `${theme.spacing}px` : undefined,
+      '--playproof-font-family': theme.fontFamily ? `'${theme.fontFamily}', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif` : undefined
     };
 
     for (const [prop, value] of Object.entries(themeVars)) {
@@ -128,9 +136,121 @@ export class Playproof {
   }
 
   /**
+   * Fetch branding settings from backend using user API key and deployment ID.
+   * - apiKey: The user's API key from the Developer page
+   * - deploymentId: The actual Convex _id of the deployment (from Deployments table)
+   */
+  private async fetchBranding(): Promise<void> {
+    const { apiKey, deploymentId } = this.config;
+
+    console.log('[Playproof Debug] fetchBranding called with:', {
+      apiKey: apiKey ? `${apiKey.substring(0, 8)}...` : 'null',
+      deploymentId: deploymentId || 'null'
+    });
+
+    if (!apiKey || !deploymentId) {
+      console.log('[Playproof Debug] No credentials provided, using default theme');
+      return; // No credentials provided, use default theme
+    }
+
+    try {
+      // Import the hardcoded API URL
+      const { PLAYPROOF_API_URL } = await import('./config');
+
+      console.log('[Playproof Debug] Fetching branding from:', PLAYPROOF_API_URL);
+
+      const requestBody = {
+        path: 'deployments:getBrandingByCredentials',
+        args: { apiKey, deploymentId },
+      };
+
+      console.log('[Playproof Debug] Request payload:', JSON.stringify(requestBody, null, 2));
+
+      const response = await fetch(`${PLAYPROOF_API_URL}/api/query`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      console.log('[Playproof Debug] Response status:', response.status, response.statusText);
+
+      if (!response.ok) {
+        console.warn('[Playproof] Failed to fetch branding settings - HTTP', response.status);
+        return;
+      }
+
+      const rawData = await response.json();
+
+      console.log('[Playproof Debug] Raw response:', JSON.stringify(rawData, null, 2));
+
+      // Check for Convex errors (comes as 'errorMessage' not 'error')
+      if (rawData.errorMessage) {
+        console.warn(`[Playproof] Backend error: ${rawData.errorMessage}`);
+        return;
+      }
+
+      // Convex returns data in { status: "success", value: {...} } format
+      // Extract the actual value from the response
+      const data = rawData.value !== undefined ? rawData.value : rawData;
+
+      console.log('[Playproof Debug] Extracted data:', JSON.stringify(data, null, 2));
+
+      // Check for application-level errors (from the query itself)
+      if (data.error) {
+        console.warn(`[Playproof] ${data.error}`);
+        return;
+      }
+
+      if (data.success && data.theme) {
+        console.log('[Playproof Debug] Theme received from backend:', data.theme);
+        console.log('[Playproof Debug] Current theme before merge:', this.config.theme);
+
+        // Merge fetched theme with config (filter out null/undefined values)
+        const filteredTheme: Record<string, string> = {};
+        for (const [key, value] of Object.entries(data.theme)) {
+          if (value !== null && value !== undefined) {
+            filteredTheme[key] = value as string;
+          }
+        }
+
+        this.config.theme = {
+          ...this.config.theme,
+          ...filteredTheme,
+        };
+
+        console.log('[Playproof Debug] Theme after merge:', this.config.theme);
+
+        // Update gameId if provided
+        if (data.gameId) {
+          console.log('[Playproof Debug] GameId from backend:', data.gameId);
+          this.config.gameId = data.gameId;
+        }
+
+        console.log('[Playproof] ✅ Theme synced successfully from deployment:', deploymentId);
+      } else {
+        console.warn('[Playproof Debug] Response missing success or theme:', data);
+      }
+    } catch (error) {
+      console.warn('[Playproof] Error fetching branding:', error);
+    }
+  }
+
+
+  /**
    * Inject styles into the document
    */
   private injectStyles(): void {
+    // Inject font import if not already present
+    if (!document.getElementById('playproof-fonts')) {
+      const fontStyle = document.createElement('style');
+      fontStyle.id = 'playproof-fonts';
+      fontStyle.textContent = fontImportCSS;
+      document.head.appendChild(fontStyle);
+    }
+
+    // Inject main styles
     if (document.getElementById('playproof-styles')) return;
 
     this.styleElement = document.createElement('style');
@@ -395,7 +515,10 @@ export class Playproof {
   /**
    * Initialize and render the captcha
    */
-  verify(): Promise<VerificationResult> {
+  async verify(): Promise<VerificationResult> {
+    // Fetch branding from backend if credentials are provided
+    await this.fetchBranding();
+
     return new Promise((resolve, reject) => {
       const originalOnSuccess = this.config.onSuccess;
       const originalOnFailure = this.config.onFailure;

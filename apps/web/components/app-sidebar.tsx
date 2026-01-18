@@ -11,7 +11,7 @@ import {
   UserButton,
   useUser,
 } from "@clerk/nextjs"
-import { BarChart3, BookOpen, Gamepad2, Rocket, ShieldCheck, TestTube } from "lucide-react"
+import { BarChart3, Code, Eye, Rocket, ShieldCheck, TestTube } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -41,19 +41,14 @@ const navItems = [
     icon: Rocket,
   },
   {
-    title: "Branding",
-    href: "/dashboard/branding",
-    icon: ShieldCheck, // Using ShieldCheck as placeholder
+    title: "Observability",
+    href: "/dashboard/observability",
+    icon: Eye,
   },
   {
-    title: "Playground",
-    href: "/dashboard/playground",
-    icon: Gamepad2, // Using Gamepad2 as a placeholder, maybe find a better icon or reuse
-  },
-  {
-    title: "Docs",
-    href: "/dashboard/docs",
-    icon: BookOpen,
+    title: "Developer",
+    href: "/dashboard/developer",
+    icon: Code,
   },
   {
     title: "Woodwide Test",
@@ -122,7 +117,7 @@ export function AppSidebar() {
       </SidebarGroup>
       <SidebarFooter>
         <SignedIn>
-          <div className="flex items-center gap-3 rounded-lg border border-sidebar-border bg-sidebar-accent/60 p-2">
+          <div className="flex items-center gap-3 rounded-lg border border-sidebar-border bg-sidebar-accent/60 p-2 group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:!border-none group-data-[collapsible=icon]:!bg-transparent group-data-[collapsible=icon]:justify-center">
             <UserButton appearance={{ elements: { avatarBox: "size-8" } }} />
             <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
               <div className="truncate text-sm font-medium">{userName}</div>

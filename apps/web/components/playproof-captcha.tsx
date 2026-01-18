@@ -15,6 +15,22 @@ export interface PlayproofCaptchaResult {
     }
 }
 
+// Available font families
+export const PLAYPROOF_FONTS = [
+    'Inter',
+    'Nunito Sans',
+    'Poppins',
+    'Roboto',
+    'Open Sans',
+    'Lato',
+    'Montserrat',
+    'Source Sans 3',
+    'Raleway',
+    'Work Sans',
+] as const
+
+export type PlayproofFontFamily = typeof PLAYPROOF_FONTS[number]
+
 export interface PlayproofCaptchaProps {
     /** Threshold for verification success (0-1) */
     confidenceThreshold?: number
@@ -26,6 +42,11 @@ export interface PlayproofCaptchaProps {
     timer?: number
     /** Border radius in pixels */
     borderRadius?: number
+    /** Spacing in pixels */
+    spacing?: number
+    /** Font family */
+    fontFamily?: PlayproofFontFamily
+    // Core colors
     /** Primary theme color */
     primaryColor?: string
     /** Secondary theme color */
@@ -34,10 +55,12 @@ export interface PlayproofCaptchaProps {
     backgroundColor?: string
     /** Surface color for game area */
     surfaceColor?: string
+    // Text colors
     /** Text color */
     textColor?: string
     /** Muted text color */
     textMutedColor?: string
+    // UI colors
     /** Accent color */
     accentColor?: string
     /** Success color */
@@ -46,10 +69,6 @@ export interface PlayproofCaptchaProps {
     errorColor?: string
     /** Border color */
     borderColor?: string
-    /** Spacing in pixels */
-    spacing?: number
-    /** Font family */
-    fontFamily?: string
     /** Called when verification passes */
     onSuccess?: (result: PlayproofCaptchaResult) => void
     /** Called when verification fails */
@@ -78,18 +97,21 @@ export function PlayproofCaptcha({
     difficulty = "normal",
     timer,
     borderRadius = 12,
+    spacing = 16,
+    fontFamily = "Inter",
+    // Core colors
     primaryColor = "#6366f1",
     secondaryColor = "#8b5cf6",
     backgroundColor = "#1e1e2e",
     surfaceColor = "#2a2a3e",
+    // Text colors
     textColor = "#f5f5f5",
     textMutedColor = "#a1a1aa",
+    // UI colors
     accentColor = "#22d3ee",
     successColor = "#10b981",
     errorColor = "#ef4444",
     borderColor = "#3f3f5a",
-    spacing = 10,
-    fontFamily = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
     onSuccess,
     onFailure,
     onTelemetry,
@@ -138,7 +160,7 @@ export function PlayproofCaptcha({
                 // Ensure container has the ID
                 containerRef.current.id = containerId
 
-                // Create Playproof instance
+                // Create Playproof instance with full theme support
                 const instance = new Playproof({
                     containerId,
                     confidenceThreshold,
@@ -155,6 +177,9 @@ export function PlayproofCaptcha({
                         success: successColor,
                         error: errorColor,
                         border: borderColor,
+                        borderRadius,
+                        spacing,
+                        fontFamily,
                     },
                     hooks: {
                         onTelemetryBatch: async (batch: any) => {
@@ -252,6 +277,9 @@ export function PlayproofCaptcha({
         confidenceThreshold,
         gameType,
         gameDuration,
+        borderRadius,
+        spacing,
+        fontFamily,
         primaryColor,
         secondaryColor,
         backgroundColor,
@@ -268,11 +296,11 @@ export function PlayproofCaptcha({
         cleanup,
     ])
 
-    // Apply custom border radius via style
+    // Apply custom layout properties via style
     const containerStyle: React.CSSProperties = {
         "--playproof-border-radius": `${borderRadius}px`,
         "--playproof-spacing": `${spacing}px`,
-        "--playproof-font-family": fontFamily,
+        "--playproof-font-family": `'${fontFamily}', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`,
     } as React.CSSProperties
 
     return (

@@ -2,6 +2,22 @@
  * PlayProof SDK Type Definitions
  */
 
+// Available font families in the SDK
+export const PLAYPROOF_FONTS = [
+    'Inter',
+    'Nunito Sans',
+    'Poppins',
+    'Roboto',
+    'Open Sans',
+    'Lato',
+    'Montserrat',
+    'Source Sans 3',
+    'Raleway',
+    'Work Sans',
+] as const;
+
+export type PlayproofFontFamily = typeof PLAYPROOF_FONTS[number];
+
 // Theme configuration
 export interface PlayproofTheme {
     primary?: string;
@@ -14,6 +30,10 @@ export interface PlayproofTheme {
     success?: string;
     error?: string;
     border?: string;
+    // Layout
+    borderRadius?: number;
+    spacing?: number;
+    fontFamily?: PlayproofFontFamily;
 }
 
 // Behavior data collected during verification
@@ -30,6 +50,21 @@ export interface MouseMovement {
     x: number;
     y: number;
     timestamp: number;
+}
+
+// Pointer telemetry event - captured for all games
+export interface PointerTelemetryEvent {
+    timestampMs: number;      // Absolute timestamp (Date.now())
+    tMs: number;              // Relative time since tracking started (high-res)
+    x: number;                // X position relative to game area
+    y: number;                // Y position relative to game area
+    clientX: number;          // Absolute X position
+    clientY: number;          // Absolute Y position
+    isDown: boolean;          // Whether pointer is pressed
+    eventType: 'move' | 'down' | 'up' | 'enter' | 'leave';
+    pointerType: string;      // 'mouse', 'touch', 'pen'
+    pointerId: number;        // Unique pointer ID
+    isTrusted: boolean;       // Browser event.isTrusted flag; telemetry only, not a reliable standalone bot-detection signal
 }
 
 // Extended telemetry for future SDK
@@ -97,6 +132,14 @@ export interface PlayproofConfig {
     confidenceThreshold: number;
     gameDuration: number | null;
     gameId: GameId;
+    logTelemetry: boolean;    // Whether to console.log telemetry events (default: false)
+    // API credentials for fetching deployment branding
+    apiKey: string | null;
+    /**
+     * Deployment ID (actual Convex _id) for loading deployment-specific branding.
+     * Copy this from the ID column in the Deployments table.
+     */
+    deploymentId: string | null;
     onSuccess: ((result: VerificationResult) => void) | null;
     onFailure: ((result: VerificationResult) => void) | null;
     onStart: (() => void) | null;
@@ -106,7 +149,7 @@ export interface PlayproofConfig {
 }
 
 export interface SDKHooks {
-    onTelemetryBatch: ((batch: unknown) => void) | null;
+    onTelemetryBatch: ((batch: PointerTelemetryEvent[]) => void) | null;
     onAttemptEnd: ((attempt: AttemptData) => void) | null;
     regenerate: (() => void) | null;
 }

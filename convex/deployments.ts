@@ -2,10 +2,25 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { resolveBranding } from "./branding";
 
+// Branding input aligned with SDK PlayproofTheme interface
 const brandingInput = v.object({
+  // Core colors
   primaryColor: v.optional(v.string()),
   secondaryColor: v.optional(v.string()),
-  tertiaryColor: v.optional(v.string()),
+  backgroundColor: v.optional(v.string()),
+  surfaceColor: v.optional(v.string()),
+  // Text colors
+  textColor: v.optional(v.string()),
+  textMutedColor: v.optional(v.string()),
+  // UI colors
+  accentColor: v.optional(v.string()),
+  successColor: v.optional(v.string()),
+  errorColor: v.optional(v.string()),
+  borderColor: v.optional(v.string()),
+  // Layout
+  borderRadius: v.optional(v.number()),
+  spacing: v.optional(v.number()),
+  // Typography
   typography: v.optional(v.string()),
 });
 
@@ -24,6 +39,15 @@ export const list = query({
       .withIndex("by_updatedAt")
       .order("desc")
       .collect();
+  },
+});
+
+export const get = query({
+  args: {
+    id: v.id("deployments"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.id);
   },
 });
 
@@ -125,5 +149,53 @@ export const remove = mutation({
     }
 
     await ctx.db.delete(args.id);
+  },
+});
+
+/**
+ * Public query for SDK to fetch deployment branding by user API key and deployment ID.
+ * The API key is validated against the users table.
+ * The deploymentId is the actual Convex _id of the deployment.
+ */
+export const getBrandingByCredentials = query({
+  args: {
+    apiKey: v.string(),
+    deploymentId: v.id("deployments"),
+  },
+  handler: async (ctx, args) => {
+    // Validate API key against users table
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_apiKey", (q) => q.eq("apiKey", args.apiKey))
+      .first();
+
+    if (!user) {
+      return { error: "Invalid API key" };
+    }
+
+    // Get deployment by its actual Convex _id
+    const deployment = await ctx.db.get(args.deploymentId);
+
+    if (!deployment) {
+      return { error: "Deployment not found" };
+    }
+
+    // Return branding settings mapped to SDK theme format
+    return {
+      success: true,
+      theme: {
+        primary: deployment.primaryColor,
+        secondary: deployment.secondaryColor,
+        background: deployment.backgroundColor,
+        surface: deployment.surfaceColor,
+        text: deployment.textColor,
+        textMuted: deployment.textMutedColor,
+        accent: deployment.accentColor,
+        success: deployment.successColor,
+        error: deployment.errorColor,
+        border: deployment.borderColor,
+      },
+      gameId: deployment.type,
+    };
   },
 });

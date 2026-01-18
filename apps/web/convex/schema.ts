@@ -1,13 +1,26 @@
-
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+// Branding fields aligned with SDK PlayproofTheme interface
 const brandingFields = {
+  // Core colors
   primaryColor: v.optional(v.string()),
   secondaryColor: v.optional(v.string()),
-  tertiaryColor: v.optional(v.string()),
+  backgroundColor: v.optional(v.string()),
+  surfaceColor: v.optional(v.string()),
+  // Text colors
+  textColor: v.optional(v.string()),
+  textMutedColor: v.optional(v.string()),
+  // UI colors
+  accentColor: v.optional(v.string()),
+  successColor: v.optional(v.string()),
+  errorColor: v.optional(v.string()),
+  borderColor: v.optional(v.string()),
+  // Layout
+  borderRadius: v.optional(v.number()),
+  spacing: v.optional(v.number()),
+  // Typography
   typography: v.optional(v.string()),
-  brandingType: v.optional(v.string()),
 };
 
 const deploymentType = v.union(
@@ -29,6 +42,8 @@ export default defineSchema({
     name: v.optional(v.string()),
     // Profile image URL (from Clerk or custom)
     imageUrl: v.optional(v.string()),
+    // API key for SDK authentication (format: pp_<32 chars>)
+    apiKey: v.optional(v.string()),
     // Timestamps
     createdAt: v.optional(v.number()),
     updatedAt: v.optional(v.number()),
@@ -37,7 +52,8 @@ export default defineSchema({
   })
     .index("by_clerkId", ["clerkId"])
     .index("by_clerkSubject", ["clerkSubject"])
-    .index("by_email", ["email"]),
+    .index("by_email", ["email"])
+    .index("by_apiKey", ["apiKey"]),
   // Deployments table - stores PlayProof deployment configs
   deployments: defineTable({
     name: v.string(),

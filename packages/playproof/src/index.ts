@@ -8,14 +8,23 @@ import { Playproof } from './playproof';
 export { Playproof };
 export default Playproof;
 
-// Re-export types for consumers
+// Re-export types and constants for consumers
 export type {
   PlayproofTheme,
   PlayproofConfig,
   VerificationResult,
   BehaviorData,
-  GameId
+  GameId,
+  PlayproofFontFamily,
+  SDKHooks,
+  PointerTelemetryEvent,
 } from './types';
+
+export { PLAYPROOF_FONTS } from './types';
+
+// Export telemetry utilities for advanced consumers
+export { PointerTelemetryTracker } from './telemetry/pointer-tracker';
+export type { PointerTrackerConfig } from './telemetry/pointer-tracker';
 
 // Expose globally for script tag usage
 declare global {

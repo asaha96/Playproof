@@ -21,6 +21,7 @@
     "noUnusedParameters": false,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
+    "noImplicitAny": true,
     "baseUrl": ".",
     "paths": {
       "@playproof/shared": ["../shared/src/index.ts"],
