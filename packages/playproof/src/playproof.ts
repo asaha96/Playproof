@@ -101,7 +101,7 @@ export class Playproof {
 
     if (!validateThreshold(this.config.confidenceThreshold)) {
       console.warn('Playproof: Invalid confidenceThreshold, using default 0.7');
-      this.config.confidenceThreshold = 0.7;
+      this.config.confidenceThreshold = 0.3;
     }
   }
 
