@@ -1,5 +1,9 @@
 import type { NextConfig } from "next";
 import path from "path";
+import { config } from "dotenv";
+
+// Load env from monorepo root
+config({ path: path.join(__dirname, "../../.env.local") });
 
 const nextConfig: NextConfig = {
   /* config options here */
