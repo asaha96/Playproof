@@ -9,6 +9,40 @@ export const MINI_GOLF_LEVELS: GridLevel[] = [
     schema: 'playproof.gridlevel.v1',
     gameId: 'mini-golf',
     version: 1,
+    seed: 'straight-shot-01',
+    grid: {
+      cols: 20,
+      rows: 14,
+      tiles: [
+        '....................',
+        '....................',
+        '....................',
+        '...B................',
+        '....................',
+        '....................',
+        '....................',
+        '................H...',
+        '....................',
+        '....................',
+        '....................',
+        '....................',
+        '....................',
+        '....................'
+      ]
+    },
+    entities: [],
+    rules: { difficulty: 'easy' },
+    design: {
+      intent: 'Simple direct shot for beginners.',
+      playerHint: 'Aim straight at the hole.',
+      solutionSketch: ['Direct shot with medium power.'],
+      aestheticNotes: 'Open field, no obstacles.'
+    }
+  },
+  {
+    schema: 'playproof.gridlevel.v1',
+    gameId: 'mini-golf',
+    version: 1,
     seed: 'bank-shot-01',
     grid: {
       cols: 20,
@@ -43,21 +77,21 @@ export const MINI_GOLF_LEVELS: GridLevel[] = [
     schema: 'playproof.gridlevel.v1',
     gameId: 'mini-golf',
     version: 1,
-    seed: 'sand-drift-01',
+    seed: 'water-hazard-01',
     grid: {
       cols: 20,
       rows: 14,
       tiles: [
         '....................',
         '....................',
-        '..B......SS.........',
-        '..SS.....SS.........',
-        '..SS.....SS.........',
-        '.........##.........',
-        '.........##.....H...',
-        '.........##.........',
+        '..B.................',
         '....................',
         '....................',
+        '.........~~.........',
+        '.........~~.....H...',
+        '.........~~.........',
+        '.........##.........',
+        '.........##.........',
         '....................',
         '....................',
         '....................',
@@ -65,12 +99,12 @@ export const MINI_GOLF_LEVELS: GridLevel[] = [
       ]
     },
     entities: [],
-    rules: { difficulty: 'medium' },
+    rules: { difficulty: 'hard' },
     design: {
-      intent: 'Shot through sand patch with gentle slowdown.',
-      playerHint: 'Expect the sand to reduce speed.',
-      solutionSketch: ['Firm power, stay centered through sand.'],
-      aestheticNotes: 'Sand forms compact rectangles.'
+      intent: 'Navigate around water hazard and wall.',
+      playerHint: 'Avoid the water, bank off the wall.',
+      solutionSketch: ['Medium power, angle to avoid water.'],
+      aestheticNotes: 'Water and wall form distinct obstacles.'
     }
   }
 ];
