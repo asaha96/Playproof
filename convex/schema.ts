@@ -39,6 +39,8 @@ export default defineSchema({
     name: v.optional(v.string()),
     // Profile image URL (from Clerk or custom)
     imageUrl: v.optional(v.string()),
+    // API key for SDK authentication (format: pp_<32 chars>)
+    apiKey: v.optional(v.string()),
     // Timestamps
     createdAt: v.optional(v.number()),
     updatedAt: v.optional(v.number()),
@@ -47,7 +49,8 @@ export default defineSchema({
   })
     .index("by_clerkId", ["clerkId"])
     .index("by_clerkSubject", ["clerkSubject"])
-    .index("by_email", ["email"]),
+    .index("by_email", ["email"])
+    .index("by_apiKey", ["apiKey"]),
   // Deployments table - stores PlayProof deployment configs
   deployments: defineTable({
     name: v.string(),
