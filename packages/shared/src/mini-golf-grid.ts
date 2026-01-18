@@ -15,13 +15,13 @@ export const MINI_GOLF_TILE_SIZE_PX = 20;
 export const MINI_GOLF_GRID_COLS = 20;
 export const MINI_GOLF_GRID_ROWS = 14;
 
-const WALL_SIZES = new Set(['1x1', '1x2', '1x3', '1x4', '2x2', '2x3', '3x2', '4x1']);
+const WALL_SIZES = new Set(['1x3', '1x4', '2x2', '2x3', '2x4', '3x2', '3x3', '3x4', '4x1', '4x2', '4x3']);
 const MOVING_BLOCK_SIZES = new Set(['1x2', '1x3', '2x2']);
 
 const WALL_TOKENS = ['#'];
-const SAND_TOKENS = ['S'];
 const WATER_TOKENS = ['~'];
 const CURRENT_TOKENS = ['^', 'v', '<', '>'];
+const MOVING_BLOCK_TOKENS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
 interface TileCell {
   tx: number;
@@ -118,7 +118,7 @@ export function validateMiniGolfGridLevel(level: GridLevel): GridLevelValidation
   }
 
   const tiles: TileCell[] = [];
-  const tokenSet = new Set(['.', 'B', 'H', '#', 'S', '~', '^', 'v', '<', '>', '1', '2', '3', '4', '5', '6', '7', '8', '9']);
+  const tokenSet = new Set(['.', 'B', 'H', '#', '~', '^', 'v', '<', '>', '1', '2', '3', '4', '5', '6', '7', '8', '9']);
   const ballTiles: TileCell[] = [];
   const holeTiles: TileCell[] = [];
 
@@ -184,7 +184,7 @@ export function validateMiniGolfGridLevel(level: GridLevel): GridLevelValidation
       });
     }
     for (const cell of tiles) {
-      if (chebyshev(ball, cell) <= 2 && !['.', 'S', 'B'].includes(cell.token)) {
+      if (chebyshev(ball, cell) <= 2 && !['.', 'B'].includes(cell.token)) {
         errors.push({
           stage: 'placement',
           message: 'Ball tee pocket must be clear',
@@ -206,14 +206,16 @@ export function validateMiniGolfGridLevel(level: GridLevel): GridLevelValidation
         data: { tx: hole.tx, ty: hole.ty }
       });
     }
+    // Hole clearance: forbid ALL obstacles/hazards within Chebyshev distance 1
+    const forbiddenNearHole = new Set([...WALL_TOKENS, ...WATER_TOKENS, ...CURRENT_TOKENS, ...MOVING_BLOCK_TOKENS]);
     for (const cell of tiles) {
-      if (chebyshev(hole, cell) <= 1 && ['#', '~'].includes(cell.token)) {
+      if (chebyshev(hole, cell) <= 1 && forbiddenNearHole.has(cell.token)) {
         errors.push({
           stage: 'placement',
-          message: 'Hole clearance violates wall/water restriction',
+          message: 'Hole clearance violates obstacle/hazard restriction',
           code: 'hole.clearance',
           severity: 'error',
-          data: { tx: cell.tx, ty: cell.ty }
+          data: { tx: cell.tx, ty: cell.ty, token: cell.token }
         });
       }
     }
@@ -263,18 +265,6 @@ export function validateMiniGolfGridLevel(level: GridLevel): GridLevelValidation
           data: { tx: cell.tx, ty: cell.ty }
         });
       }
-    }
-  }
-
-  const sandComponents = findComponents(tiles, SAND_TOKENS);
-  for (const component of sandComponents) {
-    if (component.tiles.length < 2) {
-      errors.push({
-        stage: 'placement',
-        message: 'Sand must be at least 2 tiles',
-        code: 'sand.size',
-        severity: 'error'
-      });
     }
   }
 
@@ -337,28 +327,8 @@ export function validateMiniGolfGridLevel(level: GridLevel): GridLevelValidation
     }
   }
 
-  const wallComponents = findComponents(tiles, WALL_TOKENS);
-  for (const component of wallComponents) {
-    const rect = component.rect;
-    const sizeKey = `${rect.w}x${rect.h}`;
-    if (!WALL_SIZES.has(sizeKey)) {
-      errors.push({
-        stage: 'shapes',
-        message: 'Wall component must be allowed rectangle size',
-        code: 'wall.size',
-        severity: 'error',
-        data: { size: sizeKey }
-      });
-    }
-    if (component.tiles.length !== rect.w * rect.h) {
-      errors.push({
-        stage: 'shapes',
-        message: 'Wall component must be filled rectangle',
-        code: 'wall.rectangle',
-        severity: 'error'
-      });
-    }
-  }
+  // Walls can be any shape - each # tile is rendered individually
+  // No rectangle or size restrictions needed
 
   const movingBlockRegions = findMovingBlockRegions(tiles);
   const movingEntities = level.entities.filter(entity => entity.type === 'movingBlock');
@@ -548,24 +518,20 @@ export function compileMiniGolfGridLevel(level: GridLevel): MiniGolfLevelSpec {
     }
   }
 
-  const wallComponents = findComponentsFromGrid(level.grid.tiles, WALL_TOKENS);
-  for (const component of wallComponents) {
-    spec.walls.push({
-      x: component.rect.x * MINI_GOLF_TILE_SIZE_PX,
-      y: component.rect.y * MINI_GOLF_TILE_SIZE_PX,
-      w: component.rect.w * MINI_GOLF_TILE_SIZE_PX,
-      h: component.rect.h * MINI_GOLF_TILE_SIZE_PX
-    });
-  }
-
-  const sandComponents = findComponentsFromGrid(level.grid.tiles, SAND_TOKENS);
-  for (const component of sandComponents) {
-    spec.sand?.push({
-      x: component.rect.x * MINI_GOLF_TILE_SIZE_PX,
-      y: component.rect.y * MINI_GOLF_TILE_SIZE_PX,
-      w: component.rect.w * MINI_GOLF_TILE_SIZE_PX,
-      h: component.rect.h * MINI_GOLF_TILE_SIZE_PX
-    });
+  // Render each wall tile (#) as an individual 1x1 wall
+  // This allows any shape: L, T, zigzag, etc.
+  for (let ty = 0; ty < MINI_GOLF_GRID_ROWS; ty += 1) {
+    const row = level.grid.tiles[ty];
+    for (let tx = 0; tx < MINI_GOLF_GRID_COLS; tx += 1) {
+      if (row[tx] === '#') {
+        spec.walls.push({
+          x: tx * MINI_GOLF_TILE_SIZE_PX,
+          y: ty * MINI_GOLF_TILE_SIZE_PX,
+          w: MINI_GOLF_TILE_SIZE_PX,
+          h: MINI_GOLF_TILE_SIZE_PX
+        });
+      }
+    }
   }
 
   const waterComponents = findComponentsFromGrid(level.grid.tiles, WATER_TOKENS);
