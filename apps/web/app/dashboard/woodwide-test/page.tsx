@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, CheckCircle2, XCircle, AlertCircle, Play, Database, BarChart3, Gamepad2 } from "lucide-react";
-import { PlayproofCaptcha, type PlayproofCaptchaResult } from "@/components/playproof-captcha";
+import { Playproof, type VerificationResult } from "playproof/react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
 
@@ -43,9 +43,9 @@ export default function WoodwideTestPage() {
   const [result, setResult] = useState<ScoringResult | null>(null);
   const [batchStats, setBatchStats] = useState<BatchStats | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [gameResult, setGameResult] = useState<ScoringResult | null>(null);
+  const [gameResult, setGameResult] = useState<VerificationResult | null>(null);
   const [gameKey, setGameKey] = useState(0);
-  const [selectedGameType, setSelectedGameType] = useState<"bubble-pop" | "archery" | "random">("bubble-pop");
+  const [selectedGameType, setSelectedGameType] = useState<"bubble-pop" | "archery" | "osu">("bubble-pop");
 
   // Generate test telemetry
   const generateTestTelemetry = (type: "human" | "bot" | "short") => {
@@ -230,14 +230,14 @@ export default function WoodwideTestPage() {
                 <select
                   value={selectedGameType}
                   onChange={(e) => {
-                    setSelectedGameType(e.target.value as "bubble-pop" | "archery" | "random");
+                    setSelectedGameType(e.target.value as "bubble-pop" | "archery" | "osu");
                     setGameKey((k) => k + 1);
                   }}
                   className="px-3 py-1 border rounded-md text-sm bg-background"
                 >
                   <option value="bubble-pop">Bubble Pop</option>
                   <option value="archery">Archery</option>
-                  <option value="random">Random</option>
+                  <option value="osu">Osu!</option>
                 </select>
                 <Button
                   onClick={() => setGameKey((k) => k + 1)}
@@ -249,73 +249,16 @@ export default function WoodwideTestPage() {
               </div>
 
               <div className="border rounded-lg p-4 bg-slate-50 dark:bg-slate-900">
-                <PlayproofCaptcha
+                <Playproof
                   key={gameKey}
-                  gameType={selectedGameType}
-                  difficulty="normal"
-                  onTelemetry={async (telemetry) => {
-                    console.log("Telemetry received:", {
-                      movements: telemetry.movements.length,
-                      clicks: telemetry.clicks.length,
-                      duration: telemetry.durationMs,
-                      hits: telemetry.hits,
-                      misses: telemetry.misses,
-                    });
-                    
-                    setLoading(true);
-                    setError(null);
-
-                    try {
-                      const response = await fetch(`${API_URL}/api/v1/score`, {
-                        method: "POST",
-                        headers: {
-                          "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({
-                          sessionId: `game_${Date.now()}`,
-                          gameType: selectedGameType,
-                          deviceType: "mouse",
-                          durationMs: telemetry.durationMs,
-                          movements: telemetry.movements,
-                          clicks: telemetry.clicks,
-                          hits: telemetry.hits,
-                          misses: telemetry.misses,
-                        }),
-                      });
-
-                      if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.message || `HTTP ${response.status}`);
-                      }
-
-                      const data = await response.json();
-                      console.log("Scoring result:", data);
-                      setGameResult(data);
-                      
-                      // Return Woodwide decision for the game to display
-                      return {
-                        decision: data.decision,
-                        anomalyScore: data.anomaly.anomalyScore || 0,
-                      };
-                    } catch (err) {
-                      console.error("Scoring error:", err);
-                      setError(err instanceof Error ? err.message : "Unknown error");
-                      return null; // Return null if scoring fails
-                    } finally {
-                      setLoading(false);
-                    }
-                  }}
-                  onSuccess={(result) => {
+                  gameId={selectedGameType}
+                  onSuccess={(result: VerificationResult) => {
                     console.log("Game completed successfully:", result);
+                    setGameResult(result);
                   }}
-                  onFailure={(result) => {
+                  onFailure={(result: VerificationResult) => {
                     console.log("Game failed:", result);
-                  }}
-                  onSuccess={(result) => {
-                    console.log("Game completed:", result);
-                  }}
-                  onFailure={(result) => {
-                    console.log("Game failed:", result);
+                    setGameResult(result);
                   }}
                 />
               </div>
@@ -331,62 +274,56 @@ export default function WoodwideTestPage() {
                 <Card className="border-2">
                   <CardHeader>
                     <div className="flex items-center justify-between">
-                      <CardTitle>Game Scoring Result</CardTitle>
-                      <Badge className={getDecisionColor(gameResult.decision)}>
-                        {getDecisionIcon(gameResult.decision)}
-                        <span className="ml-2 uppercase">{gameResult.decision}</span>
+                      <CardTitle>Game Verification Result</CardTitle>
+                      <Badge className={gameResult.passed ? "bg-green-500/10 text-green-500 border-green-500/20" : "bg-red-500/10 text-red-500 border-red-500/20"}>
+                        {gameResult.passed ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+                        <span className="ml-2 uppercase">{gameResult.passed ? "PASS" : "FAIL"}</span>
                       </Badge>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <p className="text-sm text-muted-foreground">Session ID</p>
-                        <p className="font-mono text-sm">{gameResult.sessionId}</p>
+                        <p className="text-sm text-muted-foreground">Score</p>
+                        <p className="font-semibold">{(gameResult.score * 100).toFixed(1)}%</p>
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">Confidence</p>
-                        <p className="font-semibold">{(gameResult.confidence * 100).toFixed(1)}%</p>
+                        <p className="text-sm text-muted-foreground">Threshold</p>
+                        <p className="font-semibold">{(gameResult.threshold * 100).toFixed(1)}%</p>
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">Anomaly Score</p>
-                        <p className="font-semibold">
-                          {gameResult.anomaly.anomalyScore?.toFixed(2) ?? "N/A"}
-                        </p>
+                        <p className="text-sm text-muted-foreground">Duration</p>
+                        <p className="font-semibold">{gameResult.behaviorData?.sessionDuration?.toFixed(0) ?? "N/A"}ms</p>
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">Model</p>
-                        <p className="font-mono text-sm">
-                          {gameResult.anomaly.modelId ?? "heuristic_fallback"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Is Anomaly</p>
-                        <p className="font-semibold">
-                          {gameResult.anomaly.isAnomaly === null
-                            ? "N/A"
-                            : gameResult.anomaly.isAnomaly
-                            ? "Yes"
-                            : "No"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">Latency</p>
-                        <p className="font-semibold">{gameResult.latencyMs.toFixed(0)}ms</p>
+                        <p className="text-sm text-muted-foreground">Movements</p>
+                        <p className="font-semibold">{gameResult.behaviorData?.totalMovements ?? "N/A"}</p>
                       </div>
                     </div>
 
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-2">Key Features</p>
-                      <div className="grid grid-cols-3 gap-2 text-sm">
-                        {Object.entries(gameResult.featureSummary).map(([key, value]) => (
-                          <div key={key} className="flex justify-between">
-                            <span className="text-muted-foreground">{key}:</span>
-                            <span className="font-mono">{typeof value === "number" ? value.toFixed(3) : value}</span>
+                    {gameResult.behaviorData && (
+                      <div>
+                        <p className="text-sm text-muted-foreground mb-2">Behavior Metrics</p>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Avg Speed:</span>
+                            <span className="font-mono">{gameResult.behaviorData.averageSpeed?.toFixed(2) ?? "N/A"}</span>
                           </div>
-                        ))}
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Speed Variance:</span>
+                            <span className="font-mono">{gameResult.behaviorData.speedVariance?.toFixed(2) ?? "N/A"}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Direction Changes:</span>
+                            <span className="font-mono">{gameResult.behaviorData.directionChanges ?? "N/A"}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Click Accuracy:</span>
+                            <span className="font-mono">{(gameResult.behaviorData.clickAccuracy * 100)?.toFixed(1) ?? "N/A"}%</span>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </CardContent>
                 </Card>
               )}
