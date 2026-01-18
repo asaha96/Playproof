@@ -1,10 +1,14 @@
+"use client";
+
 import Link from "next/link";
 import { SignInButton, SignUpButton } from "@clerk/nextjs";
-import { auth } from "@clerk/nextjs/server";
+import { useUser } from "@clerk/nextjs";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Playproof, PlayproofProvider } from "playproof/react";
 
 function Shield(props: React.SVGProps<SVGSVGElement>) {
   return (
@@ -128,13 +132,131 @@ const deploymentTypes = [
   { name: "Bubble Pop", description: "Rapid pattern recognition." },
 ];
 
-export default async function LandingPage() {
-  const { userId } = await auth();
+export default function LandingPage() {
+  const { isSignedIn } = useUser();
+  const [themeColors, setThemeColors] = useState({
+    primary: "#e54d4d",
+    secondary: "#f5f5f6",
+    background: "#ffffff",
+    surface: "#ffffff",
+    text: "#0a0a0b",
+    textMuted: "#737381",
+    accent: "#f5f5f6",
+    success: "#10b981",
+    error: "#dc2626",
+    border: "#e5e5e8",
+  });
+
+  // Detect theme and update colors from CSS variables
+  useEffect(() => {
+    const updateTheme = () => {
+      const root = document.documentElement;
+      const computedStyle = getComputedStyle(root);
+      
+      // Helper to get computed color value (converts oklch to rgb)
+      const getColor = (varName: string, fallback: string) => {
+        const value = computedStyle.getPropertyValue(varName).trim();
+        if (!value) return fallback;
+        
+        // If it's oklch, we need to convert it - but for now, use fallback colors
+        // The browser will handle oklch conversion, so we can use a test element
+        const testEl = document.createElement('div');
+        testEl.style.color = value;
+        testEl.style.position = 'absolute';
+        testEl.style.visibility = 'hidden';
+        document.body.appendChild(testEl);
+        const rgb = getComputedStyle(testEl).color;
+        document.body.removeChild(testEl);
+        
+        // If we got a valid rgb, use it, otherwise use fallback
+        return rgb && rgb !== 'rgba(0, 0, 0, 0)' ? rgb : fallback;
+      };
+      
+      const isDark = document.documentElement.classList.contains('dark');
+      
+      // Use theme-appropriate fallbacks
+      if (isDark) {
+        setThemeColors({
+          primary: "#ef5a5a",
+          secondary: "#27272a",
+          background: "#0a0a0b",
+          surface: "#18181b",
+          text: "#fafafa",
+          textMuted: "#a1a1aa",
+          accent: "#27272a",
+          success: "#10b981",
+          error: "#f87171",
+          border: "#27272a",
+        });
+      } else {
+        setThemeColors({
+          primary: "#e54d4d",
+          secondary: "#f5f5f6",
+          background: "#ffffff",
+          surface: "#ffffff",
+          text: "#0a0a0b",
+          textMuted: "#737381",
+          accent: "#f5f5f6",
+          success: "#10b981",
+          error: "#dc2626",
+          border: "#e5e5e8",
+        });
+      }
+    };
+
+    updateTheme();
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+
+    return () => observer.disconnect();
+  }, []);
+
+  // Scroll animations
+  const heroRef = useRef<HTMLElement>(null);
+  const featuresRef = useRef<HTMLElement>(null);
+  const deploymentsRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('opacity-100', 'translate-y-0');
+            entry.target.classList.remove('opacity-0', 'translate-y-8');
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+
+    [heroRef, featuresRef, deploymentsRef].forEach((ref) => {
+      if (ref.current) {
+        ref.current.classList.add('opacity-0', 'translate-y-8', 'transition-all', 'duration-700');
+        observer.observe(ref.current);
+      }
+    });
+
+    // Trigger hero animation immediately
+    if (heroRef.current) {
+      setTimeout(() => {
+        heroRef.current?.classList.add('opacity-100', 'translate-y-0');
+        heroRef.current?.classList.remove('opacity-0', 'translate-y-8');
+      }, 100);
+    }
+
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <div className="flex flex-col">
       {/* Hero Section */}
-      <section className="relative flex flex-col items-center justify-center px-6 py-12 md:py-16 lg:py-20">
+      <section 
+        ref={heroRef}
+        className="relative flex min-h-screen flex-col items-center justify-center px-6 py-12 md:py-16 lg:py-20"
+      >
         {/* Background gradient */}
         <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
           <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2">
@@ -145,24 +267,11 @@ export default async function LandingPage() {
           </div>
         </div>
 
-        <h1 
-          className="mb-6 text-center font-sans text-white"
-          style={{ fontSize: 'clamp(2.5rem, 8vw, 5rem)', fontWeight: 900, letterSpacing: '-0.03em', lineHeight: 1 }}
-        >
-          PlayProof
-        </h1>
-
-        <Badge variant="secondary" className="mb-6">
-          <span className="mr-1.5 inline-block size-1.5 rounded-full bg-primary animate-pulse" />
-          Now in Beta
-        </Badge>
-
         <h1 className="max-w-4xl text-center text-4xl font-bold tracking-tight md:text-5xl lg:text-6xl">
-          Stop Bots with{" "}
+          Human Verification with Generative{" "}
           <span className="bg-gradient-to-r from-primary to-chart-2 bg-clip-text text-transparent">
-            Deployments
+            Minigames
           </span>
-          , Not Frustration
         </h1>
 
         <p className="mt-6 max-w-2xl text-center text-lg text-muted-foreground md:text-xl">
@@ -171,7 +280,7 @@ export default async function LandingPage() {
         </p>
 
         <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row">
-          {!userId ? (
+          {!isSignedIn ? (
             <>
               <SignUpButton mode="modal">
                 <Button size="lg" className="gap-2">
@@ -206,17 +315,15 @@ export default async function LandingPage() {
             <div className="text-3xl font-bold text-primary">&lt;5000ms</div>
             <div className="text-sm text-muted-foreground">Avg. Verification Time</div>
           </div>
-          <Separator orientation="vertical" className="hidden h-12 md:block" />
-          <div className="text-center">
-            <div className="text-3xl font-bold text-primary">92%</div>
-            <div className="text-sm text-muted-foreground">User Satisfaction</div>
-          </div>
         </div>
       </section>
 
       {/* Features Section */}
-      <section className="border-t bg-muted/30 px-6 py-8">
-        <div className="mx-auto max-w-6xl">
+      <section 
+        ref={featuresRef}
+        className="border-t bg-muted/30 flex min-h-screen flex-col items-center justify-center px-6 py-8"
+      >
+        <div className="mx-auto max-w-6xl w-full">
           <div className="text-center">
             <Badge variant="outline" className="mb-4">Features</Badge>
             <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
@@ -228,8 +335,11 @@ export default async function LandingPage() {
           </div>
 
           <div className="mt-16 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {features.map((feature) => (
-              <Card key={feature.title} className="border-none bg-card/50 backdrop-blur transition-all hover:bg-card hover:shadow-md">
+            {features.map((feature, index) => (
+              <Card 
+                key={feature.title} 
+                className="border-none bg-card/50 backdrop-blur transition-all duration-300 hover:bg-card hover:shadow-lg hover:scale-105 hover:-translate-y-1"
+              >
                 <CardHeader>
                   <div className="flex size-12 items-center justify-center rounded-lg bg-primary/10">
                     <feature.icon className="size-6 text-primary" />
@@ -244,7 +354,10 @@ export default async function LandingPage() {
       </section>
 
       {/* Deployments Showcase */}
-      <section className="px-6 py-24">
+      <section 
+        ref={deploymentsRef}
+        className="flex min-h-screen flex-col items-center justify-center px-6 py-24"
+      >
         <div className="mx-auto max-w-6xl">
           <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
             <div>
@@ -259,8 +372,12 @@ export default async function LandingPage() {
               </p>
 
               <div className="mt-8 space-y-4">
-                {deploymentTypes.map((deployment) => (
-                  <div key={deployment.name} className="flex items-center gap-4">
+                {deploymentTypes.map((deployment, index) => (
+                  <div 
+                    key={deployment.name} 
+                    className="flex items-center gap-4 transition-all hover:translate-x-2 hover:opacity-80"
+                    style={{ animationDelay: `${index * 100}ms` }}
+                  >
                     <CheckCircle className="size-5 shrink-0 text-primary" />
                     <div>
                       <div className="font-medium">{deployment.name}</div>
@@ -274,26 +391,37 @@ export default async function LandingPage() {
             </div>
 
             {/* Deployment Preview Card */}
-            <Card className="overflow-hidden">
-              <div className="relative aspect-video bg-gradient-to-br from-muted to-muted/50">
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
-                  <div className="mb-4 flex size-16 items-center justify-center rounded-2xl bg-primary/10">
-                    <Gamepad2 className="size-8 text-primary" />
+            <Card className="overflow-hidden transition-all duration-300 hover:shadow-xl hover:scale-[1.02]">
+              <CardHeader>
+                <CardTitle>Deployment Preview</CardTitle>
+                <CardDescription>Try the bubble pop game</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="w-full min-h-[400px] flex items-center justify-center bg-muted/30 rounded-lg p-4 transition-all hover:bg-muted/50">
+                  <PlayproofProvider client_key="">
+                    <Playproof
+                      gameId="bubble-pop"
+                      gameDuration={10000}
+                      confidenceThreshold={0.7}
+                      theme={themeColors}
+                      onSuccess={(result) => {
+                        console.log("Verification passed:", result);
+                      }}
+                      onFailure={(result) => {
+                        console.log("Verification failed:", result);
+                      }}
+                    />
+                  </PlayproofProvider>
+                </div>
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Average completion time</span>
+                    <span className="font-medium">3-5 seconds</span>
                   </div>
-                  <p className="text-lg font-medium">Deployment Preview</p>
-                  <p className="text-sm text-muted-foreground">
-                    Sign up to try the deployments yourself
-                  </p>
-                </div>
-              </div>
-              <CardContent className="mt-4">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Average completion time</span>
-                  <span className="font-medium">3-5 seconds</span>
-                </div>
-                <div className="mt-2 flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Success rate</span>
-                  <span className="font-medium text-primary">98.5%</span>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Success rate</span>
+                    <span className="font-medium text-primary">98.5%</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -302,7 +430,7 @@ export default async function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="border-t bg-muted/30 px-6 py-24">
+      <section className="border-t bg-muted/30 flex min-h-screen flex-col items-center justify-center px-6 py-24">
         <div className="mx-auto max-w-3xl text-center">
           <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
             Ready to upgrade your verification?
@@ -312,7 +440,7 @@ export default async function LandingPage() {
             Get started in minutes with our simple SDK.
           </p>
           <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-            {!userId ? (
+            {!isSignedIn ? (
               <>
                 <SignUpButton mode="modal">
                   <Button size="lg" className="gap-2">
