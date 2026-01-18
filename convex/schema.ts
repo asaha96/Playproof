@@ -26,8 +26,8 @@ const brandingFields = {
 
 const deploymentType = v.union(
   v.literal("bubble-pop"),
-  v.literal("archery"),
-  v.literal("osu")
+  v.literal("osu"),
+  v.literal("snake")
 );
 
 export default defineSchema({

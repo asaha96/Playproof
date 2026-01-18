@@ -35,11 +35,10 @@ import { Playproof, type VerificationResult } from "playproof/react";
 import { api } from "@/convex/_generated/api";
 import { useThemeColors, LIGHT_THEME_COLORS, PLAYPROOF_FONTS, type PlayproofFontFamily } from "@/hooks/useThemeColors";
 
-type DeploymentType = "bubble-pop" | "osu" | "snake";
+type DeploymentType = "bubble-pop" | "snake";
 
 const deploymentTypes: Array<{ value: DeploymentType; label: string }> = [
   { value: "bubble-pop", label: "Bubble Pop" },
-  { value: "osu", label: "OSU" },
   { value: "snake", label: "Snake" },
 ];
 

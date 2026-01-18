@@ -214,8 +214,8 @@ export default function DeploymentsPage() {
                   <div className="flex items-start gap-3">
                     <span
                       className={`mt-1 size-2 rounded-full ${deployment.isActive
-                          ? "bg-primary"
-                          : "bg-muted-foreground"
+                        ? "bg-primary"
+                        : "bg-muted-foreground"
                         }`}
                       aria-hidden="true"
                     />
