@@ -38,7 +38,7 @@ import { api } from "@/convex/_generated/api";
 export default function AnalyticsPage() {
   const stats = useQuery(api.sessions.stats);
   const sessions = useQuery(api.sessions.recent, { limit: 10 });
-  const timeSeriesData = useQuery(api.sessions.timeSeries, { days: 1 });
+  const timeSeriesData = useQuery(api.sessions.timeSeries, { hours: 24 });
 
   const statCards = stats
     ? [
