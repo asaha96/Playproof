@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * PlayproofProvider
  * Provides the client_key to all Playproof components in the tree
@@ -43,5 +45,3 @@ export function PlayproofProvider({ client_key, children }: PlayproofProviderPro
     </PlayproofContext.Provider>
   );
 }
-
-export default PlayproofProvider;

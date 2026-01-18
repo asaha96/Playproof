@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Playproof React Context
  * Stores the client_key for API authentication
@@ -25,5 +27,3 @@ export function usePlayproof(): PlayproofContextValue {
   }
   return context;
 }
-
-export default PlayproofContext;
