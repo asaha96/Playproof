@@ -1,9 +1,15 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
-// Threshold for human classification - scores >= 60% are considered human
+// Threshold for human classification - used as fallback for legacy sessions without `passed` field
 // suspectScore represents human probability (0.0 = likely bot, 1.0 = likely human)
 const BOT_THRESHOLD = 0.6;
+
+// Helper to determine if a session passed (human) or not (bot)
+// Uses the stored `passed` field if available, otherwise falls back to threshold
+function sessionPassed(session: { passed?: boolean; suspectScore: number }): boolean {
+  return session.passed !== undefined ? session.passed : session.suspectScore >= BOT_THRESHOLD;
+}
 
 const clientInfoInput = v.object({
   deviceType: v.optional(v.string()),
@@ -58,7 +64,8 @@ export const recent = query({
           startAt: session.startAt,
           endAt: session.endAt,
           durationMs: session.durationMs,
-          result: session.suspectScore < BOT_THRESHOLD ? "Bot" : "Human",
+          passed: sessionPassed(session),
+          result: sessionPassed(session) ? "Human" : "Bot",
         };
       })
     );
@@ -76,8 +83,8 @@ export const stats = query({
     const sessions = await ctx.db.query("sessions").collect();
 
     const totalSessions = sessions.length;
-    const humanSessions = sessions.filter((s) => s.suspectScore >= BOT_THRESHOLD).length;
-    const botDetections = sessions.filter((s) => s.suspectScore < BOT_THRESHOLD).length;
+    const humanSessions = sessions.filter((s) => sessionPassed(s)).length;
+    const botDetections = sessions.filter((s) => !sessionPassed(s)).length;
 
     const humanPassRate = totalSessions > 0 ? humanSessions / totalSessions : 0;
     const avgSessionMs =
@@ -96,7 +103,7 @@ export const stats = query({
         byDeployment[deploymentId] = { count: 0, passCount: 0 };
       }
       byDeployment[deploymentId].count++;
-      if (s.suspectScore >= BOT_THRESHOLD) {
+      if (sessionPassed(s)) {
         byDeployment[deploymentId].passCount++;
       }
     }
@@ -155,7 +162,7 @@ export const timeSeries = query({
 
       const entry = hoursMap.get(hourStr)!;
       entry.total++;
-      if (s.suspectScore >= BOT_THRESHOLD) {
+      if (sessionPassed(s)) {
         entry.humans++;
       } else {
         entry.bots++;
@@ -220,6 +227,7 @@ export const createWithApiKey = mutation({
     endAt: v.number(),
     durationMs: v.number(),
     suspectScore: v.number(),
+    passed: v.optional(v.boolean()), // LLM's actual human/bot decision
   },
   handler: async (ctx, args) => {
     // Validate API key against users table
@@ -250,6 +258,7 @@ export const createWithApiKey = mutation({
       endAt: args.endAt,
       durationMs: args.durationMs,
       suspectScore: args.suspectScore,
+      passed: args.passed,
     });
 
     // Update deployment's session list

@@ -126,6 +126,8 @@ export default defineSchema({
     endAt: v.number(),
     durationMs: v.number(),
     suspectScore: v.number(),
+    // LLM's actual human/bot decision (true = human, false = bot)
+    passed: v.optional(v.boolean()),
     clientInfo: v.optional(
       v.object({
         deviceType: v.optional(v.string()),

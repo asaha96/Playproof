@@ -492,7 +492,8 @@ export class Playproof {
       const suspectScore = effectiveAgentDecision.decision === "human"
         ? effectiveAgentDecision.confidence
         : 1 - effectiveAgentDecision.confidence;
-      await this.reportSession(behaviorData, suspectScore);
+      const agentPassed = effectiveAgentDecision.decision === "human";
+      await this.reportSession(behaviorData, suspectScore, agentPassed);
 
       this.showResult({
         ...finalResult,
@@ -516,7 +517,9 @@ export class Playproof {
     );
 
     // Report session to analytics backend
-    await this.reportSession(behaviorData, score);
+    // Use woodwide decision if available, otherwise use standard verification result
+    const sessionPassed = woodwideResult ? woodwideResult.decision === "pass" : result.passed;
+    await this.reportSession(behaviorData, score, sessionPassed);
 
     // Use Woodwide result if available, otherwise use game's own result
     if (woodwideResult) {
@@ -564,7 +567,7 @@ export class Playproof {
   /**
    * Report session to the analytics backend
    */
-  private async reportSession(behaviorData: BehaviorData, suspectScore: number): Promise<void> {
+  private async reportSession(behaviorData: BehaviorData, suspectScore: number, passed?: boolean): Promise<void> {
     try {
       const { PLAYPROOF_API_URL } = await import('./config');
 
@@ -582,6 +585,7 @@ export class Playproof {
           endAt,
           durationMs,
           suspectScore,
+          passed, // LLM's actual human/bot decision
         },
       };
 
