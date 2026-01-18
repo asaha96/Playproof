@@ -135,6 +135,107 @@ export class Playproof {
   }
 
   /**
+   * Fetch branding settings from backend using API credentials
+   */
+  private async fetchBranding(): Promise<void> {
+    const { apiKey, deploymentId } = this.config;
+
+    console.log('[Playproof Debug] fetchBranding called with:', {
+      apiKey: apiKey ? `${apiKey.substring(0, 8)}...` : 'null',
+      deploymentId: deploymentId || 'null'
+    });
+
+    if (!apiKey || !deploymentId) {
+      console.log('[Playproof Debug] No credentials provided, using default theme');
+      return; // No credentials provided, use default theme
+    }
+
+    try {
+      // Import the hardcoded API URL
+      const { PLAYPROOF_API_URL } = await import('./config');
+
+      console.log('[Playproof Debug] Fetching branding from:', PLAYPROOF_API_URL);
+
+      const requestBody = {
+        path: 'deployments:getBrandingByCredentials',
+        args: { apiKey, deploymentId },
+      };
+
+      console.log('[Playproof Debug] Request payload:', JSON.stringify(requestBody, null, 2));
+
+      const response = await fetch(`${PLAYPROOF_API_URL}/api/query`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      console.log('[Playproof Debug] Response status:', response.status, response.statusText);
+
+      if (!response.ok) {
+        console.warn('[Playproof] Failed to fetch branding settings - HTTP', response.status);
+        return;
+      }
+
+      const rawData = await response.json();
+
+      console.log('[Playproof Debug] Raw response:', JSON.stringify(rawData, null, 2));
+
+      // Check for Convex errors (comes as 'errorMessage' not 'error')
+      if (rawData.errorMessage) {
+        console.warn(`[Playproof] Backend error: ${rawData.errorMessage}`);
+        return;
+      }
+
+      // Convex returns data in { status: "success", value: {...} } format
+      // Extract the actual value from the response
+      const data = rawData.value !== undefined ? rawData.value : rawData;
+
+      console.log('[Playproof Debug] Extracted data:', JSON.stringify(data, null, 2));
+
+      // Check for application-level errors (from the query itself)
+      if (data.error) {
+        console.warn(`[Playproof] ${data.error}`);
+        return;
+      }
+
+      if (data.success && data.theme) {
+        console.log('[Playproof Debug] Theme received from backend:', data.theme);
+        console.log('[Playproof Debug] Current theme before merge:', this.config.theme);
+
+        // Merge fetched theme with config (filter out null/undefined values)
+        const filteredTheme: Record<string, string> = {};
+        for (const [key, value] of Object.entries(data.theme)) {
+          if (value !== null && value !== undefined) {
+            filteredTheme[key] = value as string;
+          }
+        }
+
+        this.config.theme = {
+          ...this.config.theme,
+          ...filteredTheme,
+        };
+
+        console.log('[Playproof Debug] Theme after merge:', this.config.theme);
+
+        // Update gameId if provided
+        if (data.gameId) {
+          console.log('[Playproof Debug] GameId from backend:', data.gameId);
+          this.config.gameId = data.gameId;
+        }
+
+        console.log('[Playproof] ✅ Theme synced successfully from deployment:', deploymentId);
+      } else {
+        console.warn('[Playproof Debug] Response missing success or theme:', data);
+      }
+    } catch (error) {
+      console.warn('[Playproof] Error fetching branding:', error);
+    }
+  }
+
+
+  /**
    * Inject styles into the document
    */
   private injectStyles(): void {
@@ -360,7 +461,10 @@ export class Playproof {
   /**
    * Initialize and render the captcha
    */
-  verify(): Promise<VerificationResult> {
+  async verify(): Promise<VerificationResult> {
+    // Fetch branding from backend if credentials are provided
+    await this.fetchBranding();
+
     return new Promise((resolve, reject) => {
       const originalOnSuccess = this.config.onSuccess;
       const originalOnFailure = this.config.onFailure;

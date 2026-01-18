@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Playproof SDK Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            height: 100%;
+            background: #0a0a0a;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .debug-panel {
+            background: #1a1a2e;
+            border: 1px solid #3a3a5a;
+            border-radius: 8px;
+            padding: 16px;
+            max-width: 500px;
+            width: 100%;
+            color: #f5f5f5;
+            font-size: 12px;
+        }
+
+        .debug-panel h3 {
+            color: #22d3ee;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+
+        .debug-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid #2a2a4e;
+        }
+
+        .debug-row:last-child {
+            border-bottom: none;
+        }
+
+        .debug-label {
+            color: #a1a1aa;
+        }
+
+        .debug-value {
+            color: #fff;
+            font-family: monospace;
+            word-break: break-all;
+        }
+
+        .debug-value.success {
+            color: #10b981;
+        }
+
+        .debug-value.error {
+            color: #ef4444;
+        }
+
+        .debug-value.pending {
+            color: #f59e0b;
+        }
+
+        .debug-instructions {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #3a3a5a;
+            color: #a1a1aa;
+            font-size: 11px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="debug-panel">
+        <h3>🔧 SDK Debug Panel</h3>
+        <div class="debug-row">
+            <span class="debug-label">API Key:</span>
+            <span class="debug-value" id="debug-apikey">-</span>
+        </div>
+        <div class="debug-row">
+            <span class="debug-label">Deployment ID:</span>
+            <span class="debug-value" id="debug-deployment">-</span>
+        </div>
+        <div class="debug-row">
+            <span class="debug-label">Theme Sync:</span>
+            <span class="debug-value pending" id="debug-status">Pending...</span>
+        </div>
+        <div class="debug-instructions">
+            📋 Open browser DevTools (F12) and check the Console tab for detailed debug logs prefixed with [Playproof
+            Debug]
+        </div>
+    </div>
+
+    <div id="playproof-container"></div>
+
+    <!-- Load the SDK -->
+    <script type="module">
+        // Import from the local SDK package (resolved via workspace)
+        import { Playproof } from 'playproof';
+
+        // Configuration - get these from your deployment page on the Playproof website
+        const API_KEY = 'pp_Dy1F5UhsAxw3pw3lXum7yZo29xJR3kGl';
+        const DEPLOYMENT_ID = 'hell';
+
+        // Update debug panel
+        document.getElementById('debug-apikey').textContent = API_KEY.substring(0, 12) + '...';
+        document.getElementById('debug-deployment').textContent = DEPLOYMENT_ID;
+
+        console.log('='.repeat(60));
+        console.log('[SDK Test] Initializing Playproof SDK');
+        console.log('[SDK Test] API Key:', API_KEY);
+        console.log('[SDK Test] Deployment ID:', DEPLOYMENT_ID);
+        console.log('='.repeat(60));
+
+        // Initialize the captcha with API credentials
+        // This will fetch the theme settings from your deployment configuration
+        const captcha = new Playproof({
+            containerId: 'playproof-container',
+            apiKey: API_KEY,
+            deploymentId: DEPLOYMENT_ID,
+            onSuccess: (result) => {
+                console.log('Verification passed!', result);
+            },
+            onFailure: (result) => {
+                console.log('Verification failed', result);
+            }
+        });
+
+        // Start the verification UI
+        captcha.verify().then((result) => {
+            console.log('Final result:', result);
+
+            // Update debug panel based on result
+            const statusEl = document.getElementById('debug-status');
+            statusEl.textContent = 'Theme loaded (check console for details)';
+            statusEl.className = 'debug-value success';
+        }).catch((error) => {
+            console.error('SDK Error:', error);
+            const statusEl = document.getElementById('debug-status');
+            statusEl.textContent = 'Error: ' + error.message;
+            statusEl.className = 'debug-value error';
+        });
+
+        // Also listen for any console warnings from SDK
+        const originalWarn = console.warn;
+        console.warn = function (...args) {
+            if (args[0]?.includes?.('[Playproof]')) {
+                const statusEl = document.getElementById('debug-status');
+                if (args[0].includes('Backend error') || args[0].includes('Failed')) {
+                    statusEl.textContent = 'Sync failed (see console)';
+                    statusEl.className = 'debug-value error';
+                }
+            }
+            originalWarn.apply(console, args);
+        };
+
+        const originalLog = console.log;
+        console.log = function (...args) {
+            if (args[0]?.includes?.('✅ Theme synced')) {
+                const statusEl = document.getElementById('debug-status');
+                statusEl.textContent = '✅ Theme synced!';
+                statusEl.className = 'debug-value success';
+            }
+            originalLog.apply(console, args);
+        };
+    </script>
+</body>
+
+</html>

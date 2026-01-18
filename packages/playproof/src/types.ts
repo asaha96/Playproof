@@ -133,6 +133,9 @@ export interface PlayproofConfig {
     gameDuration: number | null;
     gameId: GameId;
     logTelemetry: boolean;    // Whether to console.log telemetry events (default: false)
+    // API credentials for fetching deployment branding
+    apiKey: string | null;
+    deploymentId: string | null;
     onSuccess: ((result: VerificationResult) => void) | null;
     onFailure: ((result: VerificationResult) => void) | null;
     onStart: (() => void) | null;
