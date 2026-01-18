@@ -15,6 +15,7 @@
     "dev:demo:sdk": "concurrently -k -n sdk,demo -c cyan,magenta \"npm run dev -w packages/playproof\" \"npm run dev -w demo-app\"",
     "dev:api": "npm run dev -w apps/api",
     "dev:worker": "npm run dev -w apps/edge-worker",
+    "convex:dev": "npx convex dev",
     "build": "npm run build -w apps/web",
     "build:demo": "npm run build -w demo-app"
   },
@@ -34,5 +35,8 @@
   "repository": {
     "type": "git",
     "url": ""
+  },
+  "dependencies": {
+    "convex": "^1.31.5"
   }
 }

@@ -5,14 +5,16 @@ import { usePathname } from "next/navigation"
 import {
   SignInButton,
   SignUpButton,
+  SignOutButton,
   SignedIn,
   SignedOut,
   UserButton,
   useUser,
 } from "@clerk/nextjs"
-import { BarChart3, Gamepad2, Palette, ShieldCheck } from "lucide-react"
+import { BarChart3, BookOpen, Gamepad2, Palette, Rocket, ShieldCheck } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { ThemeToggle } from "@/components/theme-toggle"
 import {
   Sidebar,
   SidebarContent,
@@ -34,14 +36,24 @@ const navItems = [
     icon: BarChart3,
   },
   {
-    title: "Minigames",
-    href: "/dashboard/minigames",
-    icon: Gamepad2,
+    title: "Deployments",
+    href: "/dashboard/deployments",
+    icon: Rocket,
   },
   {
     title: "Branding",
     href: "/dashboard/branding",
     icon: Palette,
+  },
+  {
+    title: "Playground",
+    href: "/dashboard/playground",
+    icon: Gamepad2, // Using Gamepad2 as a placeholder, maybe find a better icon or reuse
+  },
+  {
+    title: "Docs",
+    href: "/dashboard/docs",
+    icon: BookOpen,
   },
 ]
 
@@ -91,11 +103,23 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarSeparator className="mt-auto" />
+      <SidebarGroup>
+        <SidebarGroupContent>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <div className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-md hover:bg-sidebar-accent transition-colors group-data-[collapsible=icon]:justify-center">
+                <span className="text-sm text-sidebar-foreground group-data-[collapsible=icon]:hidden">Theme</span>
+                <ThemeToggle />
+              </div>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
       <SidebarFooter>
         <SignedIn>
           <div className="flex items-center gap-3 rounded-lg border border-sidebar-border bg-sidebar-accent/60 p-2">
             <UserButton appearance={{ elements: { avatarBox: "size-8" } }} />
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
               <div className="truncate text-sm font-medium">{userName}</div>
               {userEmail ? (
                 <div className="truncate text-xs text-muted-foreground">

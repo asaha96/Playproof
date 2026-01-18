@@ -72,97 +72,97 @@ const themeCSS = `
 `;
 
 export class Playproof {
-    private config: PlayproofConfig;
-    private container: HTMLElement | null;
-    private gameArea: HTMLElement | null;
-    private game: BaseGame | null;
-    private progressFill: HTMLElement | null;
-    private timerDisplay: HTMLElement | null;
-    private progressInterval: ReturnType<typeof setInterval> | null;
-    private styleElement: HTMLStyleElement | null;
-    private currentGameId: string;
+  private config: PlayproofConfig;
+  private container: HTMLElement | null;
+  private gameArea: HTMLElement | null;
+  private game: BaseGame | null;
+  private progressFill: HTMLElement | null;
+  private timerDisplay: HTMLElement | null;
+  private progressInterval: ReturnType<typeof setInterval> | null;
+  private styleElement: HTMLStyleElement | null;
+  private currentGameId: string;
 
-    constructor(config: Partial<PlayproofConfig> = {}) {
-        this.config = mergeConfig(config);
-        this.container = null;
-        this.gameArea = null;
-        this.game = null;
-        this.progressFill = null;
-        this.timerDisplay = null;
-        this.progressInterval = null;
-        this.styleElement = null;
-        this.currentGameId = '';
+  constructor(config: Partial<PlayproofConfig> = {}) {
+    this.config = mergeConfig(config);
+    this.container = null;
+    this.gameArea = null;
+    this.game = null;
+    this.progressFill = null;
+    this.timerDisplay = null;
+    this.progressInterval = null;
+    this.styleElement = null;
+    this.currentGameId = '';
 
-        if (!validateThreshold(this.config.confidenceThreshold)) {
-            console.warn('Playproof: Invalid confidenceThreshold, using default 0.7');
-            this.config.confidenceThreshold = 0.7;
-        }
+    if (!validateThreshold(this.config.confidenceThreshold)) {
+      console.warn('Playproof: Invalid confidenceThreshold, using default 0.7');
+      this.config.confidenceThreshold = 0.7;
+    }
+  }
+
+  /**
+   * Apply theme colors as CSS custom properties
+   */
+  private applyTheme(): void {
+    if (!this.container) return;
+
+    const theme = this.config.theme;
+    const themeVars: Record<string, string | undefined> = {
+      '--playproof-primary': theme.primary,
+      '--playproof-secondary': theme.secondary,
+      '--playproof-background': theme.background,
+      '--playproof-surface': theme.surface,
+      '--playproof-text': theme.text,
+      '--playproof-text-muted': theme.textMuted,
+      '--playproof-accent': theme.accent,
+      '--playproof-success': theme.success,
+      '--playproof-error': theme.error,
+      '--playproof-border': theme.border
+    };
+
+    for (const [prop, value] of Object.entries(themeVars)) {
+      if (value) {
+        this.container.style.setProperty(prop, value);
+      }
+    }
+  }
+
+  /**
+   * Inject styles into the document
+   */
+  private injectStyles(): void {
+    if (document.getElementById('playproof-styles')) return;
+
+    this.styleElement = document.createElement('style');
+    this.styleElement.id = 'playproof-styles';
+    this.styleElement.textContent = themeCSS;
+    document.head.appendChild(this.styleElement);
+  }
+
+  /**
+   * Create the captcha UI
+   */
+  private createUI(): boolean {
+    const container = document.getElementById(this.config.containerId);
+    if (!container) {
+      console.error(`Playproof: Container #${this.config.containerId} not found`);
+      return false;
     }
 
-    /**
-     * Apply theme colors as CSS custom properties
-     */
-    private applyTheme(): void {
-        if (!this.container) return;
+    this.injectStyles();
 
-        const theme = this.config.theme;
-        const themeVars: Record<string, string | undefined> = {
-            '--playproof-primary': theme.primary,
-            '--playproof-secondary': theme.secondary,
-            '--playproof-background': theme.background,
-            '--playproof-surface': theme.surface,
-            '--playproof-text': theme.text,
-            '--playproof-text-muted': theme.textMuted,
-            '--playproof-accent': theme.accent,
-            '--playproof-success': theme.success,
-            '--playproof-error': theme.error,
-            '--playproof-border': theme.border
-        };
-
-        for (const [prop, value] of Object.entries(themeVars)) {
-            if (value) {
-                this.container.style.setProperty(prop, value);
-            }
-        }
+    // Get game instructions for display
+    let gameId: string = this.config.gameId || 'bubble-pop';
+    if (gameId === 'random') {
+      gameId = getRandomGameId();
+      this.config.gameId = gameId as PlayproofConfig['gameId'];
     }
+    const instructions = getGameInstructions(gameId);
+    const gameInfo = getGameInfo(gameId);
+    const duration = this.config.gameDuration || gameInfo.duration || 10000;
+    const durationSec = Math.ceil(duration / 1000);
 
-    /**
-     * Inject styles into the document
-     */
-    private injectStyles(): void {
-        if (document.getElementById('playproof-styles')) return;
-
-        this.styleElement = document.createElement('style');
-        this.styleElement.id = 'playproof-styles';
-        this.styleElement.textContent = themeCSS;
-        document.head.appendChild(this.styleElement);
-    }
-
-    /**
-     * Create the captcha UI
-     */
-    private createUI(): boolean {
-        const container = document.getElementById(this.config.containerId);
-        if (!container) {
-            console.error(`Playproof: Container #${this.config.containerId} not found`);
-            return false;
-        }
-
-        this.injectStyles();
-
-        // Get game instructions for display
-        let gameId: string = this.config.gameId || 'bubble-pop';
-        if (gameId === 'random') {
-            gameId = getRandomGameId();
-            this.config.gameId = gameId as PlayproofConfig['gameId'];
-        }
-        const instructions = getGameInstructions(gameId);
-        const gameInfo = getGameInfo(gameId);
-        const duration = this.config.gameDuration || gameInfo.duration || 10000;
-        const durationSec = Math.ceil(duration / 1000);
-
-        container.className = 'playproof-container';
-        container.innerHTML = `
+    container.className = 'playproof-container';
+    container.innerHTML = `
       <div class="playproof-header">
         <h2 class="playproof-title">
           <span class="playproof-logo">
@@ -201,127 +201,127 @@ export class Playproof {
       </div>
     `;
 
-        this.container = container;
-        this.gameArea = container.querySelector('.playproof-game-area');
-        this.progressFill = container.querySelector('.playproof-progress-fill');
-        this.timerDisplay = container.querySelector('.playproof-timer');
+    this.container = container;
+    this.gameArea = container.querySelector('.playproof-game-area');
+    this.progressFill = container.querySelector('.playproof-progress-fill');
+    this.timerDisplay = container.querySelector('.playproof-timer');
 
-        this.applyTheme();
+    this.applyTheme();
 
-        // Bind start button
-        const startBtn = container.querySelector('.playproof-start-btn');
-        startBtn?.addEventListener('click', () => this.startGame());
+    // Bind start button
+    const startBtn = container.querySelector('.playproof-start-btn');
+    startBtn?.addEventListener('click', () => this.startGame());
 
-        return true;
+    return true;
+  }
+
+  /**
+   * Start the verification game
+   */
+  async startGame(): Promise<void> {
+    if (this.config.onStart) {
+      this.config.onStart();
     }
 
-    /**
-     * Start the verification game
-     */
-    async startGame(): Promise<void> {
-        if (this.config.onStart) {
-            this.config.onStart();
-        }
+    // Clear instructions
+    const instructions = this.gameArea?.querySelector('.playproof-instructions');
+    if (instructions) instructions.remove();
 
-        // Clear instructions
-        const instructions = this.gameArea?.querySelector('.playproof-instructions');
-        if (instructions) instructions.remove();
+    // Determine which game to play
+    let gameId: string = this.config.gameId || 'bubble-pop';
+    if (gameId === 'random') {
+      gameId = getRandomGameId();
+    }
+    this.currentGameId = gameId;
 
-        // Determine which game to play
-        let gameId: string = this.config.gameId || 'bubble-pop';
-        if (gameId === 'random') {
-            gameId = getRandomGameId();
-        }
-        this.currentGameId = gameId;
+    // Get game info for duration
+    const gameInfo = getGameInfo(gameId);
+    const duration = this.config.gameDuration || gameInfo.duration || 10000;
 
-        // Get game info for duration
-        const gameInfo = getGameInfo(gameId);
-        const duration = this.config.gameDuration || gameInfo.duration || 10000;
+    // Create SDK hooks for future use
+    const hooks: SDKHooks = {
+      onTelemetryBatch: this.config.hooks?.onTelemetryBatch || null,
+      onAttemptEnd: this.config.hooks?.onAttemptEnd || null,
+      regenerate: this.config.hooks?.regenerate || null
+    };
 
-        // Create SDK hooks for future use
-        const hooks: SDKHooks = {
-            onTelemetryBatch: this.config.hooks?.onTelemetryBatch || null,
-            onAttemptEnd: this.config.hooks?.onAttemptEnd || null,
-            regenerate: this.config.hooks?.regenerate || null
-        };
+    // Initialize game via registry
+    this.game = createGame(gameId, this.gameArea!, {
+      ...this.config,
+      gameDuration: duration
+    }, hooks);
 
-        // Initialize game via registry
-        this.game = createGame(gameId, this.gameArea!, {
-            ...this.config,
-            gameDuration: duration
-        }, hooks);
-
-        // For Pixi games, we need to await init
-        if (gameInfo.isPixi && this.game.init) {
-            await this.game.init();
-        }
-
-        // Start progress animation
-        const startTime = Date.now();
-
-        this.progressInterval = setInterval(() => {
-            const elapsed = Date.now() - startTime;
-            const progress = Math.min(100, (elapsed / duration) * 100);
-            if (this.progressFill) {
-                this.progressFill.style.width = `${progress}%`;
-            }
-
-            const remaining = Math.max(0, Math.ceil((duration - elapsed) / 1000));
-            if (this.timerDisplay) {
-                this.timerDisplay.textContent = `${remaining}s`;
-            }
-
-            if (this.config.onProgress) {
-                this.config.onProgress(progress / 100);
-            }
-        }, 100);
-
-        // Start game
-        this.game.start((behaviorData: BehaviorData) => {
-            if (this.progressInterval) {
-                clearInterval(this.progressInterval);
-            }
-            this.evaluateResult(behaviorData);
-        });
+    // For Three.js games, we need to await init
+    if (gameInfo.isThree && this.game.init) {
+      await this.game.init();
     }
 
-    /**
-     * Evaluate game results
-     */
-    private evaluateResult(behaviorData: BehaviorData): void {
-        const score = calculateConfidence(behaviorData);
-        const result = createVerificationResult(
-            score,
-            this.config.confidenceThreshold,
-            behaviorData
-        );
+    // Start progress animation
+    const startTime = Date.now();
 
-        this.showResult(result);
+    this.progressInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(100, (elapsed / duration) * 100);
+      if (this.progressFill) {
+        this.progressFill.style.width = `${progress}%`;
+      }
 
-        if (result.passed) {
-            if (this.config.onSuccess) {
-                this.config.onSuccess(result);
-            }
-        } else {
-            if (this.config.onFailure) {
-                this.config.onFailure(result);
-            }
-        }
+      const remaining = Math.max(0, Math.ceil((duration - elapsed) / 1000));
+      if (this.timerDisplay) {
+        this.timerDisplay.textContent = `${remaining}s`;
+      }
+
+      if (this.config.onProgress) {
+        this.config.onProgress(progress / 100);
+      }
+    }, 100);
+
+    // Start game
+    this.game.start((behaviorData: BehaviorData) => {
+      if (this.progressInterval) {
+        clearInterval(this.progressInterval);
+      }
+      this.evaluateResult(behaviorData);
+    });
+  }
+
+  /**
+   * Evaluate game results
+   */
+  private evaluateResult(behaviorData: BehaviorData): void {
+    const score = calculateConfidence(behaviorData);
+    const result = createVerificationResult(
+      score,
+      this.config.confidenceThreshold,
+      behaviorData
+    );
+
+    this.showResult(result);
+
+    if (result.passed) {
+      if (this.config.onSuccess) {
+        this.config.onSuccess(result);
+      }
+    } else {
+      if (this.config.onFailure) {
+        this.config.onFailure(result);
+      }
     }
+  }
 
-    /**
-     * Show verification result
-     */
-    private showResult(result: VerificationResult): void {
-        if (!this.gameArea || !this.container) return;
+  /**
+   * Show verification result
+   */
+  private showResult(result: VerificationResult): void {
+    if (!this.gameArea || !this.container) return;
 
-        const statusClass = result.passed ? 'success' : 'error';
-        const icon = result.passed
-            ? '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>'
-            : '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg>';
-        const text = result.passed ? 'Verification Complete!' : 'Verification Failed';
+    const statusClass = result.passed ? 'success' : 'error';
+    const icon = result.passed
+      ? '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg>';
+    const text = result.passed ? 'Verification Complete!' : 'Verification Failed';
 
-        this.gameArea.innerHTML = `
+    this.gameArea.innerHTML = `
       <div class="playproof-result">
         <div class="playproof-result-icon ${statusClass}">
           ${icon}
@@ -330,55 +330,55 @@ export class Playproof {
       </div>
     `;
 
-        // Update footer status
-        const status = this.container.querySelector('.playproof-status');
-        if (status) {
-            status.className = `playproof-status ${statusClass}`;
-            status.innerHTML = result.passed
-                ? `${icon} Verified`
-                : `${icon} Not Verified`;
-        }
+    // Update footer status
+    const status = this.container.querySelector('.playproof-status');
+    if (status) {
+      status.className = `playproof-status ${statusClass}`;
+      status.innerHTML = result.passed
+        ? `${icon} Verified`
+        : `${icon} Not Verified`;
     }
+  }
 
-    /**
-     * Initialize and render the captcha
-     */
-    verify(): Promise<VerificationResult> {
-        return new Promise((resolve, reject) => {
-            const originalOnSuccess = this.config.onSuccess;
-            const originalOnFailure = this.config.onFailure;
+  /**
+   * Initialize and render the captcha
+   */
+  verify(): Promise<VerificationResult> {
+    return new Promise((resolve, reject) => {
+      const originalOnSuccess = this.config.onSuccess;
+      const originalOnFailure = this.config.onFailure;
 
-            this.config.onSuccess = (result: VerificationResult) => {
-                if (originalOnSuccess) originalOnSuccess(result);
-                resolve(result);
-            };
+      this.config.onSuccess = (result: VerificationResult) => {
+        if (originalOnSuccess) originalOnSuccess(result);
+        resolve(result);
+      };
 
-            this.config.onFailure = (result: VerificationResult) => {
-                if (originalOnFailure) originalOnFailure(result);
-                resolve(result); // Still resolve, but with passed: false
-            };
+      this.config.onFailure = (result: VerificationResult) => {
+        if (originalOnFailure) originalOnFailure(result);
+        resolve(result); // Still resolve, but with passed: false
+      };
 
-            if (!this.createUI()) {
-                reject(new Error('Failed to create UI'));
-            }
-        });
+      if (!this.createUI()) {
+        reject(new Error('Failed to create UI'));
+      }
+    });
+  }
+
+  /**
+   * Clean up resources
+   */
+  destroy(): void {
+    if (this.game) {
+      this.game.destroy();
     }
-
-    /**
-     * Clean up resources
-     */
-    destroy(): void {
-        if (this.game) {
-            this.game.destroy();
-        }
-        if (this.progressInterval) {
-            clearInterval(this.progressInterval);
-        }
-        if (this.container) {
-            this.container.innerHTML = '';
-            this.container.className = '';
-        }
+    if (this.progressInterval) {
+      clearInterval(this.progressInterval);
     }
+    if (this.container) {
+      this.container.innerHTML = '';
+      this.container.className = '';
+    }
+  }
 }
 
 // Export for different module systems

@@ -1,12 +1,12 @@
 # Playproof
 
-Playproof is a modern, game-based captcha verification SDK designed to distinguish between humans and bots through engaging interactive challenges. Unlike compliant, boring captchas, Playproof offers a fun user experience while maintaining security.
+Playproof is a modern verification SDK designed to distinguish between humans and bots through interactive deployments. It replaces legacy CAPTCHAs with branded verification experiences while maintaining strong security guarantees.
 
 ## 🌟 Features
 
-- **Game-Based Verification**: Users play mini-games (Bubble Pop, Target Click) to verify humanity.
-- **Bot Detection**: Analyzes behavior patterns during gameplay to calculate confidence scores.
-- **Smart Rotation**: Automatically rotates between different game types and retries.
+- **Deployment-Based Verification**: Users complete deployments (Bubble Pop, Target Click) to verify humanity.
+- **Bot Detection**: Analyzes behavior patterns during verification flows to calculate confidence scores.
+- **Smart Rotation**: Automatically rotates between different deployment types and retries.
 - **Customizable Theme**: Fully themable to match your application's design.
 - **Modern Stack**: Built with vanilla JavaScript for the SDK (no heavy dependencies) and compatible with any framework.
 
@@ -14,9 +14,10 @@ Playproof is a modern, game-based captcha verification SDK designed to distingui
 
 This is a monorepo containing the following workspaces:
 
-- `playproof/`: The core SDK package.
+- `packages/playproof/`: The core SDK package.
 - `demo-app/`: A Next.js application demonstrating the SDK usage.
-- `apps/`: Additional applications (web, api, edge-worker).
+- `apps/web`: The primary web application.
+- `convex/`: The backend infrastructure.
 
 ## 🚀 Getting Started
 
@@ -51,6 +52,11 @@ You can run the different parts of the project using the following commands from
 - **Run the Web App**:
   ```bash
   npm run dev:web
+  ```
+
+- **Run Convex Dev**:
+  ```bash
+  npm run convex:dev
   ```
 
 - **Build Utilities**:

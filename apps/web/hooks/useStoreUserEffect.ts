@@ -3,7 +3,7 @@
 import { useUser } from "@clerk/nextjs";
 import { useConvexAuth, useMutation } from "convex/react";
 import { useEffect, useRef } from "react";
-import { api } from "../convex/_generated/api";
+import { api } from "@/convex/_generated/api";
 
 /**
  * Hook that syncs the authenticated Clerk user to the Convex database.
